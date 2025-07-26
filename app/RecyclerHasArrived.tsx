@@ -1,6 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import CommonHeader from './components/CommonHeader';
+import { COLORS, DIMENSIONS } from './utils/constants';
 
 export default function RecyclerHasArrived() {
   const params = useLocalSearchParams();
@@ -29,6 +31,17 @@ export default function RecyclerHasArrived() {
     });
   };
   
+  const handleCheckPayment = () => {
+    // Navigate to PaymentSummary screen
+    router.push({
+      pathname: '/PaymentSummary',
+      params: { 
+        recyclerName: recyclerName,
+        pickup: pickup 
+      }
+    });
+  };
+
   const handleComplete = () => {
     Alert.alert(
       'Complete Pickup',
@@ -52,6 +65,8 @@ export default function RecyclerHasArrived() {
 
   return (
     <View style={styles.container}>
+      <CommonHeader title="Recycler Has Arrived!" />
+
       {/* Banner/Header */}
       <View style={styles.bannerBg}>
         <Image
@@ -87,6 +102,9 @@ export default function RecyclerHasArrived() {
           <TouchableOpacity style={styles.pillButton} onPress={handleText}>
             <Text style={styles.pillButtonText}>💬 Text</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.pillButton, styles.paymentButton]} onPress={handleCheckPayment}>
+            <Text style={[styles.pillButtonText, styles.paymentButtonText]}>💰 Check Payment Due</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.pillButton, styles.completeButton]} onPress={handleComplete}>
             <Text style={[styles.pillButtonText, styles.completeButtonText]}>✅ Complete</Text>
           </TouchableOpacity>
@@ -99,7 +117,7 @@ export default function RecyclerHasArrived() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
   },
   bannerBg: {
     width: '100%',
@@ -129,14 +147,14 @@ const styles = StyleSheet.create({
   header: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
     textAlign: 'center',
     marginBottom: 8,
   },
   pickupText: {
     fontSize: 16,
-    color: '#22330B',
-    marginHorizontal: 18,
+    color: COLORS.darkGreen,
+    marginHorizontal: DIMENSIONS.margin,
     marginBottom: 20,
   },
   mainContent: {
@@ -146,12 +164,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   arrivalCard: {
-    backgroundColor: '#E3F0D5',
+    backgroundColor: COLORS.lightGreen,
     borderRadius: 20,
     padding: 30,
     alignItems: 'center',
     marginBottom: 30,
-    shadowColor: '#000',
+    shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 5,
@@ -165,14 +183,14 @@ const styles = StyleSheet.create({
   arrivalText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
     textAlign: 'center',
     marginBottom: 10,
   },
   recyclerName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: COLORS.secondary,
     marginBottom: 8,
   },
   actionButtons: {
@@ -189,14 +207,20 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   pillButtonText: {
-    color: '#22330B',
+    color: COLORS.darkGreen,
     fontWeight: 'bold',
     fontSize: 15,
   },
+  paymentButton: {
+    backgroundColor: '#FF9800',
+  },
+  paymentButtonText: {
+    color: COLORS.white,
+  },
   completeButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: COLORS.secondary,
   },
   completeButtonText: {
-    color: '#fff',
+    color: COLORS.white,
   },
 }); 

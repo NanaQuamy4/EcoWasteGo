@@ -1,6 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import CommonHeader from './components/CommonHeader';
+import { COLORS, DIMENSIONS } from './utils/constants';
+import { formatSecondsToTime } from './utils/helpers';
 
 export default function WaitingForRecyclerScreen() {
   const params = useLocalSearchParams();
@@ -10,7 +13,7 @@ export default function WaitingForRecyclerScreen() {
   const [isConfirmed, setIsConfirmed] = useState(false);
   
   // Animation for the loading indicator
-  const spinValue = new Animated.Value(0);
+  const spinValue = useMemo(() => new Animated.Value(0), []);
   
   useEffect(() => {
     // Start spinning animation
@@ -39,7 +42,7 @@ export default function WaitingForRecyclerScreen() {
       clearTimeout(confirmationTimer);
       spinAnimation.stop();
     };
-  }, []);
+  }, [spinValue]);
 
   const spin = spinValue.interpolate({
     inputRange: [0, 1],
@@ -61,15 +64,11 @@ export default function WaitingForRecyclerScreen() {
     });
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   if (isConfirmed) {
     return (
       <View style={styles.container}>
+        <CommonHeader title="Pickup Confirmed!" />
+
         {/* Header Banner */}
         <View style={styles.bannerBg}>
           <Image
@@ -102,6 +101,8 @@ export default function WaitingForRecyclerScreen() {
 
   return (
     <View style={styles.container}>
+      <CommonHeader title="Waiting for Recycler" />
+
       {/* Header Banner */}
       <View style={styles.bannerBg}>
         <Image
@@ -131,7 +132,7 @@ export default function WaitingForRecyclerScreen() {
         {/* Time Elapsed */}
         <View style={styles.timeContainer}>
           <Text style={styles.timeLabel}>Time elapsed:</Text>
-          <Text style={styles.timeText}>{formatTime(timeElapsed)}</Text>
+          <Text style={styles.timeText}>{formatSecondsToTime(timeElapsed)}</Text>
         </View>
 
         {/* Location Info */}
@@ -156,7 +157,7 @@ export default function WaitingForRecyclerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
   },
   bannerBg: {
     width: '100%',
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
   header: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -212,7 +213,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: '#263A13',
+    color: COLORS.darkGreen,
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 22,
@@ -221,58 +222,58 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 15,
-    backgroundColor: '#E3F0D5',
+    backgroundColor: COLORS.lightGreen,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: DIMENSIONS.borderRadius,
   },
   timeLabel: {
     fontSize: 14,
-    color: '#22330B',
+    color: COLORS.darkGreen,
     marginRight: 8,
   },
   timeText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: COLORS.secondary,
   },
   locationText: {
     fontSize: 14,
-    color: '#263A13',
+    color: COLORS.darkGreen,
     textAlign: 'center',
     marginBottom: 30,
   },
   boldText: {
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
   },
   cancelButton: {
-    backgroundColor: '#f44336',
+    backgroundColor: COLORS.red,
     paddingHorizontal: 30,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: DIMENSIONS.borderRadius,
     marginBottom: 20,
   },
   cancelButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 14,
     fontWeight: 'bold',
   },
   confirmButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: COLORS.secondary,
     paddingHorizontal: 40,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: DIMENSIONS.borderRadius,
     marginTop: 10,
   },
   confirmButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
   statusMessage: {
     fontSize: 12,
-    color: '#666',
+    color: COLORS.gray,
     textAlign: 'center',
     fontStyle: 'italic',
     marginTop: 20,

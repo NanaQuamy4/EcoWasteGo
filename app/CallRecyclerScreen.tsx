@@ -1,6 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import { Alert, Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import CommonHeader from './components/CommonHeader';
+import { COLORS, DIMENSIONS, RECYCLER_DATA } from './utils/constants';
 
 interface RecyclerData {
   name: string;
@@ -16,18 +18,18 @@ interface RecyclerData {
 export default function CallRecyclerScreen() {
   const params = useLocalSearchParams();
   const recyclerName = params.recyclerName as string;
-  const pickup = params.pickup as string;
 
-  // Mock data for the recycler (in real app, this would come from API)
+
+  // Use centralized recycler data
   const recyclerData: RecyclerData = {
-    name: recyclerName || 'GreenFleet GH',
-    phone: '+233 59 197 8093',
-    rating: 4.8,
-    truckType: 'Small Truck',
-    recyclerId: 'REC001',
-    color: 'Green',
-    rate: '₵50',
-    pastPickups: 127,
+    name: recyclerName || RECYCLER_DATA.name,
+    phone: RECYCLER_DATA.phone,
+    rating: RECYCLER_DATA.rating,
+    truckType: RECYCLER_DATA.truckType,
+    recyclerId: RECYCLER_DATA.recyclerId,
+    color: RECYCLER_DATA.color,
+    rate: RECYCLER_DATA.rate,
+    pastPickups: RECYCLER_DATA.pastPickups,
   };
 
   const handleCall = () => {
@@ -56,17 +58,7 @@ export default function CallRecyclerScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Banner/Header */}
-      <View style={styles.bannerBg}>
-        <Image
-          source={require('../assets/images/blend.jpg')}
-          style={styles.bannerImage}
-          resizeMode="cover"
-        />
-        <View style={styles.headerCard}>
-          <Text style={styles.header}>Call Your Recycler</Text>
-        </View>
-      </View>
+      <CommonHeader title="Call Your Recycler" />
 
       {/* Main Content */}
       <View style={styles.content}>
@@ -127,50 +119,19 @@ export default function CallRecyclerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
   },
-  bannerBg: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 8,
-    marginTop: 0,
-    position: 'relative',
-  },
-  bannerImage: {
-    width: '100%',
-    height: 70,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-  },
-  headerCard: {
-    backgroundColor: 'transparent',
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    position: 'absolute',
-    left: 18,
-    right: 18,
-    top: 30,
-    zIndex: 2,
-    alignItems: 'center',
-  },
-  header: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#22330B',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
+
   content: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: DIMENSIONS.margin,
   },
   profileCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: COLORS.white,
+    borderRadius: DIMENSIONS.cardBorderRadius,
     padding: 20,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -185,7 +146,7 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     borderWidth: 3,
-    borderColor: '#4CAF50',
+    borderColor: COLORS.secondary,
   },
   recyclerInfo: {
     alignItems: 'center',
@@ -198,50 +159,50 @@ const styles = StyleSheet.create({
   recyclerName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
     marginRight: 8,
   },
   badge: {
-    backgroundColor: '#E3F0D5',
+    backgroundColor: COLORS.lightGreen,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: DIMENSIONS.borderRadius,
   },
   badgeText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
   },
   truckType: {
     fontSize: 16,
-    color: '#666',
+    color: COLORS.gray,
     marginBottom: 4,
   },
   recyclerId: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.gray,
     marginBottom: 4,
   },
   color: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.gray,
     marginBottom: 4,
   },
   rate: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.gray,
     marginBottom: 4,
   },
   pastPickups: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.gray,
   },
   contactSection: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: COLORS.white,
+    borderRadius: DIMENSIONS.cardBorderRadius,
     padding: 20,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -250,14 +211,14 @@ const styles = StyleSheet.create({
   contactLabel: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
     marginBottom: 16,
   },
   contactRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8F9FA',
-    borderRadius: 12,
+    borderRadius: DIMENSIONS.borderRadius,
     padding: 16,
   },
   contactIcon: {
@@ -272,27 +233,27 @@ const styles = StyleSheet.create({
   contactName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
     marginBottom: 4,
   },
   contactPhone: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.gray,
   },
   callButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: COLORS.secondary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
   },
   callButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontWeight: 'bold',
     fontSize: 14,
   },
   backButton: {
     backgroundColor: '#E3E3E3',
-    borderRadius: 12,
+    borderRadius: DIMENSIONS.borderRadius,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 'auto',
@@ -301,6 +262,6 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
   },
 }); 

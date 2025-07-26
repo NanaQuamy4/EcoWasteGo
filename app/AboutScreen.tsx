@@ -46,7 +46,7 @@ export default function AboutScreen() {
           </Text>
           
           <Text style={styles.paragraph}>
-            Our mission is to promote responsible waste disposal, reduce pollution, and support a circular economy by linking communities to reliable recycling services. Whether you're decluttering your home or managing e-waste, EcoWasteGo helps you do it responsibly while earning rewards for your efforts.
+            Our mission is to promote responsible waste disposal, reduce pollution, and support a circular economy by linking communities to reliable recycling services. Whether you&apos;re decluttering your home or managing e-waste, EcoWasteGo helps you do it responsibly while earning rewards for your efforts.
           </Text>
           
           <View style={styles.taglineContainer}>

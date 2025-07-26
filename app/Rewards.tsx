@@ -45,7 +45,7 @@ const tryOpenApp = async (url: string, fallbackUrl?: string) => {
     } else {
       Alert.alert('App not installed', 'The app is not installed on your device.');
     }
-  } catch (e) {
+  } catch {
     Alert.alert('Error', 'Unable to open the app.');
   }
 };
@@ -57,8 +57,8 @@ export default function RewardsScreen() {
   const scale = useSharedValue(1);
   const progress = useSharedValue(0);
   const progressPercent = 0.7; // 70% progress
-  const userName = 'Williams'; // Replace with dynamic user name if available
-  const [showConfetti, setShowConfetti] = useState(false);
+    const userName = 'Williams'; // Replace with dynamic user name if available
+
   const [badgeModalVisible, setBadgeModalVisible] = useState(false);
   const [modalBadge, setModalBadge] = useState<Badge | null>(null);
   const glitterAnim = React.useRef(new Animated.Value(0)).current;
@@ -80,7 +80,7 @@ export default function RewardsScreen() {
       glitterAnim.stopAnimation();
       glitterAnim.setValue(0);
     }
-  }, [badgeModalVisible, modalBadge]);
+  }, [badgeModalVisible, modalBadge, glitterAnim]);
 
   // Sparkle animation for earned badge
   React.useEffect(() => {
@@ -95,16 +95,9 @@ export default function RewardsScreen() {
       sparkleAnim.stopAnimation();
       sparkleAnim.setValue(0);
     }
-  }, [badgeModalVisible, modalBadge]);
+  }, [badgeModalVisible, modalBadge, sparkleAnim]);
 
-  // Play sound when earned badge modal opens
-  React.useEffect(() => {
-    if (badgeModalVisible && modalBadge?.earned) {
-      setShowConfetti(true);
-    } else {
-      setShowConfetti(false);
-    }
-  }, [badgeModalVisible, modalBadge]);
+
 
   // Mock leaderboard data
   const leaderboard = [
@@ -121,7 +114,7 @@ export default function RewardsScreen() {
 
   useEffect(() => {
     progress.value = withTiming(progressPercent, { duration: 1200 });
-  }, []);
+  }, [progress, progressPercent]);
 
   const animatedProgressStyle = useAnimatedStyle(() => ({
     width: `${Math.round(progress.value * 100)}%`,
@@ -263,8 +256,7 @@ export default function RewardsScreen() {
             style={[styles.challengeButton, dailyChallenge.completed && { backgroundColor: '#B6CDBD' }]}
             disabled={dailyChallenge.completed}
             onPress={() => {
-              // Mark as completed and show confetti
-              setShowConfetti(true);
+              // Mark as completed
               // ...update challenge state in real app
             }}
           >
@@ -320,7 +312,7 @@ export default function RewardsScreen() {
               explosionSpeed={350}
               fallSpeed={2500}
               autoStart={true}
-              onAnimationEnd={() => setShowConfetti(false)}
+              onAnimationEnd={() => {}}
             />
           )}
           {modalBadge && (

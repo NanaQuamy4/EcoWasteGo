@@ -1,13 +1,9 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS, DIMENSIONS, MOCKED_TRUCKS } from './utils/constants';
 
-const MOCKED_TRUCKS = [
-  { id: 1, type: 'Big Truck', image: require('../assets/images/truck.png'), eta: '5mins from your location' },
-  { id: 2, type: 'Small Truck', image: require('../assets/images/small truck.png'), eta: '10mins from your location' },
-  { id: 3, type: 'Small Truck', image: require('../assets/images/small truck.png'), eta: '2mins from your location' },
-  { id: 4, type: 'Big Truck', image: require('../assets/images/truck.png'), eta: '5mins from your location' },
-];
+
 
 export default function SelectTruckScreen() {
   const params = useLocalSearchParams();
@@ -22,6 +18,16 @@ export default function SelectTruckScreen() {
 
   const handleFilterPress = (filter: 'all' | 'Big Truck' | 'Small Truck') => {
     setSelectedFilter(filter);
+  };
+
+  const handleTruckPress = (truck: any) => {
+    router.push({
+      pathname: '/RecyclerProfileDetails',
+      params: { 
+        recyclerId: truck.recyclerId,
+        pickup: pickup
+      }
+    });
   };
 
   return (
@@ -91,10 +97,23 @@ export default function SelectTruckScreen() {
       
       {/* Filtered Truck List */}
       {filteredTrucks.map(truck => (
-        <View key={truck.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-          <Image source={truck.image} style={{ width: 54, height: 38, resizeMode: 'contain', marginRight: 12 }} />
-          <Text style={{ color: '#22330B', fontSize: 16 }}>{truck.eta}</Text>
-        </View>
+        <TouchableOpacity 
+          key={truck.id} 
+          style={styles.truckItem}
+          onPress={() => handleTruckPress(truck)}
+        >
+          <View style={styles.truckContent}>
+            <Image source={truck.image} style={styles.truckImage} />
+            <View style={styles.truckInfo}>
+              <Text style={styles.truckEta}>{truck.eta}</Text>
+              <Text style={styles.truckType}>{truck.type}</Text>
+              <Text style={styles.truckRate}>{truck.rate}</Text>
+            </View>
+            <View style={styles.ratingContainer}>
+              <Text style={styles.ratingText}>⭐ {truck.rating}</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
       ))}
       
       {/* No trucks message when filtered list is empty */}
@@ -104,8 +123,8 @@ export default function SelectTruckScreen() {
         </View>
       )}
       
-      <Text style={{ color: '#22330B', fontSize: 15, marginTop: 18, textAlign: 'center' }}>
-        You can select your preferred truck.
+      <Text style={{ color: COLORS.darkGreen, fontSize: 15, marginTop: 18, textAlign: 'center' }}>
+        Tap on a truck to view recycler details and confirm pickup.
       </Text>
     </ScrollView>
   );
@@ -114,7 +133,7 @@ export default function SelectTruckScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     paddingHorizontal: 0,
     paddingTop: 0,
   },
@@ -146,33 +165,88 @@ const styles = StyleSheet.create({
   header: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
     textAlign: 'center',
     marginBottom: 8,
   },
   pickupText: {
-    color: '#263A13',
+    color: COLORS.darkGreen,
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 8,
   },
   filterButton: {
-    backgroundColor: '#E3F0D5',
+    backgroundColor: COLORS.lightGreen,
     borderRadius: 18,
     marginRight: 12,
     paddingHorizontal: 18,
     paddingVertical: 8,
   },
   filterButtonActive: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: COLORS.secondary,
   },
   filterButtonText: {
-    color: '#22330B',
+    color: COLORS.darkGreen,
     fontWeight: 'bold',
     fontSize: 16,
   },
   filterButtonTextActive: {
-    color: '#fff',
+    color: COLORS.white,
+  },
+  truckItem: {
+    backgroundColor: COLORS.white,
+    marginHorizontal: 18,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: DIMENSIONS.borderRadius,
+    shadowColor: COLORS.black,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 3,
+  },
+  truckContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  truckImage: {
+    width: 54,
+    height: 38,
+    resizeMode: 'contain',
+    marginRight: 12,
+  },
+  truckInfo: {
+    flex: 1,
+  },
+  truckEta: {
+    color: COLORS.darkGreen,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  truckType: {
+    color: COLORS.gray,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  truckRate: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  ratingContainer: {
+    backgroundColor: COLORS.lightGreen,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  ratingText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
   },
   noTrucksContainer: {
     alignItems: 'center',
@@ -180,7 +254,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   noTrucksText: {
-    color: '#666',
+    color: COLORS.gray,
     fontSize: 16,
     textAlign: 'center',
     fontStyle: 'italic',

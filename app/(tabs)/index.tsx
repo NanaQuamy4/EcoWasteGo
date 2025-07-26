@@ -1,7 +1,7 @@
-import { Entypo, Feather, FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Dimensions, FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 
@@ -10,15 +10,7 @@ const SUGGESTIONS = [
   'Atonsu unity oil',
 ];
 
-const MENU_ITEMS = [
-  { label: 'Education', icon: <FontAwesome5 name="book-medical" size={22} color="#22330B" />, key: 'education' },
-  { label: 'History', icon: <Feather name="rotate-ccw" size={22} color="#22330B" />, key: 'history' },
-  { label: 'Rewards', icon: <Feather name="gift" size={22} color="#22330B" />, key: 'rewards' },
-  { label: 'Notification', icon: <Ionicons name="notifications-outline" size={22} color="#22330B" />, key: 'notification' },
-  { label: 'Help', icon: <Feather name="help-circle" size={22} color="#22330B" />, key: 'help' },
-  { label: 'Contact Us', icon: <Entypo name="address" size={22} color="#22330B" />, key: 'contact' },
-  { label: 'About', icon: <Feather name="info" size={22} color="#22330B" />, key: 'about' },
-];
+
 
 export default function HomeScreen() {
   const [search, setSearch] = useState('');
@@ -26,8 +18,7 @@ export default function HomeScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const user = { name: 'Williams Boampong' };
   const router = useRouter();
-  const screenWidth = Dimensions.get('window').width;
-  const drawerWidth = screenWidth * 0.78;
+
 
   const filteredSuggestions = SUGGESTIONS.filter(s =>
     s.toLowerCase().includes(search.toLowerCase())

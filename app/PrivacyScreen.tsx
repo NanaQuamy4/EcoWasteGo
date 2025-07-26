@@ -38,7 +38,7 @@ export default function PrivacyScreen() {
         <Text style={styles.sectionTitle}>Last Updated: <Text style={styles.sectionBold}>[29/08/2025]</Text></Text>
         <Text style={styles.sectionBold}>EcoWasteGo</Text>
         <Text style={styles.sectionText}>
-          ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and disclose information when you use our mobile application and services (collectively, the "App").
+          (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and disclose information when you use our mobile application and services (collectively, the &quot;App&quot;).
         </Text>
         <Text style={styles.sectionText}>
           By using EcoWasteGo, you agree to the terms of this Privacy Policy.

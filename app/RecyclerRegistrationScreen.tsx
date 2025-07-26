@@ -124,7 +124,7 @@ export default function RecyclerRegistrationScreen() {
   const [certificateImage, setCertificateImage] = useState<string | null>(null);
   const [region, setRegion] = useState('Ashanti');
   const [regionDropdown, setRegionDropdown] = useState(false);
-  const [regionQuery, setRegionQuery] = useState('Ashanti');
+      const [regionQuery, setRegionQuery] = useState('Ashanti');
   const [city, setCity] = useState('');
   const [cityDropdown, setCityDropdown] = useState(false);
   const [cityQuery, setCityQuery] = useState('');
@@ -134,7 +134,7 @@ export default function RecyclerRegistrationScreen() {
   const [idFront, setIdFront] = useState<string | null>(null);
   const [idBack, setIdBack] = useState<string | null>(null);
   const [idNo, setIdNo] = useState('');
-  const [pending, setPending] = useState(false);
+
   const [name, setName] = useState('Williams Boampong');
   const [email, setEmail] = useState('nanaquamy4@gmail.com');
   const [emailError, setEmailError] = useState('');
@@ -397,12 +397,7 @@ export default function RecyclerRegistrationScreen() {
     item.flag.includes(search)
   );
 
-  // Dummy user info
-  const user = {
-    name: 'Williams Boampong',
-    email: 'nanaquamy4@gmail.com',
-    phone: '54 673 2719',
-  };
+
 
   const pickImage = async (setter: (uri: string) => void) => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -590,8 +585,9 @@ export default function RecyclerRegistrationScreen() {
             <Text style={styles.inputLabel}>City:</Text>
             <View style={{ flex: 1 }}>
               <TextInput
-                value={cityQuery}
+                value={city}
                 onChangeText={text => {
+                  setCity(text);
                   setCityQuery(text);
                   setCityDropdown(true);
                 }}
@@ -758,7 +754,7 @@ export default function RecyclerRegistrationScreen() {
         <View style={{ alignItems: 'center', marginTop: 40 }}>
           <Text style={styles.pendingTitle}>Pending Review</Text>
           <ActivityIndicator size="large" color="#263A13" style={{ marginVertical: 24 }} />
-          <Text style={styles.pendingText}>You'll receive an update within 48-72 hours.</Text>
+          <Text style={styles.pendingText}>You&apos;ll receive an update within 48-72 hours.</Text>
           <TouchableOpacity style={styles.confirmButton} onPress={() => setStep(1)}>
             <Text style={styles.confirmButtonText}>Edit and Resubmit</Text>
           </TouchableOpacity>

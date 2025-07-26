@@ -1,6 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import CommonHeader from './components/CommonHeader';
+import { COLORS, DIMENSIONS, RECYCLER_DATA } from './utils/constants';
 
 interface RecyclerData {
   id: string;
@@ -19,16 +21,16 @@ export default function RecyclerProfileDetailsScreen() {
   const recyclerId = params.recyclerId as string;
   const pickup = params.pickup as string;
 
-  // Mock data - in a real app, this would come from an API
+  // Use centralized recycler data
   const recyclerData: RecyclerData = {
     id: recyclerId,
-    name: "GreenFleet GH",
-    truckType: "Big Truck",
-    truckId: "EWG-ASH-TK-0823",
-    color: "Green and yellow",
-    rate: "GHS 1.20/kg",
-    pastPickups: 314,
-    rating: 4.8,
+    name: RECYCLER_DATA.name,
+    truckType: RECYCLER_DATA.truckType,
+    truckId: RECYCLER_DATA.recyclerId,
+    color: RECYCLER_DATA.color,
+    rate: RECYCLER_DATA.rate,
+    pastPickups: RECYCLER_DATA.pastPickups,
+    rating: RECYCLER_DATA.rating,
     image: require('../assets/images/truck.png')
   };
 
@@ -49,17 +51,7 @@ export default function RecyclerProfileDetailsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }}>
-      {/* Header Banner */}
-      <View style={styles.bannerBg}>
-        <Image
-          source={require('../assets/images/blend.jpg')}
-          style={styles.bannerImage}
-          resizeMode="cover"
-        />
-        <View style={styles.headerCard}>
-          <Text style={styles.header}>Recycler Profile Details</Text>
-        </View>
-      </View>
+      <CommonHeader title="Recycler Profile Details" />
 
       {/* Pickup Location */}
       <Text style={styles.pickupText}>
@@ -131,56 +123,25 @@ export default function RecyclerProfileDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     paddingHorizontal: 0,
     paddingTop: 0,
   },
-  bannerBg: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 8,
-    marginTop: 0,
-    position: 'relative',
-  },
-  bannerImage: {
-    width: '100%',
-    height: 70,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-  },
-  headerCard: {
-    backgroundColor: 'transparent',
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    position: 'absolute',
-    left: 18,
-    right: 18,
-    top: 30,
-    zIndex: 2,
-    alignItems: 'center',
-  },
-  header: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#22330B',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
+
   pickupText: {
-    color: '#263A13',
+    color: COLORS.darkGreen,
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 18,
     marginTop: 8,
   },
   detailsCard: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     marginHorizontal: 18,
     marginBottom: 24,
     padding: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
+    borderRadius: DIMENSIONS.borderRadius,
+    shadowColor: COLORS.black,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -202,10 +163,10 @@ const styles = StyleSheet.create({
   recyclerName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
   },
   ratingContainer: {
-    backgroundColor: '#E3F0D5',
+    backgroundColor: COLORS.lightGreen,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -213,7 +174,7 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
   },
   detailRow: {
     flexDirection: 'row',
@@ -229,12 +190,12 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#22330B',
+    color: COLORS.darkGreen,
     width: 80,
   },
   detailText: {
     fontSize: 16,
-    color: '#22330B',
+    color: COLORS.darkGreen,
     flex: 1,
   },
   buttonContainer: {
@@ -245,25 +206,25 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     flex: 1,
-    backgroundColor: '#4CAF50',
+    backgroundColor: COLORS.secondary,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: DIMENSIONS.borderRadius,
     alignItems: 'center',
   },
   confirmButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: '#f44336',
+    backgroundColor: COLORS.red,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: DIMENSIONS.borderRadius,
     alignItems: 'center',
   },
   cancelButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -272,7 +233,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: '#4CAF50',
+    borderColor: COLORS.secondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,

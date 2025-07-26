@@ -1,6 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import CommonHeader from './components/CommonHeader';
+import { COLORS, DIMENSIONS } from './utils/constants';
 
 export default function TrackingScreen() {
   const params = useLocalSearchParams();
@@ -84,17 +86,7 @@ export default function TrackingScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Banner/Header */}
-      <View style={styles.bannerBg}>
-        <Image
-          source={require('../assets/images/blend.jpg')}
-          style={styles.bannerImage}
-          resizeMode="cover"
-        />
-        <View style={styles.headerCard}>
-          <Text style={styles.header}>Track Your Recycler</Text>
-        </View>
-      </View>
+      <CommonHeader title="Track Your Recycler" />
 
       {/* Main Content: Empty for minimalist look */}
       <View style={{ flex: 1 }} />
@@ -144,45 +136,14 @@ export default function TrackingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
   },
-  bannerBg: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 8,
-    marginTop: 0,
-    position: 'relative',
-  },
-  bannerImage: {
-    width: '100%',
-    height: 70,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-  },
-  headerCard: {
-    backgroundColor: 'transparent',
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    position: 'absolute',
-    left: 18,
-    right: 18,
-    top: 30,
-    zIndex: 2,
-    alignItems: 'center',
-  },
-  header: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#22330B',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
+
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: DIMENSIONS.margin,
     marginBottom: 70,
   },
   statusAndButtons: {
@@ -190,13 +151,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   statusText: {
-    color: '#22330B',
+    color: COLORS.darkGreen,
     fontSize: 15,
     marginBottom: 8,
     fontWeight: 'bold',
   },
   timerText: {
-    color: '#4CAF50',
+    color: COLORS.secondary,
     fontSize: 12,
     marginBottom: 8,
     fontWeight: '600',
@@ -214,7 +175,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   pillButtonText: {
-    color: '#22330B',
+    color: COLORS.darkGreen,
     fontWeight: 'bold',
     fontSize: 15,
   },
@@ -231,7 +192,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderTopWidth: 1,
     borderTopColor: '#E3E3E3',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     paddingBottom: 4,
   },
   navItem: {
@@ -240,11 +201,11 @@ const styles = StyleSheet.create({
   },
   navIcon: {
     fontSize: 22,
-    color: '#22330B',
+    color: COLORS.darkGreen,
   },
   navLabel: {
     fontSize: 12,
-    color: '#22330B',
+    color: COLORS.darkGreen,
     marginTop: 2,
   },
 }); 

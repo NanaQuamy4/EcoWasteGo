@@ -1,58 +1,9 @@
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-
-const DUMMY_RESPONSES = [
-  "I'm on my way, will be there in 10 minutes.",
-  "I'm running a bit late due to traffic. Sorry for the delay.",
-  "I've arrived at your location. Where should I meet you?",
-  "I can see your building. I'll be there shortly.",
-  "Thanks for the message. I'm heading to your pickup point now.",
-  "I'm about 5 minutes away. Please have your waste ready.",
-  "I'm here! Please come outside to meet me.",
-  "I'm having trouble finding your exact location. Can you help?",
-  "I'll be there in 15 minutes. Is that okay?",
-  "I'm at the main entrance. Where are you located?"
-];
-
-const MESSAGE_SUGGESTION_SETS = [
-  [
-    "Where are you now?",
-    "How long until you arrive?",
-    "I'm ready for pickup",
-    "Can you come earlier?",
-    "I'm running late, please wait",
-  ],
-  [
-    "I'm at the main gate",
-    "I'm in the lobby",
-    "I'm outside the building",
-    "I'm at the parking lot",
-    "I'm at the entrance",
-  ],
-  [
-    "I have a lot of waste",
-    "I have small waste bags",
-    "I have recyclable items",
-    "I have mixed waste",
-    "I have electronic waste",
-  ],
-  [
-    "Can you help me carry?",
-    "I need assistance",
-    "I'm elderly, please help",
-    "I have heavy items",
-    "I'm disabled, need help",
-  ],
-  [
-    "What's your truck color?",
-    "What's your vehicle number?",
-    "How do I identify you?",
-    "What should I look for?",
-    "Are you wearing a uniform?",
-  ],
-];
+import { ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import CommonHeader from './components/CommonHeader';
+import { COLORS, DIMENSIONS, DUMMY_RESPONSES, MESSAGE_SUGGESTION_SETS, RECYCLER_DATA } from './utils/constants';
 
 interface RecyclerData {
   name: string;
@@ -68,18 +19,18 @@ interface RecyclerData {
 export default function TextRecyclerScreen() {
   const params = useLocalSearchParams();
   const recyclerName = params.recyclerName as string;
-  const pickup = params.pickup as string;
+
 
   // Mock data for the recycler (in real app, this would come from API)
   const recyclerData: RecyclerData = {
-    name: recyclerName || 'GreenFleet GH',
-    phone: '+233 59 197 8093',
-    rating: 4.8,
-    truckType: 'Small Truck',
-    recyclerId: 'REC001',
-    color: 'Green',
-    rate: '₵50',
-    pastPickups: 127,
+    name: recyclerName || RECYCLER_DATA.name,
+    phone: RECYCLER_DATA.phone,
+    rating: RECYCLER_DATA.rating,
+    truckType: RECYCLER_DATA.truckType,
+    recyclerId: RECYCLER_DATA.recyclerId,
+    color: RECYCLER_DATA.color,
+    rate: RECYCLER_DATA.rate,
+    pastPickups: RECYCLER_DATA.pastPickups,
   };
 
   const [input, setInput] = useState("");
@@ -115,24 +66,11 @@ export default function TextRecyclerScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleBack = () => {
-    router.back();
-  };
+
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-      {/* Logo Header with Back Arrow */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 18, paddingBottom: 8, backgroundColor: '#fff', marginTop: 32, position: 'relative' }}>
-        <TouchableOpacity onPress={handleBack} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, justifyContent: 'center', paddingLeft: 12, zIndex: 2 }}>
-          <Feather name="arrow-left" size={28} color="#263A13" />
-        </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Image
-            source={require('../assets/images/logo landscape.png')}
-            style={{ width: 220, height: 52, resizeMode: 'contain', marginBottom: 12 }}
-          />
-        </View>
-      </View>
+    <SafeAreaView style={styles.container}>
+      <CommonHeader title="Text Your Recycler" />
 
       {/* Recycler Info Banner */}
       <View style={styles.bannerBg}>
@@ -152,47 +90,40 @@ export default function TextRecyclerScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ paddingHorizontal: 12, marginBottom: 6 }}
-        contentContainerStyle={{ alignItems: 'center' }}
+        style={styles.suggestionsContainer}
+        contentContainerStyle={styles.suggestionsContent}
       >
         {MESSAGE_SUGGESTION_SETS[suggestionSetIndex].map((suggestion, idx) => (
           <TouchableOpacity
             key={suggestion}
-            style={{
-              backgroundColor: '#E3F0D5',
-              borderRadius: 16,
-              paddingVertical: 7,
-              paddingHorizontal: 16,
-              marginRight: idx === MESSAGE_SUGGESTION_SETS[suggestionSetIndex].length - 1 ? 0 : 10,
-              marginLeft: idx === 0 ? 0 : 0,
-              borderWidth: 1,
-              borderColor: '#B6CDBD',
-            }}
+            style={[
+              styles.suggestionButton,
+              { marginRight: idx === MESSAGE_SUGGESTION_SETS[suggestionSetIndex].length - 1 ? 0 : 10 }
+            ]}
             onPress={() => sendMessage(suggestion)}
           >
-            <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 14 }}>{suggestion}</Text>
+            <Text style={styles.suggestionText}>{suggestion}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
       {/* Main Chat Area */}
-      <View style={{ flex: 1 }}>
+      <View style={styles.chatContainer}>
         <ScrollView
           ref={scrollViewRef}
-          contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 8, paddingBottom: 90 }}
+          contentContainerStyle={styles.chatContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ alignItems: 'center', marginBottom: 12 }}>
-            <FontAwesome5 name="recycle" size={120} color="#B6CDBD" style={{ opacity: 0.25 }} />
+          <View style={styles.recycleIconContainer}>
+            <FontAwesome5 name="recycle" size={120} color={COLORS.lightGreen} style={{ opacity: 0.25 }} />
           </View>
           {messages.map((msg, idx) => (
             <View
               key={msg.id}
-              style={
-                msg.sender === 'user'
-                  ? [styles.userBubble, { alignSelf: 'flex-end', marginRight: 18 }]
-                  : [styles.recyclerBubble, { alignSelf: 'flex-start', marginLeft: 18 }]
-              }
+              style={[
+                msg.sender === 'user' ? styles.userBubble : styles.recyclerBubble,
+                msg.sender === 'user' ? styles.userBubblePosition : styles.recyclerBubblePosition
+              ]}
             >
               <Text style={msg.sender === 'user' ? styles.userText : styles.recyclerText}>{msg.text}</Text>
             </View>
@@ -205,29 +136,29 @@ export default function TextRecyclerScreen() {
         <TextInput
           style={styles.input}
           placeholder="Type your message..."
-          placeholderTextColor="#263A13"
+          placeholderTextColor={COLORS.darkGreen}
           value={input}
           onChangeText={setInput}
           onSubmitEditing={() => sendMessage()}
           returnKeyType="send"
         />
         <TouchableOpacity style={styles.inputSendBtn} onPress={() => sendMessage()}>
-          <Feather name="send" size={22} color="#263A13" />
+          <Feather name="send" size={22} color={COLORS.darkGreen} />
         </TouchableOpacity>
       </View>
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push('/') }>
-          <Feather name="home" size={28} color="#22330B" />
+          <Feather name="home" size={28} color={COLORS.darkGreen} />
           <Text style={styles.navLabel}>Home</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push('/history') }>
-          <Feather name="rotate-ccw" size={28} color="#22330B" />
+          <Feather name="rotate-ccw" size={28} color={COLORS.darkGreen} />
           <Text style={styles.navLabel}>History</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push('/user') }>
-          <Feather name="user" size={28} color="#22330B" />
+          <Feather name="user" size={28} color={COLORS.darkGreen} />
           <Text style={styles.navLabel}>User</Text>
         </TouchableOpacity>
       </View>
@@ -236,8 +167,12 @@ export default function TextRecyclerScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+  },
   bannerBg: {
-    backgroundColor: '#B6CDBD',
+    backgroundColor: COLORS.lightGreen,
     borderRadius: 18,
     marginHorizontal: 0,
     marginTop: 8,
@@ -247,7 +182,7 @@ const styles = StyleSheet.create({
     height: 80,
   },
   bannerPill: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     borderRadius: 18,
     paddingVertical: 7,
     paddingHorizontal: 32,
@@ -255,30 +190,66 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 180,
     maxWidth: '90%',
-    shadowColor: '#000',
+    shadowColor: COLORS.black,
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
   bannerText: {
-    color: '#22330B',
+    color: COLORS.darkGreen,
     fontWeight: 'bold',
     fontSize: 18,
   },
+  suggestionsContainer: {
+    paddingHorizontal: 12,
+    marginBottom: 6,
+  },
+  suggestionsContent: {
+    alignItems: 'center',
+  },
+  suggestionButton: {
+    backgroundColor: COLORS.lightGreen,
+    borderRadius: 16,
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: COLORS.lightGreen,
+  },
+  suggestionText: {
+    color: COLORS.darkGreen,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  chatContainer: {
+    flex: 1,
+  },
+  chatContent: {
+    paddingHorizontal: 0,
+    paddingTop: 8,
+    paddingBottom: 90,
+  },
+  recycleIconContainer: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   recyclerBubble: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: COLORS.secondary,
     borderRadius: 18,
     paddingVertical: 10,
     paddingHorizontal: 16,
     marginBottom: 10,
     maxWidth: '80%',
-    shadowColor: '#000',
+    shadowColor: COLORS.black,
     shadowOpacity: 0.04,
     shadowRadius: 2,
     elevation: 1,
   },
+  recyclerBubblePosition: {
+    alignSelf: 'flex-start',
+    marginLeft: 18,
+  },
   recyclerText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 15,
   },
   userBubble: {
@@ -288,25 +259,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 10,
     maxWidth: '80%',
-    shadowColor: '#000',
+    shadowColor: COLORS.black,
     shadowOpacity: 0.04,
     shadowRadius: 2,
     elevation: 1,
   },
+  userBubblePosition: {
+    alignSelf: 'flex-end',
+    marginRight: 18,
+  },
   userText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 15,
   },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     borderRadius: 18,
-    marginHorizontal: 16,
+    marginHorizontal: DIMENSIONS.margin,
     marginBottom: 18,
     paddingHorizontal: 12,
     paddingVertical: 4,
-    shadowColor: '#000',
+    shadowColor: COLORS.black,
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 2,
@@ -314,15 +289,15 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#22330B',
+    color: COLORS.darkGreen,
     paddingVertical: 10,
     paddingHorizontal: 10,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     borderRadius: 18,
   },
   inputSendBtn: {
     marginLeft: 6,
-    backgroundColor: '#E3F0D5',
+    backgroundColor: COLORS.lightGreen,
     borderRadius: 16,
     padding: 8,
   },
@@ -330,17 +305,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderColor: '#E3F0D5',
+    borderColor: COLORS.lightGreen,
   },
   navItem: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   navLabel: {
-    color: '#22330B',
+    color: COLORS.darkGreen,
     fontSize: 13,
     marginTop: 2,
     fontWeight: 'bold',

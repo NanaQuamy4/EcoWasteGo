@@ -139,9 +139,9 @@ export default function EducationScreen() {
         {/* Explore More */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Explore More</Text>
-          <Text style={styles.linkText} onPress={() => Linking.openURL('https://www.google.com/maps/search/recyclers+near+me/')}>🔑 "Nearby Recyclers"</Text>
-          <Text style={styles.linkText} onPress={() => Linking.openURL('https://www.epa.gov/recycle/frequent-questions-recycling')}>📘 "More Waste Facts"</Text>
-          <Text style={styles.sectionTitle}>🎥 "Watch Tutorials"</Text>
+          <Text style={styles.linkText} onPress={() => Linking.openURL('https://www.google.com/maps/search/recyclers+near+me/')}>🔑 &quot;Nearby Recyclers&quot;</Text>
+          <Text style={styles.linkText} onPress={() => Linking.openURL('https://www.epa.gov/recycle/frequent-questions-recycling')}>📘 &quot;More Waste Facts&quot;</Text>
+          <Text style={styles.sectionTitle}>🎥 &quot;Watch Tutorials&quot;</Text>
           <Pressable style={styles.youtubePlayerPlaceholder} onPress={() => Linking.openURL('https://youtu.be/AJVky2Fzl54?si=rjfF5WIgltkpwEMj')}>
             <Image source={require('../assets/images/videoImage.png')} style={styles.youtubeThumbnail} />
             <Image source={require('../assets/images/youtube-logo.png')} style={styles.youtubeLogoLarge} />
