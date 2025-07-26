@@ -1,50 +1,71 @@
-# Welcome to your Expo app 👋
+# EcoWasteGo ♻️
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+EcoWasteGo is a mobile app built with Expo and React Native to help users easily schedule and track waste pickups with local recyclers. The app provides a seamless experience from selecting a truck to confirming pickup completion, with real-time status updates and direct communication features.
 
-## Get started
+## 🚀 Features
 
-1. Install dependencies
+- **Onboarding Experience**: Friendly onboarding screens introduce new users to the app’s benefits and flow.
+- **User Registration & Login**: Secure sign-up and login with validation, including country code selection for phone numbers.
+- **Profile Management**: Edit your profile details and manage your account information.
+- **Truck Selection & Filtering**: View and filter available trucks by size (Big, Small, All) to find the best fit for your waste pickup.
+- **Recycler Profile Details**: See detailed recycler/driver profiles, including name, truck type, ID, color, rate, and past pickups, with a circular profile image and rating badge.
+- **Pickup Request Flow**: Confirm your pickup, view a waiting screen, and track your recycler’s journey.
+- **Waiting Screen**: Animated waiting screen simulates waiting for recycler confirmation before tracking begins.
+- **Live Tracking Simulation**: Watch a countdown as your recycler approaches, then get notified when they arrive (simulated for demo/testing).
+- **Recycler Arrival Notification**: Automatic transition to a dedicated "Recycler Has Arrived" screen when the recycler is at your location.
+- **Direct Communication**: Call or text your recycler directly from the app using dedicated, profile-rich screens. Phone calls use the device dialer.
+- **Text Chat Simulation**: In-app chat interface with suggested quick messages and simulated recycler responses.
+- **Completion Confirmation**: Mark your pickup as complete once the recycler arrives, with confirmation dialog.
+- **History**: View your past pickups and interactions (screen placeholder for future expansion).
+- **Notifications**: Access app notifications (screen placeholder for future expansion).
+- **Help & FAQ**: Browse frequently asked questions and get help directly from the app.
+- **Modern UI/UX**: Clean, user-friendly design with consistent branding, green color theme, and smooth navigation.
 
+## 📲 Getting Started
+
+### Prerequisites
+- [Node.js](https://nodejs.org/)
+- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
+- [Expo CLI](https://docs.expo.dev/get-started/installation/)
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone <your-repo-url>
+   cd EcoWasteGo
+   ```
+2. **Install dependencies:**
    ```bash
    npm install
+   # or
+   yarn install
    ```
-
-2. Start the app
-
+3. **Start the app:**
    ```bash
    npx expo start
    ```
+4. **Run on your device:**
+   - Use the Expo Go app (Android/iOS) or an emulator/simulator.
 
-In the output, you'll find options to open the app in a
+## 🗺️ App Structure
+- `app/` — All screens and navigation (file-based routing)
+- `assets/` — Images and fonts
+- `components/` — Reusable UI components
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 🛠️ Tech Stack
+- **React Native** (with Expo)
+- **expo-router** for navigation
+- **TypeScript**
+- **@expo/vector-icons** for icons
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## 🤝 Contributing
+Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
 
-## Get a fresh project
+## 📧 Contact
+For questions or support, please contact the project maintainer.
 
-When you're ready, run:
+---
 
-```bash
-npm run reset-project
-```
+*Built with ❤️ using Expo and React Native.*
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
