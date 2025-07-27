@@ -37,7 +37,7 @@ export default function EcoImpactCelebrationScreen() {
     ]).start();
   }, [fadeAnim, scaleAnim]);
 
-  const handleContinue = () => {
+  const handleReturnHome = () => {
     // Navigate to home screen
     router.push('/');
   };
@@ -150,8 +150,8 @@ export default function EcoImpactCelebrationScreen() {
           <TouchableOpacity style={styles.historyButton} onPress={handleViewHistory}>
             <Text style={styles.historyButtonText}>View History</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue</Text>
+          <TouchableOpacity style={styles.continueButton} onPress={handleReturnHome}>
+            <Text style={styles.continueButtonText}>Return Home</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
