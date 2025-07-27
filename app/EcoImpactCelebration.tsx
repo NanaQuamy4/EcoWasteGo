@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { COLORS, DIMENSIONS, USER_STATS } from './utils/constants';
-import { calculateEnvironmentalImpact, parseWeight } from './utils/helpers';
+import { COLORS, DIMENSIONS, USER_STATS } from '../constants';
+import { calculateEnvironmentalImpact, parseWeight } from '../constants/helpers';
 
 export default function EcoImpactCelebrationScreen() {
   const params = useLocalSearchParams();

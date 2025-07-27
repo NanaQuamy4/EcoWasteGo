@@ -2,8 +2,8 @@ import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { COLORS, DIMENSIONS, DUMMY_RESPONSES, MESSAGE_SUGGESTION_SETS, RECYCLER_DATA } from '../constants';
 import CommonHeader from './components/CommonHeader';
-import { COLORS, DIMENSIONS, DUMMY_RESPONSES, MESSAGE_SUGGESTION_SETS, RECYCLER_DATA } from './utils/constants';
 
 interface RecyclerData {
   name: string;

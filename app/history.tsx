@@ -1,9 +1,9 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS, DIMENSIONS, HISTORY_DATA } from '../constants';
+import { calculateTotalStats, getStatusColor, getStatusText } from '../constants/helpers';
 import CommonHeader from './components/CommonHeader';
-import { COLORS, DIMENSIONS, HISTORY_DATA } from './utils/constants';
-import { calculateTotalStats, getStatusColor, getStatusText } from './utils/helpers';
 
 interface HistoryItem {
   id: string;

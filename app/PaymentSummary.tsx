@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import { Alert, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS, DIMENSIONS, PAYMENT_DATA } from '../constants';
 import CommonHeader from './components/CommonHeader';
-import { COLORS, DIMENSIONS, PAYMENT_DATA } from './utils/constants';
 
 interface PaymentData {
   recycler: string;

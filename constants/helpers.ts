@@ -1,4 +1,4 @@
-import { ENVIRONMENTAL_FACTORS } from './constants';
+import { ENVIRONMENTAL_FACTORS } from './index';
 
 // Weight parsing utility
 export const parseWeight = (weight: string): number => {

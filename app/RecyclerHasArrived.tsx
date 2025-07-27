@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS, DIMENSIONS } from '../constants';
 import CommonHeader from './components/CommonHeader';
-import { COLORS, DIMENSIONS } from './utils/constants';
 
 export default function RecyclerHasArrived() {
   const params = useLocalSearchParams();

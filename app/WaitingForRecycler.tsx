@@ -1,9 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS, DIMENSIONS } from '../constants';
+import { formatSecondsToTime } from '../constants/helpers';
 import CommonHeader from './components/CommonHeader';
-import { COLORS, DIMENSIONS } from './utils/constants';
-import { formatSecondsToTime } from './utils/helpers';
 
 export default function WaitingForRecyclerScreen() {
   const params = useLocalSearchParams();

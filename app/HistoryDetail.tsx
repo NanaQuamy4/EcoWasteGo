@@ -1,9 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import { Alert, Image, Linking, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS, DIMENSIONS } from '../constants';
+import { getStatusColor, getStatusText, parseWeight } from '../constants/helpers';
 import CommonHeader from './components/CommonHeader';
-import { COLORS, DIMENSIONS } from './utils/constants';
-import { getStatusColor, getStatusText, parseWeight } from './utils/helpers';
 
 export default function HistoryDetailScreen() {
   const params = useLocalSearchParams();

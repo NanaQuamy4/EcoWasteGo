@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import { Alert, Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS, DIMENSIONS, RECYCLER_DATA } from '../constants';
 import CommonHeader from './components/CommonHeader';
-import { COLORS, DIMENSIONS, RECYCLER_DATA } from './utils/constants';
 
 interface RecyclerData {
   name: string;
