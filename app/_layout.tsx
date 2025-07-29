@@ -30,9 +30,11 @@ export default function RootLayout() {
       <Stack.Screen name="HistoryDetail" options={{ headerShown: false }} />
       
       {/* Recycler Screens */}
-      <Stack.Screen name="RecyclerRequests" options={{ headerShown: false }} />
-      <Stack.Screen name="RecyclerActivities" options={{ headerShown: false }} />
-      <Stack.Screen name="RecyclerNavigation" options={{ headerShown: false }} />
+                          <Stack.Screen name="RecyclerRequests" options={{ headerShown: false }} />
+                    <Stack.Screen name="RecyclerActivities" options={{ headerShown: false }} />
+                    <Stack.Screen name="RecyclerNavigation" options={{ headerShown: false }} />
+                    <Stack.Screen name="RecyclerWeightEntry" options={{ headerShown: false }} />
+                    <Stack.Screen name="RecyclerPaymentSummary" options={{ headerShown: false }} />
     </Stack>
   );
 } 

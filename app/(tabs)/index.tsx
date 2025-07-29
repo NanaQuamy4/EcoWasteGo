@@ -40,71 +40,70 @@ export default function HomeScreen() {
       />
       <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={user} />
       
-      {/* Map Container */}
-      <View style={styles.mapContainer}>
-        {/* Blank placeholder for Google Maps API integration */}
+      {/* Search Section */}
+      <View style={styles.searchSection}>
+        <ImageBackground
+          source={require('../../assets/images/blend.jpg')}
+          style={styles.searchBarBg}
+          imageStyle={{ borderRadius: 24, opacity: 0.28 }}
+          resizeMode="cover"
+        >
+          <View style={styles.searchBar}>
+            <Feather name="search" size={20} color="#263A13" style={{ marginLeft: 10 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="What's your pickup point?"
+              value={search}
+              onChangeText={text => {
+                setSearch(text);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              placeholderTextColor="#263A13"
+            />
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#E3F0D5',
+                borderRadius: 14,
+                paddingHorizontal: 18,
+                paddingVertical: 8,
+                marginRight: 10,
+                marginLeft: 10,
+                opacity: search.length > 0 ? 1 : 0.5,
+              }}
+              disabled={search.length === 0}
+              onPress={() => {
+                if (search.length > 0) {
+                  router.push({ pathname: '/SelectTruck', params: { pickup: search } });
+                }
+              }}
+            >
+              <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 16 }}>Recycle</Text>
+            </TouchableOpacity>
+          </View>
+          {showSuggestions && search.length > 0 && (
+            <View style={styles.suggestionsBox}>
+              <FlatList
+                data={filteredSuggestions}
+                keyExtractor={item => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSuggestionPress(item)}>
+                    <Feather name="search" size={16} color="#263A13" style={{ marginRight: 8 }} />
+                    <Text style={styles.suggestionText}>{item}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          )}
+        </ImageBackground>
+      </View>
+
+      {/* Map Section */}
+      <View style={styles.mapSection}>
         <View style={styles.mapPlaceholder}>
           <View style={styles.mapHeader}>
             <Text style={styles.mapTitle}>User Dashboard</Text>
             <Text style={styles.mapSubtitle}>Find recyclers and schedule pickups</Text>
-          </View>
-          
-          {/* Search Bar Overlay */}
-          <View style={styles.searchOverlayContainer}>
-            <ImageBackground
-              source={require('../../assets/images/blend.jpg')}
-              style={styles.searchBarBg}
-              imageStyle={{ borderRadius: 24, opacity: 0.28 }}
-              resizeMode="cover"
-            >
-              <View style={styles.searchBar}>
-                <Feather name="search" size={20} color="#263A13" style={{ marginLeft: 10 }} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="What's your pickup point?"
-                  value={search}
-                  onChangeText={text => {
-                    setSearch(text);
-                    setShowSuggestions(true);
-                  }}
-                  onFocus={() => setShowSuggestions(true)}
-                  placeholderTextColor="#263A13"
-                />
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: '#E3F0D5',
-                    borderRadius: 14,
-                    paddingHorizontal: 18,
-                    paddingVertical: 8,
-                    marginRight: 10,
-                    marginLeft: 10,
-                    opacity: search.length > 0 ? 1 : 0.5,
-                  }}
-                  disabled={search.length === 0}
-                  onPress={() => {
-                    if (search.length > 0) {
-                      router.push({ pathname: '/SelectTruck', params: { pickup: search } });
-                    }
-                  }}
-                >
-                  <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 16 }}>Recycle</Text>
-                </TouchableOpacity>
-              </View>
-              {showSuggestions && search.length > 0 && (
-                <View style={styles.suggestionsBox}>
-                  <FlatList
-                    data={filteredSuggestions}
-                    keyExtractor={item => item}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSuggestionPress(item)}>
-                        <Feather name="search" size={16} color="#263A13" style={{ marginRight: 8 }} />
-                        <Text style={styles.suggestionText}>{item}</Text>
-                      </TouchableOpacity>
-                    )}
-                  />
-                </View>
-              )}
-            </ImageBackground>
           </View>
           
           {/* Blank map area for future Google Maps integration */}
@@ -201,6 +200,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
+  searchSection: {
+    margin: 16,
+    marginTop: 20,
+    marginBottom: 8,
+  },
   searchOverlayContainer: {
     position: 'absolute',
     top: 32,
@@ -267,16 +271,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#263A13',
   },
-  mapContainer: {
+  mapSection: {
     flex: 1,
     margin: 16,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  mapContainer: {
+    flex: 1,
+    maxHeight: 500,
+    margin: 16,
+    marginTop: 20,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#f5f5f5',
   },
   mapPlaceholder: {
     flex: 1,
-    backgroundColor: '#e8f5e8',
+    backgroundColor: '#F2FFE5',
     justifyContent: 'center',
     alignItems: 'center',
   },

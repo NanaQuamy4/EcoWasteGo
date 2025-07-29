@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   suggestionText: { fontSize: 16, color: '#263A13' },
   mapPlaceholder: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F2FFE5',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
   },

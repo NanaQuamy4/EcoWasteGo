@@ -7,6 +7,7 @@ import { COLORS } from '../constants';
 
 export default function RecyclerNavigation() {
   const [isNavigating, setIsNavigating] = useState(false);
+  const [hasArrived, setHasArrived] = useState(false);
 
   const handleStartNavigation = () => {
     setIsNavigating(true);
@@ -15,6 +16,11 @@ export default function RecyclerNavigation() {
       'Turn-by-turn navigation is now active. Follow the route to reach the pickup location.',
       [{ text: 'OK' }]
     );
+    
+    // Show arrival notification after 4 seconds
+    setTimeout(() => {
+      setHasArrived(true);
+    }, 4000);
   };
 
   const handleCancelNavigation = () => {
@@ -74,6 +80,17 @@ export default function RecyclerNavigation() {
     );
   };
 
+  const handleCalculate = () => {
+    // Navigate to RecyclerWeightEntry screen
+    router.push({
+      pathname: '/RecyclerWeightEntry',
+      params: {
+        userName: 'Michael Afia',
+        pickup: 'Gold hostel - Komfo Anokye'
+      }
+    });
+  };
+
   return (
     <View style={styles.container}>
       <AppHeader 
@@ -85,6 +102,19 @@ export default function RecyclerNavigation() {
       />
       
       <ScrollView style={styles.content}>
+        {/* Arrival Notification */}
+        {hasArrived && (
+          <View style={styles.arrivalNotification}>
+            <View style={styles.notificationContent}>
+              <Text style={styles.notificationTitle}>🎯 You have arrived at your destination!</Text>
+              <Text style={styles.notificationText}>Ready to collect waste from Michael Afia</Text>
+              <TouchableOpacity style={styles.calculateButton} onPress={handleCalculate}>
+                <Text style={styles.calculateButtonText}>Calculate</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Route Information Card */}
         <View style={styles.routeInfoCard}>
           <View style={styles.routeHeader}>
@@ -430,5 +460,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  arrivalNotification: {
+    backgroundColor: '#F2FFE5',
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  notificationContent: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  notificationTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  notificationText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  calculateButton: {
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  calculateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 }); 

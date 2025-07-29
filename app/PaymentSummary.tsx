@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
-import { Alert, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { COLORS, DIMENSIONS, PAYMENT_DATA } from '../constants';
+import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS } from '../constants';
 import CommonHeader from './components/CommonHeader';
 
 interface PaymentData {
@@ -18,14 +18,14 @@ export default function PaymentSummary() {
   const recyclerName = params.recyclerName as string;
   const pickup = params.pickup as string;
 
-  // Use centralized payment data
+  // Payment data
   const paymentData: PaymentData = {
     recycler: recyclerName || 'GreenFleet GH',
     pickupDate: 'June 26, 2025',
-    weight: PAYMENT_DATA.weight,
-    rate: PAYMENT_DATA.rate,
-    environmentalTax: PAYMENT_DATA.environmentalTax,
-    totalDue: PAYMENT_DATA.totalAmount,
+    weight: '10 kg',
+    rate: 'GHS 1.20/kg',
+    environmentalTax: 'GHS 0.60',
+    totalDue: 'GHS 12.60',
   };
 
   const handleAccept = () => {
@@ -67,11 +67,8 @@ export default function PaymentSummary() {
                 {
                   text: 'OK',
                   onPress: () => {
-                    // Navigate back to RecyclerHasArrived screen to wait for corrected payment
-                    router.push({
-                      pathname: '/RecyclerHasArrived',
-                      params: { recyclerName: recyclerName, pickup: pickup }
-                    });
+                    // Navigate back to tracking screen to wait for corrected payment
+                    router.back();
                   }
                 }
               ]
@@ -82,36 +79,29 @@ export default function PaymentSummary() {
     );
   };
 
-  const handleBack = () => {
-    router.back();
+  const handleCalculate = () => {
+    // Recalculate payment (in real app, this would trigger recalculation)
+    Alert.alert(
+      'Payment Calculated',
+      'Payment has been recalculated based on the current details.',
+      [{ text: 'OK' }]
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <CommonHeader onBackPress={handleBack} />
+      <CommonHeader />
 
-      {/* Background with Abstract Lines */}
-      <View style={styles.backgroundSection}>
-        <View style={styles.abstractLines} />
-        
-        {/* Payment Due Pill in Image Rectangle */}
-        <View style={styles.imageRectangle}>
-          <Image
-            source={require('../assets/images/blend.jpg')}
-            style={styles.blendImage}
-            resizeMode="cover"
-          />
-          <View style={styles.paymentDuePill}>
-            <Text style={styles.paymentDueText}>Payment Due</Text>
-          </View>
-        </View>
+      {/* Payment Due Banner */}
+      <View style={styles.paymentDueBanner}>
+        <Text style={styles.paymentDueText}>Payment Due</Text>
       </View>
 
-      {/* Summary Card with Note Section */}
+      {/* Summary Section */}
       <View style={styles.summaryContainer}>
-        <Text style={styles.summaryTitle}>Summary</Text>
-       
-        <View style={styles.paymentDetailsContainer}>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Summary</Text>
+          
           <View style={styles.paymentDetails}>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Recycler</Text>
@@ -148,14 +138,11 @@ export default function PaymentSummary() {
                 <Text style={styles.valueText}>{paymentData.environmentalTax}</Text>
               </View>
             </View>
-
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Total Due</Text>
-              <View style={styles.detailValue}>
-                <Text style={styles.valueText}>{paymentData.totalDue}</Text>
-              </View>
-            </View>
           </View>
+
+          <TouchableOpacity style={styles.calculateButton} onPress={handleCalculate}>
+            <Text style={styles.calculateButtonText}>Calculate</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Note Section */}
@@ -184,85 +171,54 @@ export default function PaymentSummary() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: '#F8FFF0',
   },
-  backgroundSection: {
-    height: 100,
-    backgroundColor: COLORS.background,
-    position: 'relative',
-  },
-  abstractLines: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    opacity: 0.3,
-  },
-  imageRectangle: {
-    position: 'absolute',
-    top: 20,
-    left: '50%',
-    transform: [{ translateX: -50 }],
+  paymentDueBanner: {
+    backgroundColor: '#F2FFE5',
     borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: COLORS.black,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  blendImage: {
-    width: 200,
-    height: 50,
-    borderRadius: 20,
-  },
-  paymentDuePill: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowRadius: 8,
+    elevation: 4,
   },
   paymentDueText: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
     textAlign: 'center',
   },
   summaryContainer: {
-    backgroundColor: COLORS.background,
-    margin: DIMENSIONS.margin,
-    borderRadius: DIMENSIONS.cardBorderRadius,
-    marginTop: -30,
+    backgroundColor: '#CFDFBF',
+    borderRadius: 20,
+    marginHorizontal: 20,
     padding: 20,
-    shadowColor: COLORS.black,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 5,
+    elevation: 4,
+  },
+  summaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
   },
   summaryTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
-    marginBottom: 16,
     textAlign: 'center',
-  },
-  paymentDetailsContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: DIMENSIONS.borderRadius,
     marginBottom: 16,
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   paymentDetails: {
-    backgroundColor: 'transparent',
-    borderRadius: DIMENSIONS.borderRadius,
-    padding: 16,
+    marginBottom: 16,
   },
   detailRow: {
     flexDirection: 'row',
@@ -272,32 +228,45 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 14,
-    color: COLORS.darkGreen,
+    color: '#666',
     fontWeight: '500',
-    flex: 1,
   },
   detailValue: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    minWidth: 100,
   },
   valueText: {
     fontSize: 14,
     color: COLORS.darkGreen,
-    flex: 1,
-    textAlign: 'right',
+    fontWeight: '600',
   },
   dropdownArrow: {
     fontSize: 12,
-    color: COLORS.black,
-    marginLeft: 4,
+    color: '#666',
+    marginLeft: 8,
+  },
+  calculateButton: {
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignSelf: 'flex-end',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  calculateButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   noteSection: {
-    padding: 16,
     marginTop: 8,
   },
   noteTitle: {
@@ -309,41 +278,52 @@ const styles = StyleSheet.create({
   noteText: {
     fontSize: 12,
     color: '#192E01',
-    lineHeight: 16,
+    lineHeight: 18,
     marginBottom: 4,
   },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: DIMENSIONS.margin,
+    paddingHorizontal: 20,
+    marginTop: 24,
     marginBottom: 20,
   },
   rejectButton: {
-    backgroundColor: COLORS.red,
-    borderRadius: DIMENSIONS.borderRadius,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
+    backgroundColor: '#FF4444',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     flex: 1,
     marginRight: 8,
-    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   rejectButtonText: {
-    color: COLORS.white,
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   acceptButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: DIMENSIONS.borderRadius,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
+    backgroundColor: '#1C3301',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     flex: 1,
     marginLeft: 8,
-    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   acceptButtonText: {
-    color: COLORS.white,
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
 }); 

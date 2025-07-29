@@ -9,10 +9,15 @@ export default function TrackingScreen() {
   const recyclerName = params.recyclerName as string;
   const pickup = params.pickup as string;
   const [timeElapsed, setTimeElapsed] = useState(0);
+  const [hasReachedDestination, setHasReachedDestination] = useState(false);
 
-  // Timer-based simulation: Navigate to "Recycler Has Arrived" after 15 seconds
+  // Timer-based simulation: Show destination reached after 10 seconds, then navigate after 15 seconds
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const destinationTimer = setTimeout(() => {
+      setHasReachedDestination(true);
+    }, 10000); // 10 seconds - show destination reached
+
+    const navigationTimer = setTimeout(() => {
       // Navigate to RecyclerHasArrived screen
       router.push({
         pathname: '/RecyclerHasArrived',
@@ -23,7 +28,10 @@ export default function TrackingScreen() {
       });
     }, 15000); // 15 seconds for demo
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(destinationTimer);
+      clearTimeout(navigationTimer);
+    };
   }, [recyclerName, pickup]);
 
   // Optional: Show countdown timer
@@ -84,6 +92,17 @@ export default function TrackingScreen() {
     );
   };
 
+  const handleCheckPaymentDue = () => {
+    // Navigate to payment summary screen
+    router.push({
+      pathname: '/PaymentSummary',
+      params: { 
+        recyclerName: recyclerName,
+        pickup: pickup 
+      }
+    });
+  };
+
   return (
     <View style={styles.container}>
       <CommonHeader title="Track Your Recycler" />
@@ -107,11 +126,28 @@ export default function TrackingScreen() {
         </View>
       </View>
 
+      {/* Destination Reached Notification */}
+      {hasReachedDestination && (
+        <View style={styles.destinationNotification}>
+          <View style={styles.notificationContent}>
+            <Text style={styles.notificationTitle}>🎯 Destination Reached!</Text>
+            <Text style={styles.notificationText}>Your recycler has arrived at your location</Text>
+            <TouchableOpacity style={styles.checkPaymentButton} onPress={handleCheckPaymentDue}>
+              <Text style={styles.checkPaymentText}>Check Payment Due</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Bottom Row: Status, Truck, and Buttons */}
       <View style={styles.bottomRow}>
         <View style={styles.statusAndButtons}>
-          <Text style={styles.statusText}>Recycler is on his way</Text>
-          <Text style={styles.timerText}>{15 - timeElapsed}s until arrival</Text>
+          <Text style={styles.statusText}>
+            {hasReachedDestination ? 'Recycler has arrived!' : 'Recycler is on his way'}
+          </Text>
+          <Text style={styles.timerText}>
+            {hasReachedDestination ? 'Ready for pickup' : `${15 - timeElapsed}s until arrival`}
+          </Text>
           <View style={styles.buttonRow}>
             <TouchableOpacity style={styles.pillButton} onPress={handleCall}>
               <Text style={styles.pillButtonText}>📞 Call</Text>
@@ -273,5 +309,52 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.darkGreen,
     marginTop: 2,
+  },
+  destinationNotification: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    zIndex: 1000,
+  },
+  notificationContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+    alignItems: 'center',
+  },
+  notificationTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  notificationText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  checkPaymentButton: {
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  checkPaymentText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 }); 

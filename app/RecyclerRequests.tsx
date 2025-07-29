@@ -1,4 +1,4 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -231,6 +231,24 @@ export default function RecyclerRequests() {
           </View>
         ))}
       </ScrollView>
+
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNavigation}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(recycler-tabs)')}>
+          <Ionicons name="home" size={24} color={COLORS.darkGreen} />
+          <Text style={styles.tabLabel}>Home</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(recycler-tabs)/history')}>
+          <Ionicons name="time" size={24} color={COLORS.gray} />
+          <Text style={styles.tabLabel}>History</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(recycler-tabs)/user')}>
+          <Ionicons name="person" size={24} color={COLORS.gray} />
+          <Text style={styles.tabLabel}>User</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -412,5 +430,25 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  bottomNavigation: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#E3E3E3',
+    paddingBottom: 5,
+    paddingTop: 5,
+    height: 60,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.gray,
+    marginTop: 2,
   },
 });

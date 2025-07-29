@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     transform: [{ translateX: 20 }],
   },
   mapContainer: {
-    height: 300,
+    flex: 1,
     margin: 16,
     borderRadius: 12,
     overflow: 'hidden',
