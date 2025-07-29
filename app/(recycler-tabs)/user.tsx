@@ -6,33 +6,37 @@ import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import { COLORS } from '../../constants';
 
-export default function UserScreen() {
-  const user = {
-    name: 'Williams Boampong',
-    email: 'nanaquamy4@gmail.com',
-    phone: '54 673 2719',
-    status: 'user',
-    totalPickups: 12,
-    totalWaste: '156.8 kg',
-    memberSince: 'Jan 2024',
+export default function RecyclerUserTab() {
+  const recycler = {
+    name: 'John Doe',
+    email: 'john.doe@example.com',
+    phone: '+233 54 123 4567',
+    status: 'recycler',
+    totalPickups: 156,
+    totalEarnings: '₵2,450.80',
+    memberSince: 'Mar 2023',
+    rating: 4.8,
+    completedPickups: 142,
   };
 
-  const [currentStatus, setCurrentStatus] = useState(user.status);
+  const [currentStatus, setCurrentStatus] = useState(recycler.status);
   const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
   const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
   const [showStatusSwitch, setShowStatusSwitch] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(3); // Mock notification count
+  const [notificationCount, setNotificationCount] = useState(3);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const router = useRouter();
 
   const handleStatusSwitch = (newStatus: string) => {
     setCurrentStatus(newStatus);
     setShowStatusSwitch(false);
     
-    if (newStatus === 'recycler') {
-      // Navigate to recycler tabs
-      router.push('/(recycler-tabs)/' as any);
-    } else if (newStatus === 'user') {
-      // Already on user mode, just update the status
+    if (newStatus === 'user') {
+      // Navigate to user tabs
+      router.push('/(tabs)/' as any);
+    } else if (newStatus === 'recycler') {
+      // Already on recycler mode, just update the status
       Alert.alert(
         'Status Changed',
         `You are now in ${newStatus} mode.`,
@@ -67,9 +71,6 @@ export default function UserScreen() {
     setShowLogoutPrompt(false);
   };
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const router = useRouter();
-
   const getStatusColor = (status: string) => {
     return status === 'recycler' ? COLORS.darkGreen : COLORS.primary;
   };
@@ -79,9 +80,7 @@ export default function UserScreen() {
   };
 
   const handleNotificationPress = () => {
-    // Navigate to notifications screen or show notification panel
     router.push('/NotificationScreen');
-    // Clear notification count when opened
     setNotificationCount(0);
   };
 
@@ -92,7 +91,7 @@ export default function UserScreen() {
         onNotificationPress={handleNotificationPress}
         notificationCount={notificationCount}
       />
-      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={user} />
+      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={recycler} />
       
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
@@ -100,9 +99,9 @@ export default function UserScreen() {
           <View style={styles.profileImageContainer}>
             <MaterialIcons name="account-circle" size={80} color={COLORS.darkGreen} />
           </View>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
-          <Text style={styles.userPhone}>{user.phone}</Text>
+          <Text style={styles.userName}>{recycler.name}</Text>
+          <Text style={styles.userEmail}>{recycler.email}</Text>
+          <Text style={styles.userPhone}>{recycler.phone}</Text>
           
           <View style={styles.statusContainer}>
             <MaterialIcons name={getStatusIcon(currentStatus)} size={16} color={getStatusColor(currentStatus)} />
@@ -128,17 +127,17 @@ export default function UserScreen() {
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <MaterialIcons name="local-shipping" size={24} color={COLORS.darkGreen} />
-            <Text style={styles.statNumber}>{user.totalPickups}</Text>
+            <Text style={styles.statNumber}>{recycler.totalPickups}</Text>
             <Text style={styles.statLabel}>Total Pickups</Text>
           </View>
           <View style={styles.statCard}>
-            <MaterialIcons name="eco" size={24} color={COLORS.darkGreen} />
-            <Text style={styles.statNumber}>{user.totalWaste}</Text>
-            <Text style={styles.statLabel}>Waste Recycled</Text>
+            <MaterialIcons name="attach-money" size={24} color={COLORS.darkGreen} />
+            <Text style={styles.statNumber}>{recycler.totalEarnings}</Text>
+            <Text style={styles.statLabel}>Total Earnings</Text>
           </View>
           <View style={styles.statCard}>
             <MaterialIcons name="event" size={24} color={COLORS.darkGreen} />
-            <Text style={styles.statNumber}>{user.memberSince}</Text>
+            <Text style={styles.statNumber}>{recycler.memberSince}</Text>
             <Text style={styles.statLabel}>Member Since</Text>
           </View>
         </View>
@@ -170,14 +169,6 @@ export default function UserScreen() {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => router.push('/RecyclerRegistrationScreen')}
-          >
-            <MaterialIcons name="recycling" size={20} color={COLORS.darkGreen} />
-            <Text style={styles.actionText}>Join as a Recycler</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
             style={styles.actionButton} 
             onPress={() => setShowLogoutPrompt(true)}
           >
@@ -198,69 +189,85 @@ export default function UserScreen() {
         {showStatusSwitch && (
           <View style={styles.statusSwitchContainer} pointerEvents="box-none">
             <View style={styles.statusSwitchModal}>
-              <Text style={styles.statusSwitchTitle}>Switch Status</Text>
+              <Text style={styles.statusSwitchTitle}>Switch Mode</Text>
+              <Text style={styles.statusSwitchSubtitle}>Choose your mode:</Text>
+              
               <TouchableOpacity 
-                style={[styles.statusOption, currentStatus === 'user' && styles.statusOptionActive]} 
+                style={styles.statusOption}
                 onPress={() => handleStatusSwitch('user')}
               >
-                <MaterialIcons name="verified-user" size={20} color={currentStatus === 'user' ? '#fff' : COLORS.darkGreen} />
-                <Text style={[styles.statusOptionText, currentStatus === 'user' && styles.statusOptionTextActive]}>User</Text>
+                <MaterialIcons name="verified-user" size={24} color={COLORS.primary} />
+                <Text style={styles.statusOptionText}>User Mode</Text>
               </TouchableOpacity>
+              
               <TouchableOpacity 
-                style={[styles.statusOption, currentStatus === 'recycler' && styles.statusOptionActive]} 
+                style={styles.statusOption}
                 onPress={() => handleStatusSwitch('recycler')}
               >
-                <MaterialIcons name="recycling" size={20} color={currentStatus === 'recycler' ? '#fff' : COLORS.darkGreen} />
-                <Text style={[styles.statusOptionText, currentStatus === 'recycler' && styles.statusOptionTextActive]}>Recycler</Text>
+                <MaterialIcons name="recycling" size={24} color={COLORS.darkGreen} />
+                <Text style={styles.statusOptionText}>Recycler Mode</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowStatusSwitch(false)}>
+              
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => setShowStatusSwitch(false)}
+              >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Prompts */}
-        {showLogoutPrompt && (
-          <View style={styles.promptContainer}>
-            <Text style={styles.promptText}>Do you want to log out?</Text>
-            <View style={styles.promptActions}>
-              <TouchableOpacity onPress={handleLogoutYes} style={styles.promptYes}>
-                <Text style={styles.promptYesText}>Yes</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleLogoutNo} style={styles.promptNo}>
-                <Text style={styles.promptNoText}>No</Text>
-              </TouchableOpacity>
+        {/* Delete Account Modal */}
+        {showDeletePrompt && (
+          <View style={styles.modalOverlay} pointerEvents="box-none">
+            <View style={styles.modalContainer}>
+              {deleteStep === 1 ? (
+                <>
+                  <Text style={styles.modalTitle}>Delete Account</Text>
+                  <Text style={styles.modalText}>Are you sure you want to delete your account? This action cannot be undone.</Text>
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity style={styles.modalButton} onPress={handleDeleteNo}>
+                      <Text style={styles.modalButtonText}>No</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.modalButton, styles.deleteButton]} onPress={handleDeleteYes}>
+                      <Text style={styles.deleteButtonText}>Yes</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.modalTitle}>Final Confirmation</Text>
+                  <Text style={styles.modalText}>This will permanently delete your account and all associated data. Are you absolutely sure?</Text>
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity style={styles.modalButton} onPress={handleDeleteNo}>
+                      <Text style={styles.modalButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.modalButton, styles.deleteButton]} onPress={handleDeleteFinal}>
+                      <Text style={styles.deleteButtonText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         )}
 
-        {showDeletePrompt && (
-          <View style={styles.promptContainer}>
-            {deleteStep === 1 ? (
-              <>
-                <Text style={styles.promptText}>
-                  Are you sure you want to{"\n"}permanently delete the account?
-                </Text>
-                <View style={styles.promptActions}>
-                  <TouchableOpacity onPress={handleDeleteYes} style={styles.promptYes}>
-                    <Text style={styles.promptYesText}>Yes</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={handleDeleteNo} style={styles.promptNo}>
-                    <Text style={styles.promptNoText}>No</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteFinal}>
-                  <Text style={styles.deleteButtonText}>Delete</Text>
+        {/* Logout Modal */}
+        {showLogoutPrompt && (
+          <View style={styles.modalOverlay} pointerEvents="box-none">
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalTitle}>Logout</Text>
+              <Text style={styles.modalText}>Are you sure you want to logout?</Text>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.modalButton} onPress={handleLogoutNo}>
+                  <Text style={styles.modalButtonText}>No</Text>
                 </TouchableOpacity>
-                <Text style={styles.promptText}>
-                  Are you sure you want to{"\n"}permanently delete the account?
-                </Text>
-              </>
-            )}
+                <TouchableOpacity style={[styles.modalButton, styles.logoutButton]} onPress={handleLogoutYes}>
+                  <Text style={styles.logoutButtonText}>Yes</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -276,20 +283,17 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 16,
   },
   profileHeader: {
     alignItems: 'center',
-    marginBottom: 20,
+    paddingVertical: 20,
+    backgroundColor: COLORS.lightGreen,
+    marginTop: 8,
+    borderRadius: 12,
+    marginBottom: 16,
   },
   profileImageContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.lightGreen,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   userName: {
     fontSize: 24,
@@ -299,110 +303,110 @@ const styles = StyleSheet.create({
   },
   userEmail: {
     fontSize: 16,
-    color: COLORS.darkGreen,
+    color: COLORS.gray,
     marginBottom: 4,
   },
   userPhone: {
     fontSize: 16,
-    color: COLORS.darkGreen,
-    marginBottom: 10,
+    color: COLORS.gray,
+    marginBottom: 8,
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.lightGreen,
-    borderRadius: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginTop: 10,
   },
   statusText: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 8,
+    marginLeft: 4,
   },
   statusSection: {
-    marginBottom: 20,
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 28,
-    marginBottom: 10,
   },
   statusLabel: {
+    flex: 1,
+    fontSize: 16,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
-    fontSize: 16,
+    marginLeft: 8,
   },
   switchButton: {
     backgroundColor: COLORS.darkGreen,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    elevation: 2,
-    minWidth: 48,
-    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
   },
   switchButtonText: {
-    color: '#fff',
+    color: COLORS.white,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
   statCard: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    width: '30%',
+    marginHorizontal: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   statNumber: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
     marginTop: 8,
+    marginBottom: 4,
   },
   statLabel: {
-    fontSize: 14,
-    color: COLORS.darkGreen,
-    marginTop: 4,
+    fontSize: 12,
+    color: COLORS.gray,
+    textAlign: 'center',
   },
   actionsContainer: {
-    marginTop: 20,
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
     paddingVertical: 12,
-    paddingHorizontal: 28,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGray,
   },
   actionText: {
+    flex: 1,
     fontSize: 16,
-    fontWeight: 'bold',
     color: COLORS.darkGreen,
-    marginLeft: 10,
+    marginLeft: 12,
   },
   statusSwitchContainer: {
     position: 'absolute',
@@ -410,54 +414,42 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1000,
   },
   statusSwitchModal: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 24,
-    width: '80%',
-    maxWidth: 300,
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 20,
+    marginHorizontal: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
   },
   statusSwitchTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
+    marginBottom: 8,
+  },
+  statusSwitchSubtitle: {
+    fontSize: 16,
+    color: COLORS.gray,
     marginBottom: 20,
   },
   statusOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '100%',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 8,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  statusOptionActive: {
-    backgroundColor: COLORS.darkGreen,
-    borderColor: COLORS.darkGreen,
+    width: '100%',
   },
   statusOptionText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
     marginLeft: 12,
-    flex: 1,
-  },
-  statusOptionTextActive: {
-    color: '#fff',
   },
   cancelButton: {
     marginTop: 16,
@@ -465,66 +457,63 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   cancelButtonText: {
-    color: '#666',
     fontSize: 16,
-    fontWeight: 'bold',
+    color: COLORS.gray,
   },
-  promptContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 10,
-    alignItems: 'center',
-    alignSelf: 'center',
-    width: '70%',
-    marginTop: 0,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 8,
-    zIndex: 10,
-  },
-  promptText: {
-    color: '#222',
-    fontSize: 13,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  promptActions: {
-    flexDirection: 'row',
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    gap: 8,
+    alignItems: 'center',
   },
-  promptYes: {
-    backgroundColor: '#eee',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginRight: 6,
+  modalContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 20,
+    marginHorizontal: 20,
+    alignItems: 'center',
   },
-  promptYesText: {
-    color: COLORS.darkGreen,
+  modalTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-  },
-  promptNo: {
-    backgroundColor: '#eee',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  promptNoText: {
     color: COLORS.darkGreen,
-    fontWeight: 'bold',
-  },
-  deleteButton: {
-    backgroundColor: 'red',
-    borderRadius: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 8,
     marginBottom: 12,
   },
-  deleteButtonText: {
-    color: '#fff',
+  modalText: {
+    fontSize: 16,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    backgroundColor: COLORS.lightGray,
+  },
+  modalButtonText: {
+    fontSize: 16,
     fontWeight: 'bold',
-    fontSize: 18,
+    color: COLORS.darkGreen,
+  },
+  deleteButton: {
+    backgroundColor: COLORS.red,
+  },
+  deleteButtonText: {
+    color: COLORS.white,
+  },
+  logoutButton: {
+    backgroundColor: COLORS.darkGreen,
+  },
+  logoutButtonText: {
+    color: COLORS.white,
   },
 }); 

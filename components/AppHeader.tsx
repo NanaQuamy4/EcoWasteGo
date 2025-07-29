@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -6,19 +6,41 @@ interface AppHeaderProps {
   onMenuPress?: () => void;
   onNotificationPress?: () => void;
   notificationCount?: number;
+  leftIcon?: 'menu' | 'arrow-left';
+  rightIcon?: 'bell' | 'list' | 'truck';
+  onLeftPress?: () => void;
+  onRightPress?: () => void;
 }
 
-export default function AppHeader({ onMenuPress, onNotificationPress, notificationCount = 0 }: AppHeaderProps) {
+export default function AppHeader({ 
+  onMenuPress, 
+  onNotificationPress, 
+  notificationCount = 0,
+  leftIcon = 'menu',
+  rightIcon = 'bell',
+  onLeftPress,
+  onRightPress
+}: AppHeaderProps) {
   return (
     <View style={styles.header}>
-      <TouchableOpacity style={styles.menuButton} onPress={onMenuPress}>
-        <Feather name="menu" size={28} color="#263A13" />
+      <TouchableOpacity 
+        style={styles.menuButton} 
+        onPress={onLeftPress || onMenuPress}
+      >
+        <Feather name={leftIcon} size={28} color="#263A13" />
       </TouchableOpacity>
       <Image source={require('../assets/images/logo landscape.png')} style={styles.logo} />
       <View style={{ flex: 1 }} />
-      <TouchableOpacity style={styles.notificationButton} onPress={onNotificationPress}>
-        <Feather name="bell" size={26} color="#263A13" />
-        {notificationCount > 0 && (
+      <TouchableOpacity 
+        style={styles.notificationButton} 
+        onPress={onRightPress || onNotificationPress}
+      >
+        {rightIcon === 'truck' ? (
+          <FontAwesome5 name="truck" size={24} color="#263A13" />
+        ) : (
+          <Feather name={rightIcon} size={26} color="#263A13" />
+        )}
+        {notificationCount > 0 && rightIcon === 'bell' && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{notificationCount}</Text>
           </View>

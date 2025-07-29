@@ -1,19 +1,30 @@
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 // import BottomNav from '../../components/BottomNav';
 
-
-
 export default function HistoryScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(1); // Mock notification count
   const user = { name: 'Williams Boampong' };
+  const router = useRouter();
 
+  const handleNotificationPress = () => {
+    // Navigate to notifications screen or show notification panel
+    router.push('/NotificationScreen');
+    // Clear notification count when opened
+    setNotificationCount(0);
+  };
 
   return (
     <View style={styles.container}>
-      <AppHeader onMenuPress={() => setDrawerOpen(true)} />
+      <AppHeader 
+        onMenuPress={() => setDrawerOpen(true)} 
+        onNotificationPress={handleNotificationPress}
+        notificationCount={notificationCount}
+      />
       <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={user} />
       <View style={styles.greenSectionWrapper}>
         <ImageBackground

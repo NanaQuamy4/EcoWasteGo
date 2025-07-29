@@ -1,13 +1,19 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  FlatList,
+  ImageBackground,
+  Keyboard,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import AppHeader from '../components/AppHeader';
 
-const SUGGESTIONS = [
-  'Gold Hostel, komfo anokye',
-  'Atonsu unity oil',
-];
+const SUGGESTIONS = ['Gold Hostel, Komfo Anokye', 'Atonsu Unity Oil'];
 
 export default function HomeScreen() {
   const [search, setSearch] = useState('');
@@ -27,9 +33,8 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <AppHeader />
-      {/* Map section left blank for now */}
+
       <View style={styles.mapPlaceholder}>
-        {/* Overlayed Search Bar */}
         <View style={styles.searchOverlayContainer}>
           <View style={styles.searchBarBg}>
             <ImageBackground
@@ -42,7 +47,7 @@ export default function HomeScreen() {
               <Feather name="search" size={20} color="#263A13" style={{ marginLeft: 10 }} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="What your pickup point?"
+                placeholder="What's your pickup point?"
                 value={search}
                 onChangeText={text => {
                   setSearch(text);
@@ -52,26 +57,22 @@ export default function HomeScreen() {
                 placeholderTextColor="#263A13"
               />
               <TouchableOpacity
-                style={{
-                  backgroundColor: '#E3F0D5',
-                  borderRadius: 14,
-                  paddingHorizontal: 18,
-                  paddingVertical: 8,
-                  marginRight: 10,
-                  marginLeft: 10,
-                  opacity: search.length > 0 ? 1 : 0.5,
-                }}
+                style={styles.recyclingBtn}
                 disabled={search.length === 0}
                 onPress={() => {
                   if (search.length > 0) {
-                    router.push({ pathname: '/SelectTruck', params: { pickup: search } });
+                    router.push({
+                      pathname: '/SelectTruck',
+                      params: { pickup: search },
+                    });
                   }
                 }}
               >
-                <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 16 }}>Recycle</Text>
+                <Text style={styles.recycleText}>Recycle</Text>
               </TouchableOpacity>
             </View>
           </View>
+
           {showSuggestions && search.length > 0 && (
             <View style={styles.suggestionsBox}>
               <FlatList
@@ -87,18 +88,13 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
-        {/* Truck List Section removed. Now handled in SelectTruck screen. */}
       </View>
-      {/* BottomNav removed, default tab bar will show */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
   searchOverlayContainer: {
     position: 'absolute',
     top: 32,
@@ -112,24 +108,18 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     width: '94%',
     height: 100,
-    minHeight: 100,
-    overflow: 'hidden',
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 0,
-    paddingVertical: 0,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
     backgroundColor: '#fff',
     borderRadius: 18,
     height: 50,
     width: '90%',
+    alignSelf: 'center',
     position: 'absolute',
     top: '50%',
-    left: '2%',
     transform: [{ translateY: -27 }],
   },
   searchInput: {
@@ -137,22 +127,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#263A13',
     marginLeft: 10,
-    backgroundColor: 'transparent',
+  },
+  recyclingBtn: {
+    backgroundColor: '#E3F0D5',
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    marginRight: 10,
+    marginLeft: 10,
+    opacity: 1,
+  },
+  recycleText: {
+    color: '#22330B',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   suggestionsBox: {
-    position: 'absolute',
-    top: 56,
-    left: 20,
-    right: 20,
+    marginTop: 10,
     backgroundColor: '#fff',
     borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.01,
-    shadowRadius: 8,
     elevation: 4,
-    zIndex: 10,
     paddingVertical: 8,
+    width: '90%',
   },
   suggestionItem: {
     flexDirection: 'row',
@@ -160,18 +156,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
-  suggestionText: {
-    fontSize: 16,
-    color: '#263A13',
-  },
+  suggestionText: { fontSize: 16, color: '#263A13' },
   mapPlaceholder: {
     flex: 1,
     backgroundColor: '#fff',
-    marginHorizontal: 0,
-    marginBottom: 0,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    overflow: 'hidden',
-    position: 'relative',
   },
-}); 
+});

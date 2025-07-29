@@ -10,7 +10,10 @@ export const COLORS = {
   lightGray: '#999',
   darkGreen: '#22330B',
   red: '#f44336',
+  lightRed: '#ffebee',
   green: '#4CAF50',
+  lightBlue: '#E3F2FD',
+  darkBlue: '#1976D2',
 } as const;
 
 // App Dimensions

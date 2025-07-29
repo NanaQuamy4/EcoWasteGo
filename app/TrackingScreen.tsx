@@ -88,14 +88,30 @@ export default function TrackingScreen() {
     <View style={styles.container}>
       <CommonHeader title="Track Your Recycler" />
 
-      {/* Main Content: Empty for minimalist look */}
-      <View style={{ flex: 1 }} />
+      {/* Map Container */}
+      <View style={styles.mapContainer}>
+        {/* Blank placeholder for Google Maps API integration */}
+        <View style={styles.mapPlaceholder}>
+          <View style={styles.mapHeader}>
+            <Text style={styles.mapTitle}>Live Tracking</Text>
+            <Text style={styles.mapSubtitle}>Track your recycler in real-time</Text>
+          </View>
+          
+          {/* Blank map area for future Google Maps integration */}
+          <View style={styles.mapContent}>
+            <View style={styles.blankMapArea}>
+              <Text style={styles.blankMapText}>Map Area</Text>
+              <Text style={styles.blankMapSubtext}>Google Maps integration coming soon</Text>
+            </View>
+          </View>
+        </View>
+      </View>
 
-             {/* Bottom Row: Status, Truck, and Buttons */}
-       <View style={styles.bottomRow}>
-         <View style={styles.statusAndButtons}>
-           <Text style={styles.statusText}>Recycler is on his way</Text>
-           <Text style={styles.timerText}>{15 - timeElapsed}s until arrival</Text>
+      {/* Bottom Row: Status, Truck, and Buttons */}
+      <View style={styles.bottomRow}>
+        <View style={styles.statusAndButtons}>
+          <Text style={styles.statusText}>Recycler is on his way</Text>
+          <Text style={styles.timerText}>{15 - timeElapsed}s until arrival</Text>
           <View style={styles.buttonRow}>
             <TouchableOpacity style={styles.pillButton} onPress={handleCall}>
               <Text style={styles.pillButtonText}>📞 Call</Text>
@@ -137,6 +153,56 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.white,
+  },
+
+  mapContainer: {
+    flex: 1,
+    backgroundColor: COLORS.lightGray,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: DIMENSIONS.margin,
+  },
+  mapPlaceholder: {
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    padding: DIMENSIONS.margin,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  mapHeader: {
+    alignItems: 'center',
+    marginBottom: DIMENSIONS.margin,
+  },
+  mapTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginBottom: 4,
+  },
+  mapSubtitle: {
+    fontSize: 14,
+    color: COLORS.secondary,
+  },
+  mapContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blankMapArea: {
+    alignItems: 'center',
+  },
+  blankMapText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginBottom: 8,
+  },
+  blankMapSubtext: {
+    fontSize: 14,
+    color: COLORS.secondary,
   },
 
   bottomRow: {

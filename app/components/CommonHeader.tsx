@@ -32,14 +32,13 @@ export default function CommonHeader({
       )}
       <View style={styles.logoContainer}>
         <Image 
-          source={require('../../assets/images/logo.png')} 
+          source={require('../../assets/images/logo landscape.png')} 
           style={styles.logo} 
         />
-        <View style={styles.brandText}>
-          <Text style={styles.appName}>{title}</Text>
-          <Text style={styles.tagline}>{subtitle}</Text>
-        </View>
       </View>
+      {showBackButton && (
+        <View style={styles.spacer} />
+      )}
     </View>
   );
 }
@@ -51,6 +50,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 16,
+    marginTop: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E3E3E3',
@@ -59,20 +59,23 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   backArrow: {
-    fontSize: 24,
+    fontSize: 40,
     color: '#000',
     fontWeight: 'bold',
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     flex: 1,
   },
   logo: {
+    width: 200,
+    height: 70,
+    resizeMode: 'contain',
+  },
+  spacer: {
     width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
   },
   brandText: {
     flex: 1,

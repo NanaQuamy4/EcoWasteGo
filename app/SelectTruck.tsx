@@ -1,95 +1,129 @@
-import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import AppHeader from '../components/AppHeader';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useState } from 'react';
+import {
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { COLORS, DIMENSIONS, MOCKED_TRUCKS } from '../constants';
 
-const SUGGESTIONS = [
-  'Gold Hostel, komfo anokye',
-  'Atonsu unity oil',
-];
+export default function SelectTruckScreen() {
+  const params = useLocalSearchParams();
+  const pickup = params.pickup as string;
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'Big Truck' | 'Small Truck'>('all');
 
-export default function HomeScreen() {
-  const [search, setSearch] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const router = useRouter();
+  const filteredTrucks = MOCKED_TRUCKS.filter(truck => {
+    if (selectedFilter === 'all') return true;
+    return truck.type === selectedFilter;
+  });
 
-  const filteredSuggestions = SUGGESTIONS.filter(s =>
-    s.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleFilterPress = (filter: 'all' | 'Big Truck' | 'Small Truck') => {
+    setSelectedFilter(filter);
+  };
 
-  const handleSuggestionPress = (suggestion: string) => {
-    setSearch(suggestion);
-    setShowSuggestions(false);
-    Keyboard.dismiss();
+  const handleTruckPress = (truck: any) => {
+    router.push({
+      pathname: '/RecyclerProfileDetails',
+      params: {
+        recyclerId: truck.recyclerId,
+        pickup: pickup
+      }
+    });
   };
 
   return (
     <View style={styles.container}>
-      <AppHeader />
-      {/* Map section left blank for now */}
-      <View style={styles.mapPlaceholder}>
-        {/* Overlayed Search Bar */}
-        <View style={styles.searchOverlayContainer}>
-          <View style={styles.searchBarBg}>
-            <ImageBackground
-              source={require('../assets/images/blend.jpg')}
-              style={StyleSheet.absoluteFill}
-              imageStyle={{ borderRadius: 18 }}
-              resizeMode="cover"
+      {/* Header and Logo */}
+      <View>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Image
+              source={require('../assets/images/logo landscape.png')}
+              style={styles.headerLogo}
             />
-            <View style={styles.searchBar}>
-              <Feather name="search" size={20} color="#263A13" style={{ marginLeft: 10 }} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="What your pickup point?"
-                value={search}
-                onChangeText={text => {
-                  setSearch(text);
-                  setShowSuggestions(true);
-                }}
-                onFocus={() => setShowSuggestions(true)}
-                placeholderTextColor="#263A13"
-              />
+          </View>
+        </View>
+
+        {/* Banner with Filter Buttons */}
+      <View style={styles.bannerBg}>
+        <Image
+          source={require('../assets/images/blend.jpg')}
+          style={styles.bannerImage}
+          resizeMode="cover"
+        />
+          <View style={styles.filterContainerOverlay}>
+            {['all', 'Big Truck', 'Small Truck'].map(filter => (
               <TouchableOpacity
-                style={{
-                  backgroundColor: '#E3F0D5',
-                  borderRadius: 14,
-                  paddingHorizontal: 18,
-                  paddingVertical: 8,
-                  marginRight: 10,
-                  marginLeft: 10,
-                  opacity: search.length > 0 ? 1 : 0.5,
-                }}
-                disabled={search.length === 0}
-                onPress={() => {
-                  if (search.length > 0) {
-                    router.push({ pathname: '/SelectTruck', params: { pickup: search } });
-                  }
-                }}
+                key={filter}
+                style={[
+                  styles.filterButton,
+                  selectedFilter === filter && styles.filterButtonActive
+                ]}
+                onPress={() => handleFilterPress(filter as any)}
               >
-                <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 16 }}>Recycle</Text>
+                {filter !== 'all' && (
+                  <Image
+                    source={
+                      filter === 'Big Truck'
+                        ? require('../assets/images/truck.png')
+                        : require('../assets/images/small truck.png')
+                    }
+                    style={styles.filterIcon}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    selectedFilter === filter && styles.filterButtonTextActive
+                  ]}
+                >
+                  {filter === 'all' ? 'All' : filter}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Pickup Point */}
+        <Text style={styles.pickupText}>
+          Pickup Point: <Text style={{ fontWeight: 'bold' }}>{pickup}</Text>
+        </Text>
+      </View>
+
+      {/* Scrollable Trucks */}
+      <ScrollView style={styles.scrollArea} contentContainerStyle={{ paddingBottom: 32 }}>
+        {filteredTrucks.map(truck => (
+          <View key={truck.id} style={styles.truckCard}>
+            <View style={styles.truckRow}>
+              <Image source={truck.image} style={styles.truckImage} />
+              <View style={styles.truckDetails}>
+                <Text style={styles.truckName}>{truck.name}</Text>
+                <Text style={styles.truckType}>{truck.type}</Text>
+                <Text style={styles.truckCapacity}>Rate: {truck.rate}</Text>
+                <View style={styles.ratingContainer}>
+                  <Text style={styles.ratingText}>Rating: {truck.rating}</Text>
+                  <Text style={styles.ratingStars}>{'★'.repeat(Math.floor(truck.rating))}</Text>
+          </View>
+        </View>
+      </View>
+            <View style={styles.truckActions}>
+              <Text style={styles.priceText}>{truck.rate}</Text>
+              <TouchableOpacity
+                style={styles.selectButton}
+                onPress={() => handleTruckPress(truck)}
+              >
+                <Text style={styles.selectButtonText}>Select</Text>
               </TouchableOpacity>
             </View>
-          </View>
-          {showSuggestions && search.length > 0 && (
-            <View style={styles.suggestionsBox}>
-              <FlatList
-                data={filteredSuggestions}
-                keyExtractor={item => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSuggestionPress(item)}>
-                    <Feather name="search" size={16} color="#263A13" style={{ marginRight: 8 }} />
-                    <Text style={styles.suggestionText}>{item}</Text>
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
-          )}
         </View>
-        {/* Truck List Section removed. Now handled in SelectTruck screen. */}
-      </View>
-      {/* BottomNav removed, default tab bar will show */}
+      ))}
+    </ScrollView>
     </View>
   );
 }
@@ -97,81 +131,160 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.background,
   },
-  searchOverlayContainer: {
-    position: 'absolute',
-    top: 32,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  searchBarBg: {
-    backgroundColor: '#D9DED8',
-    borderRadius: 24,
-    width: '94%',
-    height: 100,
-    minHeight: 100,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    height: 50,
-    width: '90%',
-    position: 'absolute',
-    top: '50%',
-    left: '2%',
-    transform: [{ translateY: -27 }],
-  },
-  searchInput: {
+  scrollArea: {
     flex: 1,
-    fontSize: 16,
-    color: '#263A13',
-    marginLeft: 10,
-    backgroundColor: 'transparent',
   },
-  suggestionsBox: {
-    position: 'absolute',
-    top: 56,
-    left: 20,
-    right: 20,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.01,
-    shadowRadius: 8,
-    elevation: 4,
-    zIndex: 10,
-    paddingVertical: 8,
-  },
-  suggestionItem: {
+  header: {
+    backgroundColor: '#E3F0D5',
+    paddingTop: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
     paddingHorizontal: 16,
   },
-  suggestionText: {
-    fontSize: 16,
-    color: '#263A13',
+  backButton: {
+    marginRight: 16,
   },
-  mapPlaceholder: {
+  backButtonText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  headerContent: {
     flex: 1,
-    backgroundColor: '#fff',
-    marginHorizontal: 0,
-    marginBottom: 0,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    overflow: 'hidden',
+    alignItems: 'center',
+  },
+  headerLogo: {
+    width: 200,
+    height: 200,
+    resizeMode: 'contain',
+  },
+  bannerBg: {
     position: 'relative',
+    height: 120,
+    marginBottom: 10,
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  filterContainerOverlay: {
+    position: 'absolute',
+    top: '50%',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    transform: [{ translateY: -20 }],
+  },
+  pickupText: {
+    fontSize: 16,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: DIMENSIONS.borderRadius,
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterButtonText: {
+    fontWeight: 'bold',
+    color: COLORS.gray,
+  },
+  filterButtonTextActive: {
+    color: COLORS.white,
+  },
+  filterIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 8,
+    resizeMode: 'contain',
+  },
+  truckCard: {
+    backgroundColor: COLORS.white,
+    marginHorizontal: DIMENSIONS.padding,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: DIMENSIONS.cardBorderRadius,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  truckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  truckImage: {
+    width: 100,
+    height: 100,
+    borderRadius: DIMENSIONS.borderRadius,
+    marginRight: 12,
+  },
+  truckDetails: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  truckName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
+  truckType: {
+    fontSize: 14,
+    color: COLORS.gray,
+    marginBottom: 4,
+  },
+  truckCapacity: {
+    fontSize: 14,
+    color: COLORS.gray,
+    marginBottom: 4,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingText: {
+    fontSize: 14,
+    color: COLORS.gray,
+    marginRight: 8,
+  },
+  ratingStars: {
+    fontSize: 14,
+    color: COLORS.primary,
+  },
+  truckActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  priceText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  selectButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: DIMENSIONS.borderRadius,
+  },
+  selectButtonText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
   },
 }); 

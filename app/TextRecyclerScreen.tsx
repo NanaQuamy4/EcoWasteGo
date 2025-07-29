@@ -70,7 +70,7 @@ export default function TextRecyclerScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <CommonHeader title="Text Your Recycler" />
+      <CommonHeader />
 
       {/* Recycler Info Banner */}
       <View style={styles.bannerBg}>
@@ -81,7 +81,7 @@ export default function TextRecyclerScreen() {
           resizeMode="cover"
         >
           <View style={styles.bannerPill}>
-            <Text style={styles.bannerText}>Text with {recyclerData.name}</Text>
+            <Text style={styles.bannerText}>Text with Customer</Text>
           </View>
         </ImageBackground>
       </View>

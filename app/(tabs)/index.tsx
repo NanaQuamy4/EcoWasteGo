@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
+import { COLORS } from '../../constants';
 
 const SUGGESTIONS = [
   'Gold Hostel, komfo anokye',
@@ -38,66 +39,82 @@ export default function HomeScreen() {
         notificationCount={3}
       />
       <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={user} />
-      {/* Map section left blank for now */}
-      <View style={styles.mapPlaceholder}>
-        {/* Overlayed Search Bar */}
-        <View style={styles.searchOverlayContainer}>
-          <ImageBackground
-            source={require('../../assets/images/blend.jpg')}
-            style={styles.searchBarBg}
-            imageStyle={{ borderRadius: 24, opacity: 0.28 }}
-            resizeMode="cover"
-          >
-            <View style={styles.searchBar}>
-              <Feather name="search" size={20} color="#263A13" style={{ marginLeft: 10 }} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="What your pickup point?"
-                value={search}
-                onChangeText={text => {
-                  setSearch(text);
-                  setShowSuggestions(true);
-                }}
-                onFocus={() => setShowSuggestions(true)}
-                placeholderTextColor="#263A13"
-              />
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#E3F0D5',
-                  borderRadius: 14,
-                  paddingHorizontal: 18,
-                  paddingVertical: 8,
-                  marginRight: 10,
-                  marginLeft: 10,
-                  opacity: search.length > 0 ? 1 : 0.5,
-                }}
-                disabled={search.length === 0}
-                onPress={() => {
-                  if (search.length > 0) {
-                    router.push({ pathname: '/SelectTruck', params: { pickup: search } });
-                  }
-                }}
-              >
-                <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 16 }}>Recycle</Text>
-              </TouchableOpacity>
-            </View>
-            {showSuggestions && search.length > 0 && (
-              <View style={styles.suggestionsBox}>
-                <FlatList
-                  data={filteredSuggestions}
-                  keyExtractor={item => item}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSuggestionPress(item)}>
-                      <Feather name="search" size={16} color="#263A13" style={{ marginRight: 8 }} />
-                      <Text style={styles.suggestionText}>{item}</Text>
-                    </TouchableOpacity>
-                  )}
+      
+      {/* Map Container */}
+      <View style={styles.mapContainer}>
+        {/* Blank placeholder for Google Maps API integration */}
+        <View style={styles.mapPlaceholder}>
+          <View style={styles.mapHeader}>
+            <Text style={styles.mapTitle}>User Dashboard</Text>
+            <Text style={styles.mapSubtitle}>Find recyclers and schedule pickups</Text>
+          </View>
+          
+          {/* Search Bar Overlay */}
+          <View style={styles.searchOverlayContainer}>
+            <ImageBackground
+              source={require('../../assets/images/blend.jpg')}
+              style={styles.searchBarBg}
+              imageStyle={{ borderRadius: 24, opacity: 0.28 }}
+              resizeMode="cover"
+            >
+              <View style={styles.searchBar}>
+                <Feather name="search" size={20} color="#263A13" style={{ marginLeft: 10 }} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="What's your pickup point?"
+                  value={search}
+                  onChangeText={text => {
+                    setSearch(text);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  placeholderTextColor="#263A13"
                 />
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#E3F0D5',
+                    borderRadius: 14,
+                    paddingHorizontal: 18,
+                    paddingVertical: 8,
+                    marginRight: 10,
+                    marginLeft: 10,
+                    opacity: search.length > 0 ? 1 : 0.5,
+                  }}
+                  disabled={search.length === 0}
+                  onPress={() => {
+                    if (search.length > 0) {
+                      router.push({ pathname: '/SelectTruck', params: { pickup: search } });
+                    }
+                  }}
+                >
+                  <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 16 }}>Recycle</Text>
+                </TouchableOpacity>
               </View>
-            )}
-          </ImageBackground>
+              {showSuggestions && search.length > 0 && (
+                <View style={styles.suggestionsBox}>
+                  <FlatList
+                    data={filteredSuggestions}
+                    keyExtractor={item => item}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSuggestionPress(item)}>
+                        <Feather name="search" size={16} color="#263A13" style={{ marginRight: 8 }} />
+                        <Text style={styles.suggestionText}>{item}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+              )}
+            </ImageBackground>
+          </View>
+          
+          {/* Blank map area for future Google Maps integration */}
+          <View style={styles.mapContent}>
+            <View style={styles.blankMapArea}>
+              <Text style={styles.blankMapText}>Map Area</Text>
+              <Text style={styles.blankMapSubtext}>Google Maps integration coming soon</Text>
+            </View>
+          </View>
         </View>
-        {/* Blank map area removed */}
       </View>
       {/* BottomNav removed, default tab bar will show */}
     </View>
@@ -250,14 +267,58 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#263A13',
   },
+  mapContainer: {
+    flex: 1,
+    margin: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#f5f5f5',
+  },
   mapPlaceholder: {
     flex: 1,
-    backgroundColor: '#fff',
-    marginHorizontal: 0,
-    marginBottom: 0,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    overflow: 'hidden',
-    position: 'relative',
+    backgroundColor: '#e8f5e8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapHeader: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    zIndex: 1,
+  },
+  mapTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    textAlign: 'center',
+  },
+  mapSubtitle: {
+    fontSize: 14,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  mapContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blankMapArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  blankMapText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    textAlign: 'center',
+  },
+  blankMapSubtext: {
+    fontSize: 16,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginTop: 8,
   },
 });
