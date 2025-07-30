@@ -128,27 +128,34 @@ export default function HelpScreen() {
       </ScrollView>
       {/* Main Icon */}
       <View style={{ flex: 1 }}>
-        <ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 8, paddingBottom: 90 }}
-          showsVerticalScrollIndicator={false}
+        <ImageBackground
+          source={require('../assets/images/bin.png')}
+          style={{ flex: 1, paddingTop: 8, paddingBottom: 90 }}
+          imageStyle={{ opacity: 0.1 }}
+          resizeMode="contain"
         >
-          <View style={{ alignItems: 'center', marginBottom: 12 }}>
-            <FontAwesome5 name="recycle" size={120} color="#B6CDBD" style={{ opacity: 0.25 }} />
-          </View>
-          {messages.map((msg, idx) => (
-            <View
-              key={msg.id}
-              style={
-                msg.sender === 'user'
-                  ? [styles.userBubble, { alignSelf: 'flex-end', marginRight: 18 }]
-                  : [styles.supportBubble, { alignSelf: 'flex-start', marginLeft: 18 }]
-              }
-            >
-              <Text style={msg.sender === 'user' ? styles.userText : styles.supportText}>{msg.text}</Text>
+          <ScrollView
+            ref={scrollViewRef}
+            contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 8, paddingBottom: 90 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={{ alignItems: 'center', marginBottom: 12 }}>
+              <FontAwesome5 name="recycle" size={120} color="#B6CDBD" style={{ opacity: 0.25 }} />
             </View>
-          ))}
-        </ScrollView>
+            {messages.map((msg, idx) => (
+              <View
+                key={msg.id}
+                style={
+                  msg.sender === 'user'
+                    ? [styles.userBubble, { alignSelf: 'flex-end', marginRight: 18 }]
+                    : [styles.supportBubble, { alignSelf: 'flex-start', marginLeft: 18 }]
+                }
+              >
+                <Text style={msg.sender === 'user' ? styles.userText : styles.supportText}>{msg.text}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </ImageBackground>
       </View>
       {/* Input Bar */}
       <View style={styles.inputBar}>

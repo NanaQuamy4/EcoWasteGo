@@ -109,26 +109,33 @@ export default function TextRecyclerScreen() {
 
       {/* Main Chat Area */}
       <View style={styles.chatContainer}>
-        <ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.chatContent}
-          showsVerticalScrollIndicator={false}
+        <ImageBackground
+          source={require('../assets/images/bin.png')}
+          style={styles.chatBackground}
+          imageStyle={{ opacity: 0.1 }}
+          resizeMode="contain"
         >
-          <View style={styles.recycleIconContainer}>
-            <FontAwesome5 name="recycle" size={120} color={COLORS.lightGreen} style={{ opacity: 0.25 }} />
-          </View>
-          {messages.map((msg, idx) => (
-            <View
-              key={msg.id}
-              style={[
-                msg.sender === 'user' ? styles.userBubble : styles.recyclerBubble,
-                msg.sender === 'user' ? styles.userBubblePosition : styles.recyclerBubblePosition
-              ]}
-            >
-              <Text style={msg.sender === 'user' ? styles.userText : styles.recyclerText}>{msg.text}</Text>
+          <ScrollView
+            ref={scrollViewRef}
+            contentContainerStyle={styles.chatContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.recycleIconContainer}>
+              <FontAwesome5 name="recycle" size={120} color={COLORS.lightGreen} style={{ opacity: 0.25 }} />
             </View>
-          ))}
-        </ScrollView>
+            {messages.map((msg, idx) => (
+              <View
+                key={msg.id}
+                style={[
+                  msg.sender === 'user' ? styles.userBubble : styles.recyclerBubble,
+                  msg.sender === 'user' ? styles.userBubblePosition : styles.recyclerBubblePosition
+                ]}
+              >
+                <Text style={msg.sender === 'user' ? styles.userText : styles.recyclerText}>{msg.text}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </ImageBackground>
       </View>
 
       {/* Input Bar */}
@@ -326,5 +333,10 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  chatBackground: {
+    flex: 1,
+    paddingTop: 8,
+    paddingBottom: 90,
   },
 }); 
