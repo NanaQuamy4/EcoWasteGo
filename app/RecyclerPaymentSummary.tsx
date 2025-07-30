@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants';
 import CommonHeader from './components/CommonHeader';
 
@@ -15,6 +15,10 @@ export default function RecyclerPaymentSummary() {
   const environmentalTax = params.environmentalTax as string;
   const totalAmount = params.totalAmount as string;
 
+  // State to track payment status
+  const [paymentSent, setPaymentSent] = useState(false);
+  const [paymentAccepted, setPaymentAccepted] = useState(false);
+
   const handleSendToUser = () => {
     Alert.alert(
       'Send Payment Summary',
@@ -24,6 +28,7 @@ export default function RecyclerPaymentSummary() {
         {
           text: 'Send',
           onPress: () => {
+            setPaymentSent(true);
             Alert.alert(
               'Payment Summary Sent',
               'The payment summary has been sent to the user. They will receive a notification to review and accept/reject the payment.',
@@ -31,8 +36,86 @@ export default function RecyclerPaymentSummary() {
                 {
                   text: 'OK',
                   onPress: () => {
-                    // Navigate back to requests screen
-                    router.push('/RecyclerRequests');
+                    // Simulate user response after 3 seconds
+                    setTimeout(() => {
+                      simulateUserResponse();
+                    }, 3000);
+                  }
+                }
+              ]
+            );
+          }
+        }
+      ]
+    );
+  };
+
+  const simulateUserResponse = () => {
+    // Simulate user accepting the payment (in real app, this would come from backend)
+    Alert.alert(
+      'User Response',
+      'The user has accepted your payment summary! You can now mark payment as received.',
+      [
+        {
+          text: 'OK',
+          onPress: () => {
+            setPaymentAccepted(true);
+          }
+        }
+      ]
+    );
+  };
+
+  const handlePaymentReceived = () => {
+    if (!paymentSent) {
+      Alert.alert(
+        'Payment Not Sent',
+        'Please send the payment summary to the user first.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (!paymentAccepted) {
+      Alert.alert(
+        'Payment Not Accepted',
+        'The user has not accepted the payment summary yet. Please wait for their response.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Payment Received',
+      'Confirm that you have received the payment from the user?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: () => {
+            // Mark request as completed and navigate to requests
+            Alert.alert(
+              'Request Completed',
+              'Payment received! This request has been marked as completed.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    // Navigate to celebration screen with pickup information
+                    router.push({
+                      pathname: '/RecyclerCelebration',
+                      params: {
+                        pickupId: '1', // This would be the actual pickup ID
+                        userName: userName,
+                        pickup: pickup,
+                        wasteType: wasteType,
+                        totalAmount: totalAmount,
+                        weight: weight,
+                        rate: rate,
+                        subtotal: subtotal,
+                        environmentalTax: environmentalTax
+                      }
+                    });
                   }
                 }
               ]
@@ -44,6 +127,9 @@ export default function RecyclerPaymentSummary() {
   };
 
   const handleEdit = () => {
+    // Reset payment status when editing
+    setPaymentSent(false);
+    setPaymentAccepted(false);
     // Go back to weight entry to edit
     router.back();
   };
@@ -52,92 +138,139 @@ export default function RecyclerPaymentSummary() {
     <SafeAreaView style={styles.container}>
       <CommonHeader />
 
-      {/* Header Section */}
-      <View style={styles.headerSection}>
-        <Text style={styles.headerTitle}>Payment Summary</Text>
-        <Text style={styles.headerSubtitle}>Review bill for {userName}</Text>
-      </View>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Header Section */}
+        <View style={styles.headerSection}>
+          <Text style={styles.headerTitle}>Payment Summary</Text>
+          <Text style={styles.headerSubtitle}>Review bill for {userName}</Text>
+        </View>
 
-      {/* Summary Card */}
-      <View style={styles.summaryContainer}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Bill Details</Text>
-          
-          <View style={styles.billDetails}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>User</Text>
-              <View style={styles.detailValue}>
-                <Text style={styles.valueText}>{userName}</Text>
-              </View>
+        {/* Payment Status Indicator */}
+        {paymentSent && (
+          <View style={styles.statusContainer}>
+            <View style={[styles.statusCard, paymentAccepted ? styles.acceptedStatus : styles.pendingStatus]}>
+              <Text style={styles.statusTitle}>
+                {paymentAccepted ? '✅ Payment Accepted' : '⏳ Awaiting User Response'}
+              </Text>
+              <Text style={styles.statusText}>
+                {paymentAccepted 
+                  ? 'The user has accepted your payment summary. You can now mark payment as received.'
+                  : 'Payment summary sent to user. Waiting for their acceptance.'
+                }
+              </Text>
             </View>
+          </View>
+        )}
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Pickup Location</Text>
-              <View style={styles.detailValue}>
-                <Text style={styles.valueText}>{pickup}</Text>
+        {/* Summary Card */}
+        <View style={styles.summaryContainer}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Bill Details</Text>
+            
+            <View style={styles.billDetails}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>User</Text>
+                <View style={styles.detailValue}>
+                  <Text style={styles.valueText}>{userName}</Text>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Waste Type</Text>
-              <View style={styles.detailValue}>
-                <Text style={styles.valueText}>{wasteType}</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Pickup Location</Text>
+                <View style={styles.detailValue}>
+                  <Text style={styles.valueText}>{pickup}</Text>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Weight</Text>
-              <View style={styles.detailValue}>
-                <Text style={styles.valueText}>{weight} kg</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Waste Type</Text>
+                <View style={styles.detailValue}>
+                  <Text style={styles.valueText}>{wasteType}</Text>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Rate</Text>
-              <View style={styles.detailValue}>
-                <Text style={styles.valueText}>GHS {rate}/kg</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Weight</Text>
+                <View style={styles.detailValue}>
+                  <Text style={styles.valueText}>{weight} kg</Text>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Subtotal</Text>
-              <View style={styles.detailValue}>
-                <Text style={styles.valueText}>GHS {subtotal}</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Rate</Text>
+                <View style={styles.detailValue}>
+                  <Text style={styles.valueText}>GHS {rate}/kg</Text>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Environmental Tax (5%)</Text>
-              <View style={styles.detailValue}>
-                <Text style={styles.valueText}>GHS {environmentalTax}</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Subtotal</Text>
+                <View style={styles.detailValue}>
+                  <Text style={styles.valueText}>GHS {subtotal}</Text>
+                </View>
               </View>
-            </View>
 
-            <View style={[styles.detailRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Total Amount</Text>
-              <View style={styles.totalValue}>
-                <Text style={styles.totalText}>GHS {totalAmount}</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Environmental Tax (5%)</Text>
+                <View style={styles.detailValue}>
+                  <Text style={styles.valueText}>GHS {environmentalTax}</Text>
+                </View>
+              </View>
+
+              <View style={[styles.detailRow, styles.totalRow]}>
+                <Text style={styles.totalLabel}>Total Amount</Text>
+                <View style={styles.totalValue}>
+                  <Text style={styles.totalText}>GHS {totalAmount}</Text>
+                </View>
               </View>
             </View>
           </View>
+
+          {/* Note Section */}
+          <View style={styles.noteSection}>
+            <Text style={styles.noteTitle}>Note:</Text>
+            <Text style={styles.noteText}>This bill includes a 5% Environmental Excise Tax as required by Ghana's environmental protection regulations.</Text>
+            <Text style={styles.noteText}>The user will receive this payment summary and can accept or reject the payment.</Text>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Fixed Bottom Buttons */}
+      <View style={styles.bottomButtonsContainer}>
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
+            <Text style={styles.editButtonText}>EDIT</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.sendButton, paymentSent && styles.disabledButton]} 
+            onPress={handleSendToUser}
+            disabled={paymentSent}
+          >
+            <Text style={styles.sendButtonText}>
+              {paymentSent ? 'SENT TO USER' : 'SEND TO USER'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Note Section */}
-        <View style={styles.noteSection}>
-          <Text style={styles.noteTitle}>Note:</Text>
-          <Text style={styles.noteText}>This bill includes a 5% Environmental Excise Tax as required by Ghana's environmental protection regulations.</Text>
-          <Text style={styles.noteText}>The user will receive this payment summary and can accept or reject the payment.</Text>
+        {/* Payment Received Button */}
+        <View style={styles.paymentReceivedContainer}>
+          <TouchableOpacity 
+            style={[
+              styles.paymentReceivedButton, 
+              (!paymentSent || !paymentAccepted) && styles.disabledPaymentButton
+            ]} 
+            onPress={handlePaymentReceived}
+            disabled={!paymentSent || !paymentAccepted}
+          >
+            <Text style={[
+              styles.paymentReceivedButtonText,
+              (!paymentSent || !paymentAccepted) && styles.disabledPaymentButtonText
+            ]}>
+              💰 PAYMENT RECEIVED
+            </Text>
+          </TouchableOpacity>
         </View>
-      </View>
-
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-          <Text style={styles.editButtonText}>EDIT</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.sendButton} onPress={handleSendToUser}>
-          <Text style={styles.sendButtonText}>SEND TO USER</Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -147,6 +280,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FFF0',
+  },
+  scrollView: {
+    flex: 1,
   },
   headerSection: {
     alignItems: 'center',
@@ -164,8 +300,38 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
+  statusContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  statusCard: {
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+  },
+  pendingStatus: {
+    backgroundColor: '#FFF3CD',
+    borderWidth: 1,
+    borderColor: '#FFEAA7',
+  },
+  acceptedStatus: {
+    backgroundColor: '#D4EDDA',
+    borderWidth: 1,
+    borderColor: '#C3E6CB',
+  },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   summaryContainer: {
     paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   summaryCard: {
     backgroundColor: '#fff',
@@ -251,12 +417,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     lineHeight: 20,
   },
+  bottomButtonsContainer: {
+    backgroundColor: '#F8FFF0',
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    marginTop: 24,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   editButton: {
     backgroundColor: '#FF4444',
@@ -290,10 +460,44 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  disabledButton: {
+    backgroundColor: '#999',
+    opacity: 0.6,
+  },
   sendButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  paymentReceivedContainer: {
+    paddingHorizontal: 20,
+  },
+  paymentReceivedButton: {
+    backgroundColor: '#FFD700',
+    borderRadius: 25,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 2,
+    borderColor: '#FFA500',
+  },
+  disabledPaymentButton: {
+    backgroundColor: '#E0E0E0',
+    borderColor: '#CCC',
+    opacity: 0.5,
+  },
+  paymentReceivedButtonText: {
+    color: '#1C3301',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  disabledPaymentButtonText: {
+    color: '#999',
   },
 }); 

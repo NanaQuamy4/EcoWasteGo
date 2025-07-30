@@ -1,11 +1,12 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../components/AppHeader';
 import { COLORS } from '../constants';
 
 export default function RecyclerRequests() {
+  const params = useLocalSearchParams();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(2);
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -43,6 +44,42 @@ export default function RecyclerRequests() {
       status: 'pending'
     }
   ];
+
+  // Handle completed pickup from celebration screen
+  useEffect(() => {
+    if (params.completedPickup === 'true') {
+      const pickupId = params.pickupId as string;
+      const userName = params.userName as string;
+      const location = params.location as string;
+      const wasteType = params.wasteType as string;
+      const totalAmount = params.totalAmount as string;
+
+      // Add to completed requests
+      setCompletedRequests(prev => new Set([...prev, pickupId]));
+      
+      // Remove from accepted requests if it was there
+      setAcceptedRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(pickupId);
+        return newSet;
+      });
+
+      // Show completion message
+      Alert.alert(
+        'Pickup Completed!',
+        `Successfully completed pickup for ${userName} at ${location}. Payment received: GHS ${totalAmount}`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Switch to completed filter to show the completed pickup
+              setSelectedFilter('completed');
+            }
+          }
+        ]
+      );
+    }
+  }, [params.completedPickup, params.pickupId, params.userName, params.location, params.wasteType, params.totalAmount]);
 
   const handleNotificationPress = () => {
     setNotificationCount(0);

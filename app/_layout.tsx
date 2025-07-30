@@ -35,6 +35,7 @@ export default function RootLayout() {
                     <Stack.Screen name="RecyclerNavigation" options={{ headerShown: false }} />
                     <Stack.Screen name="RecyclerWeightEntry" options={{ headerShown: false }} />
                     <Stack.Screen name="RecyclerPaymentSummary" options={{ headerShown: false }} />
+                    <Stack.Screen name="RecyclerCelebration" options={{ headerShown: false }} />
     </Stack>
   );
 } 
