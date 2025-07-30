@@ -1,4 +1,4 @@
-import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { FontAwesome5 } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -11,7 +11,6 @@ export default function RecyclerHomeTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [requests, setRequests] = useState(0);
-  const [activities] = useState(1);
   const [notificationCount, setNotificationCount] = useState(2); // Mock notification count
 
   const recycler = {
@@ -56,17 +55,6 @@ export default function RecyclerHomeTab() {
     router.push('/RecyclerRequests');
   };
 
-  const handleActivitiesPress = () => {
-    // Pass actual completed pickups count and today's earnings to Activities screen
-    router.push({
-      pathname: '/RecyclerActivities',
-      params: {
-        completedPickupsCount: recyclerStats.getCompletedPickupsCount().toString(),
-        todayEarnings: recyclerStats.getTodayEarnings().toString()
-      }
-    });
-  };
-
   const handleNotificationPress = () => {
     // Navigate to notifications screen or show notification panel
     router.push('/NotificationScreen');
@@ -83,7 +71,7 @@ export default function RecyclerHomeTab() {
       />
       <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={recycler} />
       
-      {/* Status Bar with Requests, Activities, and Offline Toggle */}
+      {/* Status Bar with Requests and Offline Toggle */}
       <View style={styles.statusBar}>
         <TouchableOpacity style={styles.statusItem} onPress={handleRequestsPress}>
           <View style={styles.statusIconContainer}>
@@ -95,18 +83,6 @@ export default function RecyclerHomeTab() {
             )}
           </View>
           <Text style={styles.statusText}>Requests</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.statusItem} onPress={handleActivitiesPress}>
-          <View style={styles.statusIconContainer}>
-            <Ionicons name="alert-circle" size={20} color={COLORS.darkGreen} />
-            {activities > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{activities}</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.statusText}>Activities</Text>
         </TouchableOpacity>
 
         <View style={styles.offlineContainer}>
@@ -168,7 +144,7 @@ const styles = StyleSheet.create({
   },
   statusBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -179,7 +155,7 @@ const styles = StyleSheet.create({
   },
   statusItem: {
     alignItems: 'center',
-    flex: 1,
+    marginRight: 40,
   },
   statusIconContainer: {
     position: 'relative',
@@ -208,6 +184,7 @@ const styles = StyleSheet.create({
   },
   offlineContainer: {
     alignItems: 'center',
+    marginLeft: 'auto',
   },
   offlineText: {
     fontSize: 12,
