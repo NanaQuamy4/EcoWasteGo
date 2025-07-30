@@ -27,7 +27,8 @@ export default function RecyclerHomeTab() {
   useEffect(() => {
     const updateCounts = () => {
       // Show total available requests (pending + active) to match RecyclerRequests screen
-      setRequests(recyclerStats.getTotalAvailableRequestsCount());
+      const newCount = recyclerStats.getTotalAvailableRequestsCount();
+      setRequests(newCount);
     };
     
     updateCounts();
@@ -35,6 +36,26 @@ export default function RecyclerHomeTab() {
     const interval = setInterval(updateCounts, 1000);
     
     return () => clearInterval(interval);
+  }, []);
+
+  // Check for subscription payment requirement
+  useEffect(() => {
+    if (recyclerStats.isPaymentRequired()) {
+      Alert.alert(
+        'Payment Required',
+        `You have outstanding subscription fees of ${recyclerStats.getSubscriptionFeeString()}. You must pay these fees before continuing to use the app.`,
+        [
+          {
+            text: 'Pay Now',
+            onPress: () => router.push('/SubscriptionScreen')
+          },
+          {
+            text: 'Later',
+            style: 'cancel'
+          }
+        ]
+      );
+    }
   }, []);
 
   const handleOfflineToggle = () => {

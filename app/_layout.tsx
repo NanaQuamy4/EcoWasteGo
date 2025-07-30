@@ -31,11 +31,12 @@ export default function RootLayout() {
       
       {/* Recycler Screens */}
                           <Stack.Screen name="RecyclerRequests" options={{ headerShown: false }} />
-                    <Stack.Screen name="RecyclerActivities" options={{ headerShown: false }} />
                     <Stack.Screen name="RecyclerNavigation" options={{ headerShown: false }} />
                     <Stack.Screen name="RecyclerWeightEntry" options={{ headerShown: false }} />
                     <Stack.Screen name="RecyclerPaymentSummary" options={{ headerShown: false }} />
                     <Stack.Screen name="RecyclerCelebration" options={{ headerShown: false }} />
+                    <Stack.Screen name="SubscriptionScreen" options={{ headerShown: false }} />
+        <Stack.Screen name="AnalyticsScreen" options={{ headerShown: false }} />
     </Stack>
   );
 } 

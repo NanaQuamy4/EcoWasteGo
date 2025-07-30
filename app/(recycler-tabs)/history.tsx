@@ -1,6 +1,6 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import { COLORS } from '../../constants';
@@ -9,12 +9,6 @@ import recyclerStats from '../utils/recyclerStats';
 export default function RecyclerHistoryTab() {
   const params = useLocalSearchParams();
   const [selectedFilter, setSelectedFilter] = useState('all');
-  const [refreshKey, setRefreshKey] = useState(0); // For forcing re-renders
-
-  // Refresh data when screen is focused or when params change
-  useEffect(() => {
-    setRefreshKey(prev => prev + 1);
-  }, [params.completedPickupsCount, params.todayEarnings]);
 
   // Get completed pickups count from params or default to 0
   const completedPickupsCount = parseInt(params.completedPickupsCount as string) || recyclerStats.getCompletedPickupsCount();

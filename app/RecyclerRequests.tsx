@@ -13,8 +13,9 @@ export default function RecyclerRequests() {
   const [acceptedRequests, setAcceptedRequests] = useState<Set<string>>(new Set());
   const [completedRequests, setCompletedRequests] = useState<Set<string>>(new Set());
 
-  // Initialize mock data on component mount
+  // Initialize mock data on component mount (only once)
   useEffect(() => {
+    // Always initialize mock data to ensure it's available
     recyclerStats.initializeMockData();
     
     // Sync accepted requests with shared stats

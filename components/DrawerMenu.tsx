@@ -4,13 +4,16 @@ import React, { useState } from 'react';
 import { Animated, Dimensions, Linking, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const DEFAULT_MENU_ITEMS = [
-  { label: 'Education', icon: <FontAwesome5 name="book-medical" size={22} color="#22330B" />, key: 'education' },
+  { label: 'Education', icon: <MaterialIcons name="chat-bubble-outline" size={22} color="#22330B" />, key: 'education' },
   { label: 'History', icon: <Feather name="rotate-ccw" size={22} color="#22330B" />, key: 'history' },
+  { label: 'Earnings', icon: <FontAwesome5 name="dollar-sign" size={22} color="#22330B" />, key: 'earnings' },
+  { label: 'Subscription', icon: <MaterialIcons name="check-circle-outline" size={22} color="#22330B" />, key: 'subscription' },
+  { label: 'Analytics', icon: <MaterialIcons name="show-chart" size={22} color="#22330B" />, key: 'analytics' },
   { label: 'Rewards', icon: <Feather name="gift" size={22} color="#22330B" />, key: 'rewards' },
   { label: 'Notification', icon: <Ionicons name="notifications-outline" size={22} color="#22330B" />, key: 'notification' },
-  { label: 'Help', icon: <Feather name="help-circle" size={22} color="#22330B" />, key: 'help' },
-  { label: 'Contact Us', icon: <MaterialIcons name="support-agent" size={22} color="#22330B" />, key: 'contact' },
-  { label: 'About', icon: <Feather name="info" size={22} color="#22330B" />, key: 'about' },
+  { label: 'Help', icon: <MaterialIcons name="computer" size={22} color="#22330B" />, key: 'help' },
+  { label: 'Contact Us', icon: <MaterialIcons name="person-outline" size={22} color="#22330B" />, key: 'contact' },
+  { label: 'About', icon: <MaterialIcons name="info-outline" size={22} color="#22330B" />, key: 'about' },
 ];
 
 type DrawerMenuProps = {
@@ -40,8 +43,8 @@ export default function DrawerMenu({ open, onClose, user, menuItems = DEFAULT_ME
             <Feather name="user" size={28} color="#fff" />
           </View>
           <TouchableOpacity onPress={() => { onClose(); router.push('/user'); }}>
-            <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 19 }}>{user?.name || 'User Name'}</Text>
-            <Text style={{ color: '#22330B', fontSize: 13, marginTop: 0 }}>My Account</Text>
+            <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 19 }}>GreenFleet GH</Text>
+            <Text style={{ color: '#22330B', fontSize: 13, marginTop: 0 }}>Recycler</Text>
           </TouchableOpacity>
         </View>
         {menuItems.map(item => (
@@ -63,6 +66,18 @@ export default function DrawerMenu({ open, onClose, user, menuItems = DEFAULT_ME
                 setShowContactCard(false);
                 onClose();
                 router.push('/history');
+              } else if (item.key === 'earnings') {
+                setShowContactCard(false);
+                onClose();
+                router.push('/(recycler-tabs)/history');
+              } else if (item.key === 'subscription') {
+                setShowContactCard(false);
+                onClose();
+                router.push('/SubscriptionScreen');
+              } else if (item.key === 'analytics') {
+                setShowContactCard(false);
+                onClose();
+                router.push('/AnalyticsScreen');
               } else if (item.key === 'rewards') {
                 setShowContactCard(false);
                 onClose();
