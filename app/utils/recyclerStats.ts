@@ -75,9 +75,6 @@ class RecyclerStats {
     this.addPendingRequest('1');
     this.addPendingRequest('2');
     this.addPendingRequest('3');
-    this.addPendingRequest('4');
-    this.addPendingRequest('7');
-    this.addPendingRequest('8');
     
     // Add some mock active pickups
     this.addActivePickup('5');

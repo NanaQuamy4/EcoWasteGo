@@ -48,15 +48,6 @@ export default function RecyclerRequests() {
       status: 'pending'
     },
     {
-      id: '4',
-      userName: 'Emma Thompson',
-      location: 'Kejetia Market',
-      phone: '0545551234',
-      wasteType: 'Glass',
-      distance: '4.2 km',
-      status: 'pending'
-    },
-    {
       id: '5',
       userName: 'James Brown',
       location: 'Adum Shopping Center',
@@ -73,24 +64,6 @@ export default function RecyclerRequests() {
       wasteType: 'Plastic',
       distance: '2.7 km',
       status: 'active'
-    },
-    {
-      id: '7',
-      userName: 'Robert Davis',
-      location: 'Kumasi Airport',
-      phone: '0541112222',
-      wasteType: 'Paper',
-      distance: '5.3 km',
-      status: 'pending'
-    },
-    {
-      id: '8',
-      userName: 'Maria Garcia',
-      location: 'KNUST Library',
-      phone: '0543334444',
-      wasteType: 'Electronic',
-      distance: '0.8 km',
-      status: 'pending'
     }
   ];
 
@@ -151,9 +124,6 @@ export default function RecyclerRequests() {
   };
 
   const handleRejectRequest = (requestId: string) => {
-    // Remove from pending requests in shared stats
-    recyclerStats.removePendingRequest(requestId);
-    
     Alert.alert(
       'Reject Request',
       'Are you sure you want to reject this pickup request?',
@@ -163,6 +133,16 @@ export default function RecyclerRequests() {
           text: 'Reject', 
           style: 'destructive',
           onPress: () => {
+            // Remove from pending requests in shared stats
+            recyclerStats.removePendingRequest(requestId);
+            
+            // Remove from accepted requests if it was there
+            setAcceptedRequests(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(requestId);
+              return newSet;
+            });
+            
             Alert.alert('Request Rejected', 'The user has been notified.');
           }
         }
