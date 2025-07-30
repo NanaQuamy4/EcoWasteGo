@@ -15,6 +15,11 @@ export default function RecyclerRequests() {
   const [completedRequests, setCompletedRequests] = useState<Set<string>>(new Set());
   const recycler = { name: 'John Recycler' };
 
+  // Initialize mock data on component mount
+  useEffect(() => {
+    recyclerStats.initializeMockData();
+  }, []);
+
   // Mock pickup requests data
   const pickupRequests = [
     {
@@ -92,6 +97,10 @@ export default function RecyclerRequests() {
 
   const handleAcceptRequest = (requestId: string) => {
     setAcceptedRequests(prev => new Set([...prev, requestId]));
+    
+    // Update shared stats
+    recyclerStats.addActivePickup(requestId);
+    
     Alert.alert(
       'Request Accepted',
       'You have accepted this pickup request. It has been added to your active pickups.',
@@ -100,6 +109,9 @@ export default function RecyclerRequests() {
   };
 
   const handleRejectRequest = (requestId: string) => {
+    // Remove from pending requests in shared stats
+    recyclerStats.removePendingRequest(requestId);
+    
     Alert.alert(
       'Reject Request',
       'Are you sure you want to reject this pickup request?',

@@ -1,6 +1,6 @@
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
@@ -10,7 +10,7 @@ import recyclerStats from '../utils/recyclerStats';
 export default function RecyclerHomeTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
-  const [requests, setRequests] = useState(4);
+  const [requests, setRequests] = useState(0);
   const [activities, setActivities] = useState(1);
   const [notificationCount, setNotificationCount] = useState(2); // Mock notification count
 
@@ -23,6 +23,19 @@ export default function RecyclerHomeTab() {
     totalEarnings: '₵2,450.80',
     memberSince: 'Mar 2023',
   };
+
+  // Update counts from shared stats
+  useEffect(() => {
+    const updateCounts = () => {
+      setRequests(recyclerStats.getPendingRequestsCount());
+    };
+    
+    updateCounts();
+    // Update counts every time the component mounts or when stats change
+    const interval = setInterval(updateCounts, 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const handleOfflineToggle = () => {
     const newStatus = !isOffline;
@@ -135,7 +148,7 @@ export default function RecyclerHomeTab() {
           <Text style={styles.statLabel}>Pending Requests</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>2</Text>
+          <Text style={styles.statNumber}>{recyclerStats.getActivePickupsCount()}</Text>
           <Text style={styles.statLabel}>Active Pickups</Text>
         </View>
         <View style={styles.statCard}>
