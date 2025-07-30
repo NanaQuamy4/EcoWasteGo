@@ -1,7 +1,7 @@
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS, DIMENSIONS, DUMMY_RESPONSES, MESSAGE_SUGGESTION_SETS, RECYCLER_DATA } from '../constants';
 import CommonHeader from './components/CommonHeader';
 
@@ -20,6 +20,8 @@ export default function TextRecyclerScreen() {
   const params = useLocalSearchParams();
   const recyclerName = params.recyclerName as string;
 
+  // Log to verify image loading
+  console.log('Loading bin.png background image');
 
   // Mock data for the recycler (in real app, this would come from API)
   const recyclerData: RecyclerData = {
@@ -86,35 +88,41 @@ export default function TextRecyclerScreen() {
         </ImageBackground>
       </View>
 
-      {/* Message Suggestions */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.suggestionsContainer}
-        contentContainerStyle={styles.suggestionsContent}
-      >
-        {MESSAGE_SUGGESTION_SETS[suggestionSetIndex].map((suggestion, idx) => (
-          <TouchableOpacity
-            key={suggestion}
-            style={[
-              styles.suggestionButton,
-              { marginRight: idx === MESSAGE_SUGGESTION_SETS[suggestionSetIndex].length - 1 ? 0 : 10 }
-            ]}
-            onPress={() => sendMessage(suggestion)}
-          >
-            <Text style={styles.suggestionText}>{suggestion}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
       {/* Main Chat Area */}
       <View style={styles.chatContainer}>
-        <ImageBackground
-          source={require('../assets/images/bin.png')}
-          style={styles.chatBackground}
-          imageStyle={{ opacity: 0.1 }}
-          resizeMode="contain"
-        >
+        <View style={[styles.chatBackground, { backgroundColor: '#F8FFF0' }]}>
+          <Image
+            source={require('../assets/images/bin.png')}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              opacity: 0.4,
+              resizeMode: 'contain'
+            }}
+          />
+          {/* Message Suggestions - Now inside the chat area */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ paddingHorizontal: 12, marginVertical: 8 }}
+            contentContainerStyle={{ alignItems: 'center' }}
+          >
+            {MESSAGE_SUGGESTION_SETS[suggestionSetIndex].map((suggestion, idx) => (
+              <TouchableOpacity
+                key={suggestion}
+                style={[
+                  styles.suggestionButton,
+                  { marginRight: idx === MESSAGE_SUGGESTION_SETS[suggestionSetIndex].length - 1 ? 0 : 10 }
+                ]}
+                onPress={() => sendMessage(suggestion)}
+              >
+                <Text style={styles.suggestionText}>{suggestion}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
           <ScrollView
             ref={scrollViewRef}
             contentContainerStyle={styles.chatContent}
@@ -135,7 +143,7 @@ export default function TextRecyclerScreen() {
               </View>
             ))}
           </ScrollView>
-        </ImageBackground>
+        </View>
       </View>
 
       {/* Input Bar */}

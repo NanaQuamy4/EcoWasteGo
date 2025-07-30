@@ -100,62 +100,68 @@ export default function HelpScreen() {
           </View>
         </ImageBackground>
       </View>
-      {/* FAQ Suggestions */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ paddingHorizontal: 12, marginBottom: 4, marginTop: -4 }}
-        contentContainerStyle={{ alignItems: 'center' }}
-      >
-        {FAQ_SUGGESTION_SETS[faqSetIndex].map((faq, idx) => (
-          <TouchableOpacity
-            key={faq}
-            style={{
-              backgroundColor: '#E3F0D5',
-              borderRadius: 12,
-              paddingVertical: 4,
-              paddingHorizontal: 12,
-              marginRight: idx === FAQ_SUGGESTION_SETS[faqSetIndex].length - 1 ? 0 : 8,
-              marginLeft: idx === 0 ? 0 : 0,
-              borderWidth: 1,
-              borderColor: '#B6CDBD',
-            }}
-            onPress={() => sendMessage(faq)}
-          >
-            <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 12 }}>{faq}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-      {/* Main Icon */}
-      <View style={{ flex: 1 }}>
-        <ImageBackground
+      {/* Main Chat Area with Background */}
+      <View style={{ flex: 1, backgroundColor: '#F8FFF0' }}>
+        <Image
           source={require('../assets/images/bin.png')}
-          style={{ flex: 1, paddingTop: 8, paddingBottom: 90 }}
-          imageStyle={{ opacity: 0.1 }}
-          resizeMode="contain"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            opacity: 0.4,
+            resizeMode: 'contain'
+          }}
+        />
+        {/* FAQ Suggestions - Now inside the chat area */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ paddingHorizontal: 12, marginVertical: 8 }}
+          contentContainerStyle={{ alignItems: 'center' }}
         >
-          <ScrollView
-            ref={scrollViewRef}
-            contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 8, paddingBottom: 90 }}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={{ alignItems: 'center', marginBottom: 12 }}>
-              <FontAwesome5 name="recycle" size={120} color="#B6CDBD" style={{ opacity: 0.25 }} />
+          {FAQ_SUGGESTION_SETS[faqSetIndex].map((faq, idx) => (
+            <TouchableOpacity
+              key={faq}
+              style={{
+                backgroundColor: '#E3F0D5',
+                borderRadius: 12,
+                paddingVertical: 4,
+                paddingHorizontal: 12,
+                marginRight: idx === FAQ_SUGGESTION_SETS[faqSetIndex].length - 1 ? 0 : 8,
+                marginLeft: idx === 0 ? 0 : 0,
+                borderWidth: 1,
+                borderColor: '#B6CDBD',
+              }}
+              onPress={() => sendMessage(faq)}
+            >
+              <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 12 }}>{faq}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        {/* Chat Messages */}
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 8, paddingBottom: 90 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={{ alignItems: 'center', marginBottom: 12 }}>
+            <FontAwesome5 name="recycle" size={120} color="#B6CDBD" style={{ opacity: 0.25 }} />
+          </View>
+          {messages.map((msg, idx) => (
+            <View
+              key={msg.id}
+              style={
+                msg.sender === 'user'
+                  ? [styles.userBubble, { alignSelf: 'flex-end', marginRight: 18 }]
+                  : [styles.supportBubble, { alignSelf: 'flex-start', marginLeft: 18 }]
+              }
+            >
+              <Text style={msg.sender === 'user' ? styles.userText : styles.supportText}>{msg.text}</Text>
             </View>
-            {messages.map((msg, idx) => (
-              <View
-                key={msg.id}
-                style={
-                  msg.sender === 'user'
-                    ? [styles.userBubble, { alignSelf: 'flex-end', marginRight: 18 }]
-                    : [styles.supportBubble, { alignSelf: 'flex-start', marginLeft: 18 }]
-                }
-              >
-                <Text style={msg.sender === 'user' ? styles.userText : styles.supportText}>{msg.text}</Text>
-              </View>
-            ))}
-          </ScrollView>
-        </ImageBackground>
+          ))}
+        </ScrollView>
       </View>
       {/* Input Bar */}
       <View style={styles.inputBar}>
