@@ -11,7 +11,7 @@ export default function RecyclerWeightEntry() {
   
   const [weight, setWeight] = useState('');
   const [wasteType, setWasteType] = useState('Plastic');
-  const [rate, setRate] = useState('1.20');
+  const [rate] = useState('1.20');
 
   const calculateBill = () => {
     if (!weight || parseFloat(weight) <= 0) {
@@ -39,10 +39,6 @@ export default function RecyclerWeightEntry() {
         totalAmount: totalAmount.toFixed(2)
       }
     });
-  };
-
-  const handleBack = () => {
-    router.back();
   };
 
   return (

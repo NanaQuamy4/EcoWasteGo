@@ -207,11 +207,11 @@ export default function RecyclerActivities() {
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>{completedPickupsCount}</Text>
-          <Text style={styles.statLabel}>Today's Pickups</Text>
+          <Text style={styles.statLabel}>Today&apos;s Pickups</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>₵{todayEarnings.toFixed(2)}</Text>
-          <Text style={styles.statLabel}>Today's Earnings</Text>
+          <Text style={styles.statNumber}>₵{todayEarnings}</Text>
+          <Text style={styles.statLabel}>Today&apos;s Earnings</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>4.8/5</Text>

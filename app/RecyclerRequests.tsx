@@ -8,12 +8,10 @@ import recyclerStats from './utils/recyclerStats';
 
 export default function RecyclerRequests() {
   const params = useLocalSearchParams();
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(2);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [acceptedRequests, setAcceptedRequests] = useState<Set<string>>(new Set());
   const [completedRequests, setCompletedRequests] = useState<Set<string>>(new Set());
-  const recycler = { name: 'John Recycler' };
 
   // Initialize mock data on component mount
   useEffect(() => {
@@ -57,7 +55,6 @@ export default function RecyclerRequests() {
       const pickupId = params.pickupId as string;
       const userName = params.userName as string;
       const location = params.location as string;
-      const wasteType = params.wasteType as string;
       const totalAmount = params.totalAmount as string;
 
       // Add to completed requests
@@ -89,7 +86,7 @@ export default function RecyclerRequests() {
         ]
       );
     }
-  }, [params.completedPickup, params.pickupId, params.userName, params.location, params.wasteType, params.totalAmount]);
+  }, [params.completedPickup, params.pickupId, params.userName, params.location, params.totalAmount]);
 
   const handleNotificationPress = () => {
     setNotificationCount(0);
@@ -162,21 +159,9 @@ export default function RecyclerRequests() {
     }
   };
 
-  const handleCallUser = (phone: string) => {
-    Alert.alert(
-      'Call User',
-      `Call ${phone}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Call', onPress: () => {} }
-      ]
-    );
-  };
-
   return (
     <View style={styles.container}>
       <AppHeader 
-        onMenuPress={() => setDrawerOpen(true)} 
         onNotificationPress={handleNotificationPress}
         notificationCount={notificationCount}
       />

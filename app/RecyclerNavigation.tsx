@@ -45,7 +45,7 @@ export default function RecyclerNavigation() {
     
     try {
       Linking.openURL(`tel:${phoneNumber}`);
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Unable to open phone dialer. Please try calling manually: ' + phoneNumber);
     }
   };

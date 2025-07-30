@@ -1,6 +1,6 @@
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
@@ -11,7 +11,7 @@ export default function RecyclerHomeTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [requests, setRequests] = useState(0);
-  const [activities, setActivities] = useState(1);
+  const [activities] = useState(1);
   const [notificationCount, setNotificationCount] = useState(2); // Mock notification count
 
   const recycler = {
@@ -153,7 +153,7 @@ export default function RecyclerHomeTab() {
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>₵{recyclerStats.getTodayEarnings().toFixed(2)}</Text>
-          <Text style={styles.statLabel}>Today's Earnings</Text>
+          <Text style={styles.statLabel}>Today&apos;s Earnings</Text>
         </View>
       </View>
     </View>

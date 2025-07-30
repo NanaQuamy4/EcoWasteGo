@@ -153,10 +153,10 @@ export default function RecyclerPaymentSummary() {
                 {paymentAccepted ? '✅ Payment Accepted' : '⏳ Awaiting User Response'}
               </Text>
               <Text style={styles.statusText}>
-                {paymentAccepted 
-                  ? 'The user has accepted your payment summary. You can now mark payment as received.'
-                  : 'Payment summary sent to user. Waiting for their acceptance.'
-                }
+                Payment Status: {paymentSent ? (paymentAccepted ? 'Accepted' : 'Sent') : 'Not Sent'}
+              </Text>
+              <Text style={styles.statusSubtext}>
+                {paymentSent ? (paymentAccepted ? 'User has accepted the payment summary' : 'Waiting for user&apos;s response') : 'Payment summary not sent yet'}
               </Text>
             </View>
           </View>
@@ -229,7 +229,7 @@ export default function RecyclerPaymentSummary() {
           {/* Note Section */}
           <View style={styles.noteSection}>
             <Text style={styles.noteTitle}>Note:</Text>
-            <Text style={styles.noteText}>This bill includes a 5% Environmental Excise Tax as required by Ghana's environmental protection regulations.</Text>
+            <Text style={styles.noteText}>This bill includes a 5% Environmental Excise Tax as required by Ghana&apos;s environmental protection regulations.</Text>
             <Text style={styles.noteText}>The user will receive this payment summary and can accept or reject the payment.</Text>
           </View>
         </View>
@@ -328,6 +328,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  statusSubtext: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
   summaryContainer: {
     paddingHorizontal: 20,

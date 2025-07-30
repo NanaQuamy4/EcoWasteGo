@@ -98,7 +98,7 @@ export default function RecyclerCelebration() {
             
             <View style={styles.achievementContent}>
               <Text style={styles.achievementText}>
-                You've successfully completed another waste collection and helped make our environment cleaner!
+                You&apos;ve successfully completed another pickup and contributed to a cleaner environment!
               </Text>
               
               <View style={styles.statsContainer}>
@@ -122,7 +122,7 @@ export default function RecyclerCelebration() {
           <View style={styles.impactCard}>
             <Text style={styles.impactTitle}>Your Impact Today</Text>
             <Text style={styles.impactText}>
-              By collecting and properly disposing of waste, you've contributed to:
+              By collecting and properly disposing of waste, you&apos;ve contributed to:
             </Text>
             <View style={styles.impactList}>
               <Text style={styles.impactItem}>• Reducing landfill waste</Text>
