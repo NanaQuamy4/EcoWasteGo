@@ -1,12 +1,17 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../components/AppHeader';
 import { COLORS } from '../constants';
 
 export default function RecyclerActivities() {
+  const params = useLocalSearchParams();
   const [selectedFilter, setSelectedFilter] = useState('pickups');
+
+  // Get completed pickups count from params or default to 0
+  const completedPickupsCount = parseInt(params.completedPickupsCount as string) || 0;
+  const todayEarnings = parseFloat(params.todayEarnings as string) || 156.80;
 
   // Mock activities data focused on work performance
   const activities = [
@@ -201,11 +206,11 @@ export default function RecyclerActivities() {
       {/* Performance Stats */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>16</Text>
+          <Text style={styles.statNumber}>{completedPickupsCount}</Text>
           <Text style={styles.statLabel}>Today's Pickups</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>₵156.80</Text>
+          <Text style={styles.statNumber}>₵{todayEarnings.toFixed(2)}</Text>
           <Text style={styles.statLabel}>Today's Earnings</Text>
         </View>
         <View style={styles.statCard}>

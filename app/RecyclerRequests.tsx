@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../components/AppHeader';
 import { COLORS } from '../constants';
+import recyclerStats from './utils/recyclerStats';
 
 export default function RecyclerRequests() {
   const params = useLocalSearchParams();
@@ -56,6 +57,10 @@ export default function RecyclerRequests() {
 
       // Add to completed requests
       setCompletedRequests(prev => new Set([...prev, pickupId]));
+      
+      // Add to shared stats
+      const earnings = parseFloat(totalAmount) || 0;
+      recyclerStats.addCompletedPickup(pickupId, earnings);
       
       // Remove from accepted requests if it was there
       setAcceptedRequests(prev => {
@@ -122,6 +127,10 @@ export default function RecyclerRequests() {
       newSet.delete(requestId);
       return newSet;
     });
+    
+    // Add to shared stats (mock earnings for manual completion)
+    recyclerStats.addCompletedPickup(requestId, 15.50);
+    
     Alert.alert(
       'Pickup Completed',
       'This pickup has been marked as completed.',

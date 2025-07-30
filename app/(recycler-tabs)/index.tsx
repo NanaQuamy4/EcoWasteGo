@@ -5,6 +5,7 @@ import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import { COLORS } from '../../constants';
+import recyclerStats from '../utils/recyclerStats';
 
 export default function RecyclerHomeTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -42,7 +43,14 @@ export default function RecyclerHomeTab() {
   };
 
   const handleActivitiesPress = () => {
-    router.push('/RecyclerActivities');
+    // Pass actual completed pickups count and today's earnings to Activities screen
+    router.push({
+      pathname: '/RecyclerActivities',
+      params: {
+        completedPickupsCount: recyclerStats.getCompletedPickupsCount().toString(),
+        todayEarnings: recyclerStats.getTodayEarnings().toString()
+      }
+    });
   };
 
   const handleNotificationPress = () => {
@@ -131,7 +139,7 @@ export default function RecyclerHomeTab() {
           <Text style={styles.statLabel}>Active Pickups</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>₵45.20</Text>
+          <Text style={styles.statNumber}>₵{recyclerStats.getTodayEarnings().toFixed(2)}</Text>
           <Text style={styles.statLabel}>Today's Earnings</Text>
         </View>
       </View>
