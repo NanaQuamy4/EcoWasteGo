@@ -42,6 +42,11 @@ class RecyclerStats {
     return this.activePickups.size;
   }
 
+  // Get total available requests (pending + active)
+  getTotalAvailableRequestsCount(): number {
+    return this.pendingRequests.size + this.activePickups.size;
+  }
+
   // Completed Pickups Management
   addCompletedPickup(pickupId: string, earnings: number = 0) {
     this.completedPickups.add(pickupId);
@@ -71,6 +76,8 @@ class RecyclerStats {
     this.addPendingRequest('2');
     this.addPendingRequest('3');
     this.addPendingRequest('4');
+    this.addPendingRequest('7');
+    this.addPendingRequest('8');
     
     // Add some mock active pickups
     this.addActivePickup('5');

@@ -27,7 +27,8 @@ export default function RecyclerHomeTab() {
   // Update counts from shared stats
   useEffect(() => {
     const updateCounts = () => {
-      setRequests(recyclerStats.getPendingRequestsCount());
+      // Show total available requests (pending + active) to correlate with RecyclerRequests screen
+      setRequests(recyclerStats.getTotalAvailableRequestsCount());
     };
     
     updateCounts();

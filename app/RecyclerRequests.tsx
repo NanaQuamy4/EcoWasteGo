@@ -46,6 +46,51 @@ export default function RecyclerRequests() {
       wasteType: 'Electronic',
       distance: '3.1 km',
       status: 'pending'
+    },
+    {
+      id: '4',
+      userName: 'Emma Thompson',
+      location: 'Kejetia Market',
+      phone: '0545551234',
+      wasteType: 'Glass',
+      distance: '4.2 km',
+      status: 'pending'
+    },
+    {
+      id: '5',
+      userName: 'James Brown',
+      location: 'Adum Shopping Center',
+      phone: '0547778888',
+      wasteType: 'Metal',
+      distance: '1.5 km',
+      status: 'active'
+    },
+    {
+      id: '6',
+      userName: 'Lisa Anderson',
+      location: 'KNUST Hospital',
+      phone: '0549990000',
+      wasteType: 'Plastic',
+      distance: '2.7 km',
+      status: 'active'
+    },
+    {
+      id: '7',
+      userName: 'Robert Davis',
+      location: 'Kumasi Airport',
+      phone: '0541112222',
+      wasteType: 'Paper',
+      distance: '5.3 km',
+      status: 'pending'
+    },
+    {
+      id: '8',
+      userName: 'Maria Garcia',
+      location: 'KNUST Library',
+      phone: '0543334444',
+      wasteType: 'Electronic',
+      distance: '0.8 km',
+      status: 'pending'
     }
   ];
 
