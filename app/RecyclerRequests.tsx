@@ -16,6 +16,9 @@ export default function RecyclerRequests() {
   // Initialize mock data on component mount
   useEffect(() => {
     recyclerStats.initializeMockData();
+    
+    // Sync accepted requests with shared stats
+    setAcceptedRequests(new Set(['5', '6'])); // IDs 5 and 6 are active in shared stats
   }, []);
 
   // Mock pickup requests data

@@ -27,8 +27,8 @@ export default function RecyclerHomeTab() {
   // Update counts from shared stats
   useEffect(() => {
     const updateCounts = () => {
-      // Show only pending requests count - when accepted, count decreases
-      setRequests(recyclerStats.getPendingRequestsCount());
+      // Show total available requests (pending + active) to match RecyclerRequests screen
+      setRequests(recyclerStats.getTotalAvailableRequestsCount());
     };
     
     updateCounts();
@@ -146,7 +146,7 @@ export default function RecyclerHomeTab() {
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>{requests}</Text>
-          <Text style={styles.statLabel}>Pending Requests</Text>
+          <Text style={styles.statLabel}>Available Requests</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>{recyclerStats.getActivePickupsCount()}</Text>
