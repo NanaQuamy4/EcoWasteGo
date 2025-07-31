@@ -84,7 +84,11 @@ export default function RecyclerRequests() {
       
       // Add to shared stats
       const earnings = parseFloat(totalAmount) || 0;
-      recyclerStats.addCompletedPickup(pickupId, earnings);
+      recyclerStats.addCompletedPickup(pickupId, earnings, {
+        customer: userName,
+        wasteType: 'Mixed Waste', // Default since we don't have this data
+        weight: '10kg' // Default since we don't have this data
+      });
       
       // Remove from accepted requests if it was there
       setAcceptedRequests(prev => {
@@ -167,7 +171,11 @@ export default function RecyclerRequests() {
     });
     
     // Add to shared stats (mock earnings for manual completion)
-    recyclerStats.addCompletedPickup(requestId, 15.50);
+    recyclerStats.addCompletedPickup(requestId, 15.50, {
+      customer: 'Manual Completion',
+      wasteType: 'Mixed Waste',
+      weight: '10kg'
+    });
     
     Alert.alert(
       'Pickup Completed',

@@ -8,7 +8,11 @@ import DrawerMenu from '../../components/DrawerMenu';
 export default function HistoryScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(1); // Mock notification count
-  const user = { name: 'Williams Boampong' };
+  const user = { 
+    name: 'Williams Boampong',
+    type: 'user' as const,
+    status: 'user'
+  };
   const router = useRouter();
 
   const handleNotificationPress = () => {

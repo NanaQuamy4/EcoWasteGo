@@ -51,9 +51,16 @@ export default function SubscriptionScreen() {
   };
 
   const handleTestAddFees = () => {
-    // Test function to add some fees for testing
-    recyclerStats.addCompletedPickup('test-1', 25.00);
-    recyclerStats.addCompletedPickup('test-2', 30.00);
+    recyclerStats.addCompletedPickup('test-1', 25.00, {
+      customer: 'Test User 1',
+      wasteType: 'Plastic',
+      weight: '12kg'
+    });
+    recyclerStats.addCompletedPickup('test-2', 30.00, {
+      customer: 'Test User 2',
+      wasteType: 'Paper',
+      weight: '15kg'
+    });
     Alert.alert('Test Fees Added', 'Added test fees for testing. Refresh the screen to see changes.');
   };
 

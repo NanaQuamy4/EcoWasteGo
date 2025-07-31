@@ -33,35 +33,7 @@ const COLORS = {
 export default function AnalyticsScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState('week');
 
-  // Mock data for analytics
-  const wasteReductionData = {
-    week: {
-      totalWaste: 1250, // kg
-      recycledWaste: 875, // kg
-      reductionPercentage: 70,
-      dailyData: [
-        { day: 'Mon', waste: 180, recycled: 126 },
-        { day: 'Tue', waste: 200, recycled: 140 },
-        { day: 'Wed', waste: 220, recycled: 154 },
-        { day: 'Thu', waste: 190, recycled: 133 },
-        { day: 'Fri', waste: 210, recycled: 147 },
-        { day: 'Sat', waste: 150, recycled: 105 },
-        { day: 'Sun', waste: 100, recycled: 70 },
-      ]
-    },
-    month: {
-      totalWaste: 5200,
-      recycledWaste: 3640,
-      reductionPercentage: 70,
-      weeklyData: [
-        { week: 'Week 1', waste: 1250, recycled: 875 },
-        { week: 'Week 2', waste: 1300, recycled: 910 },
-        { week: 'Week 3', waste: 1350, recycled: 945 },
-        { week: 'Week 4', waste: 1300, recycled: 910 },
-      ]
-    }
-  };
-
+  // Real data based on recycler's actual performance
   const recyclerPerformanceData = {
     week: {
       totalPickups: recyclerStats.getCompletedPickupsCount(),
@@ -80,12 +52,21 @@ export default function AnalyticsScreen() {
     }
   };
 
-  const environmentalImpactData = {
-    co2Reduced: 1250, // kg CO2 equivalent
-    treesEquivalent: 62, // number of trees
-    landfillSpaceSaved: 875, // cubic meters
-    energySaved: 1750, // kWh
+  // Calculate environmental impact based on actual completed pickups
+  const getEnvironmentalImpact = () => {
+    const completedPickups = recyclerStats.getCompletedPickupsCount();
+    const avgWastePerPickup = 12; // kg average per pickup
+    
+    return {
+      wasteDiverted: completedPickups * avgWastePerPickup, // kg
+      co2Reduced: completedPickups * avgWastePerPickup * 0.5, // kg CO2 equivalent
+      treesEquivalent: Math.floor(completedPickups * avgWastePerPickup * 0.5 / 20), // 20kg CO2 per tree
+      landfillSpaceSaved: completedPickups * avgWastePerPickup * 0.7, // cubic meters
+      energySaved: completedPickups * avgWastePerPickup * 1.4, // kWh
+    };
   };
+
+  const environmentalImpact = getEnvironmentalImpact();
 
   const renderProgressBar = (percentage: number, color: string) => (
     <View style={styles.progressContainer}>
@@ -135,7 +116,6 @@ export default function AnalyticsScreen() {
     </View>
   );
 
-  const currentData = selectedPeriod === 'week' ? wasteReductionData.week : wasteReductionData.month;
   const performanceData = recyclerPerformanceData.week;
 
   return (
@@ -174,24 +154,24 @@ export default function AnalyticsScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons name="eco" size={24} color={COLORS.primary} />
-            <Text style={styles.sectionTitle}>Waste Reduction Impact</Text>
+            <Text style={styles.sectionTitle}>Your Environmental Impact</Text>
           </View>
           
           <View style={styles.overviewCard}>
             <View style={styles.overviewRow}>
               <View style={styles.overviewItem}>
-                <Text style={styles.overviewLabel}>Total Waste Generated</Text>
-                <Text style={styles.overviewValue}>{currentData.totalWaste} kg</Text>
+                <Text style={styles.overviewLabel}>Waste Diverted</Text>
+                <Text style={styles.overviewValue}>{environmentalImpact.wasteDiverted} kg</Text>
               </View>
               <View style={styles.overviewItem}>
-                <Text style={styles.overviewLabel}>Waste Recycled</Text>
-                <Text style={styles.overviewValue}>{currentData.recycledWaste} kg</Text>
+                <Text style={styles.overviewLabel}>Pickups Completed</Text>
+                <Text style={styles.overviewValue}>{recyclerStats.getCompletedPickupsCount()}</Text>
               </View>
             </View>
             
             <View style={styles.reductionContainer}>
-              <Text style={styles.reductionTitle}>Waste Reduction Rate</Text>
-              {renderProgressBar(currentData.reductionPercentage, COLORS.success)}
+              <Text style={styles.reductionTitle}>Impact Rate</Text>
+              {renderProgressBar(100, COLORS.success)} {/* 100% impact for completed pickups */}
             </View>
           </View>
         </View>
@@ -245,22 +225,22 @@ export default function AnalyticsScreen() {
           <View style={styles.impactGrid}>
             <View style={styles.impactCard}>
               <Ionicons name="leaf-outline" size={24} color={COLORS.darkGreen} />
-              <Text style={styles.impactValue}>{environmentalImpactData.co2Reduced} kg</Text>
+              <Text style={styles.impactValue}>{environmentalImpact.co2Reduced} kg</Text>
               <Text style={styles.impactLabel}>CO₂ Reduced</Text>
             </View>
             <View style={styles.impactCard}>
               <MaterialIcons name="park" size={24} color={COLORS.darkGreen} />
-              <Text style={styles.impactValue}>{environmentalImpactData.treesEquivalent}</Text>
+              <Text style={styles.impactValue}>{environmentalImpact.treesEquivalent}</Text>
               <Text style={styles.impactLabel}>Trees Equivalent</Text>
             </View>
             <View style={styles.impactCard}>
               <MaterialIcons name="storage" size={24} color={COLORS.darkGreen} />
-              <Text style={styles.impactValue}>{environmentalImpactData.landfillSpaceSaved} m³</Text>
+              <Text style={styles.impactValue}>{environmentalImpact.landfillSpaceSaved} m³</Text>
               <Text style={styles.impactLabel}>Landfill Space Saved</Text>
             </View>
             <View style={styles.impactCard}>
               <MaterialIcons name="flash-on" size={24} color={COLORS.darkGreen} />
-              <Text style={styles.impactValue}>{environmentalImpactData.energySaved} kWh</Text>
+              <Text style={styles.impactValue}>{environmentalImpact.energySaved} kWh</Text>
               <Text style={styles.impactLabel}>Energy Saved</Text>
             </View>
           </View>
@@ -294,41 +274,39 @@ export default function AnalyticsScreen() {
           </View>
           
           <View style={styles.trendContainer}>
-            {(selectedPeriod === 'week' ? wasteReductionData.week.dailyData : wasteReductionData.month.weeklyData.map(w => ({ day: w.week, waste: w.waste, recycled: w.recycled }))).map((day: { day: string; waste: number; recycled: number }, index: number) => (
-              <View key={index} style={styles.trendDay}>
-                <Text style={styles.trendDayLabel}>{day.day}</Text>
-                <View style={styles.trendBars}>
-                  <View style={styles.trendBarContainer}>
-                    <Text style={styles.trendBarLabel}>Waste</Text>
-                    <View style={[styles.trendBar, { backgroundColor: COLORS.error }]}>
-                      <View 
-                        style={[
-                          styles.trendBarFill, 
-                          { 
-                            width: `${(day.waste / 250) * 100}%`,
-                            backgroundColor: COLORS.error
-                          }
-                        ]} 
-                      />
-                    </View>
+            <View style={styles.trendDay}>
+              <Text style={styles.trendDayLabel}>Today</Text>
+              <View style={styles.trendBars}>
+                <View style={styles.trendBarContainer}>
+                  <Text style={styles.trendBarLabel}>Waste</Text>
+                  <View style={[styles.trendBar, { backgroundColor: COLORS.error }]}>
+                    <View 
+                      style={[
+                        styles.trendBarFill, 
+                        { 
+                          width: `${(12 / 250) * 100}%`,
+                          backgroundColor: COLORS.error
+                        }
+                      ]} 
+                    />
                   </View>
-                  <View style={styles.trendBarContainer}>
-                    <Text style={styles.trendBarLabel}>Recycled</Text>
-                    <View style={[styles.trendBar, { backgroundColor: COLORS.success }]}>
-                      <View 
-                        style={[
-                          styles.trendBarFill, 
-                          { 
-                            width: `${(day.recycled / 250) * 100}%`,
-                            backgroundColor: COLORS.success
-                          }
-                        ]} 
-                      />
-                    </View>
+                </View>
+                <View style={styles.trendBarContainer}>
+                  <Text style={styles.trendBarLabel}>Recycled</Text>
+                  <View style={[styles.trendBar, { backgroundColor: COLORS.success }]}>
+                    <View 
+                      style={[
+                        styles.trendBarFill, 
+                        { 
+                          width: `${(12 / 250) * 100}%`,
+                          backgroundColor: COLORS.success
+                        }
+                      ]} 
+                    />
                   </View>
                 </View>
               </View>
-            ))}
+            </View>
           </View>
         </View>
       </ScrollView>

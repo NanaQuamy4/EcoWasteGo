@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants';
 import CommonHeader from './components/CommonHeader';
+import recyclerStats from './utils/recyclerStats';
 
 export default function RecyclerPaymentSummary() {
   const params = useLocalSearchParams();
@@ -93,6 +94,16 @@ export default function RecyclerPaymentSummary() {
         {
           text: 'Confirm',
           onPress: () => {
+            // Calculate earnings from total amount
+            const earnings = parseFloat(totalAmount.replace('GHS ', '').replace(',', ''));
+            
+            // Add completed pickup to recyclerStats with payment data
+            recyclerStats.addCompletedPickup('1', earnings, {
+              customer: userName,
+              wasteType: wasteType,
+              weight: weight
+            });
+            
             // Mark request as completed and navigate to requests
             Alert.alert(
               'Request Completed',

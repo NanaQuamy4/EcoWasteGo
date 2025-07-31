@@ -17,7 +17,11 @@ export default function HomeScreen() {
   const [search, setSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const user = { name: 'Williams Boampong' };
+  const user = { 
+    name: 'Williams Boampong',
+    type: 'user' as const,
+    status: 'user'
+  };
   const router = useRouter();
 
 

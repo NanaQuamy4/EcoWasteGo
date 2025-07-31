@@ -12,6 +12,7 @@ export default function UserScreen() {
     email: 'nanaquamy4@gmail.com',
     phone: '54 673 2719',
     status: 'user',
+    type: 'user' as const,
     totalPickups: 12,
     totalWaste: '156.8 kg',
     memberSince: 'Jan 2024',

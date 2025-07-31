@@ -37,6 +37,7 @@ export default function RootLayout() {
                     <Stack.Screen name="RecyclerCelebration" options={{ headerShown: false }} />
                     <Stack.Screen name="SubscriptionScreen" options={{ headerShown: false }} />
         <Stack.Screen name="AnalyticsScreen" options={{ headerShown: false }} />
+        <Stack.Screen name="EarningsScreen" options={{ headerShown: false }} />
     </Stack>
   );
 } 

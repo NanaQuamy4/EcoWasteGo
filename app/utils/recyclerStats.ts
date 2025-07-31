@@ -9,6 +9,17 @@ class RecyclerStats {
   private weeklyPickupCount: number = 0; // Track pickups for the week
   private lastWeekReset: Date = new Date(); // Track when week resets
   private isInitialized: boolean = false; // Track if mock data has been initialized
+  private paymentHistory: {
+    id: string;
+    date: string;
+    time: string;
+    pickupId: string;
+    amount: number;
+    status: string;
+    customer: string;
+    wasteType: string;
+    weight: string;
+  }[] = [];
 
   private constructor() {}
 
@@ -52,7 +63,11 @@ class RecyclerStats {
   }
 
   // Completed Pickups Management
-  addCompletedPickup(pickupId: string, earnings: number) {
+  addCompletedPickup(pickupId: string, earnings: number, paymentData?: {
+    customer: string;
+    wasteType: string;
+    weight: string;
+  }) {
     this.completedPickups.add(pickupId);
     this.todayEarnings += earnings;
     
@@ -63,6 +78,25 @@ class RecyclerStats {
     const subscriptionFee = earnings * 0.10;
     this.weeklySubscriptionFees += subscriptionFee;
     this.weeklyPickupCount++;
+    
+    // Add to payment history if payment data is provided
+    if (paymentData) {
+      const now = new Date();
+      const date = now.toISOString().split('T')[0];
+      const time = now.toTimeString().split(' ')[0].substring(0, 5);
+      
+      this.paymentHistory.unshift({
+        id: Date.now().toString(),
+        date: date,
+        time: time,
+        pickupId: pickupId,
+        amount: earnings,
+        status: 'completed',
+        customer: paymentData.customer,
+        wasteType: paymentData.wasteType,
+        weight: paymentData.weight
+      });
+    }
     
     console.log(`🔍 DEBUG: Pickup completed - ID: ${pickupId}`);
     console.log(`💰 Earnings: GHS ${earnings.toFixed(2)}`);
@@ -79,6 +113,30 @@ class RecyclerStats {
 
   getTodayEarnings(): number {
     return this.todayEarnings;
+  }
+
+  // Get payment history
+  getPaymentHistory() {
+    return this.paymentHistory;
+  }
+
+  // Get earnings statistics for different periods
+  getEarningsStats() {
+    const totalEarnings = this.todayEarnings;
+    const completedPickups = this.completedPickups.size;
+    const averagePerPickup = completedPickups > 0 ? totalEarnings / completedPickups : 0;
+    const weeklyEarnings = totalEarnings * 7; // Estimate for week
+    const monthlyEarnings = totalEarnings * 30; // Estimate for month
+
+    return {
+      totalEarnings,
+      completedPickups,
+      averagePerPickup,
+      weeklyEarnings,
+      monthlyEarnings,
+      todayEarnings: totalEarnings,
+      yesterdayEarnings: totalEarnings * 0.8, // Mock data for now
+    };
   }
 
   resetDailyStats() {
@@ -102,6 +160,66 @@ class RecyclerStats {
     // Add some mock active pickups
     this.addActivePickup('5');
     this.addActivePickup('6');
+    
+    // Add some mock payment history
+    this.paymentHistory = [
+      {
+        id: '1',
+        date: '2024-01-15',
+        time: '14:30',
+        pickupId: 'PK-001',
+        amount: 25.00,
+        status: 'completed',
+        customer: 'John Doe',
+        wasteType: 'Plastic',
+        weight: '12kg'
+      },
+      {
+        id: '2',
+        date: '2024-01-15',
+        time: '16:45',
+        pickupId: 'PK-002',
+        amount: 30.00,
+        status: 'completed',
+        customer: 'Sarah Wilson',
+        wasteType: 'Paper',
+        weight: '15kg'
+      },
+      {
+        id: '3',
+        date: '2024-01-14',
+        time: '10:20',
+        pickupId: 'PK-003',
+        amount: 18.50,
+        status: 'completed',
+        customer: 'Mike Johnson',
+        wasteType: 'Glass',
+        weight: '8kg'
+      },
+      {
+        id: '4',
+        date: '2024-01-14',
+        time: '13:15',
+        pickupId: 'PK-004',
+        amount: 22.00,
+        status: 'completed',
+        customer: 'Emma Davis',
+        wasteType: 'Plastic',
+        weight: '11kg'
+      },
+      {
+        id: '5',
+        date: '2024-01-13',
+        time: '09:30',
+        pickupId: 'PK-005',
+        amount: 28.00,
+        status: 'completed',
+        customer: 'David Brown',
+        wasteType: 'Paper',
+        weight: '14kg'
+      }
+    ];
+    
     this.isInitialized = true;
     console.log('Mock data initialized successfully.');
   }

@@ -3,7 +3,8 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Animated, Dimensions, Linking, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const DEFAULT_MENU_ITEMS = [
+// Menu items for recyclers
+const RECYCLER_MENU_ITEMS = [
   { label: 'Education', icon: <MaterialIcons name="chat-bubble-outline" size={22} color="#22330B" />, key: 'education' },
   { label: 'History', icon: <Feather name="rotate-ccw" size={22} color="#22330B" />, key: 'history' },
   { label: 'Earnings', icon: <FontAwesome5 name="dollar-sign" size={22} color="#22330B" />, key: 'earnings' },
@@ -16,18 +17,35 @@ const DEFAULT_MENU_ITEMS = [
   { label: 'About', icon: <MaterialIcons name="info-outline" size={22} color="#22330B" />, key: 'about' },
 ];
 
+// Menu items for regular users
+const USER_MENU_ITEMS = [
+  { label: 'Education', icon: <MaterialIcons name="chat-bubble-outline" size={22} color="#22330B" />, key: 'education' },
+  { label: 'History', icon: <Feather name="rotate-ccw" size={22} color="#22330B" />, key: 'history' },
+  { label: 'Rewards', icon: <Feather name="gift" size={22} color="#22330B" />, key: 'rewards' },
+  { label: 'Notification', icon: <Ionicons name="notifications-outline" size={22} color="#22330B" />, key: 'notification' },
+  { label: 'Help', icon: <MaterialIcons name="computer" size={22} color="#22330B" />, key: 'help' },
+  { label: 'Contact Us', icon: <MaterialIcons name="person-outline" size={22} color="#22330B" />, key: 'contact' },
+  { label: 'About', icon: <MaterialIcons name="info-outline" size={22} color="#22330B" />, key: 'about' },
+];
+
 type DrawerMenuProps = {
   open: boolean;
   onClose: () => void;
-  user: { name: string; email?: string; phone?: string; status?: string };
-  menuItems?: typeof DEFAULT_MENU_ITEMS;
+  user: { name: string; email?: string; phone?: string; status?: string; type?: 'recycler' | 'user' };
+  menuItems?: typeof RECYCLER_MENU_ITEMS;
 };
 
-export default function DrawerMenu({ open, onClose, user, menuItems = DEFAULT_MENU_ITEMS }: DrawerMenuProps) {
+export default function DrawerMenu({ open, onClose, user, menuItems }: DrawerMenuProps) {
   const [showContactCard, setShowContactCard] = useState(false);
   const screenWidth = Dimensions.get('window').width;
   const drawerWidth = screenWidth * 0.78;
   const router = useRouter();
+
+  // Determine user type and menu items
+  const isRecycler = user.type === 'recycler' || user.status === 'recycler';
+  const currentMenuItems = menuItems || (isRecycler ? RECYCLER_MENU_ITEMS : USER_MENU_ITEMS);
+  const userTitle = isRecycler ? 'Recycler' : 'User';
+  const userName = isRecycler ? 'GreenFleet GH' : user.name || 'User';
 
   // Drawer overlay
   const DrawerOverlay = open ? (
@@ -43,11 +61,11 @@ export default function DrawerMenu({ open, onClose, user, menuItems = DEFAULT_ME
             <Feather name="user" size={28} color="#fff" />
           </View>
           <TouchableOpacity onPress={() => { onClose(); router.push('/user'); }}>
-            <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 19 }}>GreenFleet GH</Text>
-            <Text style={{ color: '#22330B', fontSize: 13, marginTop: 0 }}>Recycler</Text>
+            <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 19 }}>{userName}</Text>
+            <Text style={{ color: '#22330B', fontSize: 13, marginTop: 0 }}>{userTitle}</Text>
           </TouchableOpacity>
         </View>
-        {menuItems.map(item => (
+        {currentMenuItems.map(item => (
           <TouchableOpacity
             key={item.key}
             style={styles.menuItem}
@@ -66,15 +84,15 @@ export default function DrawerMenu({ open, onClose, user, menuItems = DEFAULT_ME
                 setShowContactCard(false);
                 onClose();
                 router.push('/history');
-              } else if (item.key === 'earnings') {
+              } else if (item.key === 'earnings' && isRecycler) {
                 setShowContactCard(false);
                 onClose();
-                router.push('/(recycler-tabs)/history');
-              } else if (item.key === 'subscription') {
+                router.push('/EarningsScreen');
+              } else if (item.key === 'subscription' && isRecycler) {
                 setShowContactCard(false);
                 onClose();
                 router.push('/SubscriptionScreen');
-              } else if (item.key === 'analytics') {
+              } else if (item.key === 'analytics' && isRecycler) {
                 setShowContactCard(false);
                 onClose();
                 router.push('/AnalyticsScreen');
