@@ -11,26 +11,14 @@ export default function TrackingScreen() {
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [hasReachedDestination, setHasReachedDestination] = useState(false);
 
-  // Timer-based simulation: Show destination reached after 10 seconds, then navigate after 15 seconds
+  // Timer-based simulation: Show destination reached after 10 seconds
   useEffect(() => {
     const destinationTimer = setTimeout(() => {
       setHasReachedDestination(true);
     }, 10000); // 10 seconds - show destination reached
 
-    const navigationTimer = setTimeout(() => {
-      // Navigate to RecyclerHasArrived screen
-      router.push({
-        pathname: '/RecyclerHasArrived',
-        params: { 
-          recyclerName: recyclerName,
-          pickup: pickup 
-        }
-      });
-    }, 15000); // 15 seconds for demo
-
     return () => {
       clearTimeout(destinationTimer);
-      clearTimeout(navigationTimer);
     };
   }, [recyclerName, pickup]);
 
@@ -107,35 +95,40 @@ export default function TrackingScreen() {
     <View style={styles.container}>
       <CommonHeader title="Track Your Recycler" />
 
+      {/* Image Rectangle Banner */}
+      <View style={styles.bannerContainer}>
+        <View style={styles.bannerBg}>
+          <Image
+            source={require('../assets/images/blend.jpg')}
+            style={styles.bannerImage}
+            resizeMode="cover"
+          />
+          <TouchableOpacity style={styles.trackButton}>
+            <Text style={styles.trackButtonText}>Track Your Recycler</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Map Container */}
       <View style={styles.mapContainer}>
-        {/* Blank placeholder for Google Maps API integration */}
-        <View style={styles.mapPlaceholder}>
-          <View style={styles.mapHeader}>
-            <Text style={styles.mapTitle}>Live Tracking</Text>
-            <Text style={styles.mapSubtitle}>Track your recycler in real-time</Text>
-          </View>
-          
-          {/* Blank map area for future Google Maps integration */}
-          <View style={styles.mapContent}>
-            <View style={styles.blankMapArea}>
-              <Text style={styles.blankMapText}>Map Area</Text>
-              <Text style={styles.blankMapSubtext}>Google Maps integration coming soon</Text>
-            </View>
+        <View style={styles.mapHeader}>
+          <Text style={styles.mapTitle}>Live Tracking</Text>
+          <Text style={styles.mapSubtitle}>Track your recycler in real-time</Text>
+        </View>
+        
+        {/* Blank map area for future Google Maps integration */}
+        <View style={styles.mapContent}>
+          <View style={styles.blankMapArea}>
+            <Text style={styles.blankMapText}>Map Area</Text>
+            <Text style={styles.blankMapSubtext}>Google Maps integration coming soon</Text>
           </View>
         </View>
       </View>
 
-      {/* Destination Reached Notification */}
+      {/* Simple Arrival Notification */}
       {hasReachedDestination && (
-        <View style={styles.destinationNotification}>
-          <View style={styles.notificationContent}>
-            <Text style={styles.notificationTitle}>🎯 Destination Reached!</Text>
-            <Text style={styles.notificationText}>Your recycler has arrived at your location</Text>
-            <TouchableOpacity style={styles.checkPaymentButton} onPress={handleCheckPaymentDue}>
-              <Text style={styles.checkPaymentText}>Check Payment Due</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.arrivalNotification}>
+          <Text style={styles.arrivalText}>🎯 Recycler has arrived!</Text>
         </View>
       )}
 
@@ -158,6 +151,11 @@ export default function TrackingScreen() {
             <TouchableOpacity style={styles.pillButton} onPress={handleCancel}>
               <Text style={styles.pillButtonText}>Cancel</Text>
             </TouchableOpacity>
+            {hasReachedDestination && (
+              <TouchableOpacity style={styles.paymentButton} onPress={handleCheckPaymentDue}>
+                <Text style={styles.paymentButtonText}>Check Payment Due</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         <Image
@@ -191,54 +189,103 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
 
-  mapContainer: {
-    flex: 1,
-    backgroundColor: COLORS.lightGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: DIMENSIONS.margin,
+  bannerContainer: {
+    paddingHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 20,
   },
-  mapPlaceholder: {
+  bannerBg: {
+    backgroundColor: COLORS.lightGreen,
+    borderRadius: 20,
+    padding: 15,
+    alignItems: 'center',
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    overflow: 'hidden',
+    position: 'relative',
+    height: 80,
+  },
+  bannerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+  },
+  trackButton: {
     backgroundColor: COLORS.white,
-    borderRadius: 10,
-    padding: DIMENSIONS.margin,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    borderRadius: 20,
+    paddingHorizontal: 25,
+    paddingVertical: 10,
+    shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
+  trackButtonText: {
+    color: '#1C3301',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+
+  mapContainer: {
+    flex: 1,
+    backgroundColor: COLORS.lightGreen,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: DIMENSIONS.margin,
+    marginHorizontal: 16,
+    marginTop: 20,
+    borderRadius: 20,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+
   mapHeader: {
     alignItems: 'center',
-    marginBottom: DIMENSIONS.margin,
+    marginBottom: 20,
+    paddingTop: 10,
   },
   mapTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
-    marginBottom: 4,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   mapSubtitle: {
-    fontSize: 14,
+    fontSize: 16,
     color: COLORS.secondary,
+    textAlign: 'center',
+    fontWeight: '500',
   },
   mapContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 20,
   },
   blankMapArea: {
     alignItems: 'center',
   },
   blankMapText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   blankMapSubtext: {
-    fontSize: 14,
+    fontSize: 16,
     color: COLORS.secondary,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 
   bottomRow: {
@@ -246,7 +293,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: DIMENSIONS.margin,
-    marginBottom: 70,
+    marginBottom: 80,
+    marginTop: 20,
   },
   statusAndButtons: {
     flex: 1,
@@ -254,14 +302,14 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: COLORS.darkGreen,
-    fontSize: 15,
-    marginBottom: 8,
+    fontSize: 18,
+    marginBottom: 10,
     fontWeight: 'bold',
   },
   timerText: {
     color: COLORS.secondary,
-    fontSize: 12,
-    marginBottom: 8,
+    fontSize: 14,
+    marginBottom: 15,
     fontWeight: '600',
   },
   buttonRow: {
@@ -270,91 +318,85 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   pillButton: {
-    backgroundColor: '#E3E3E3',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
+    backgroundColor: '#1C3301',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginRight: 10,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   pillButtonText: {
-    color: COLORS.darkGreen,
+    color: COLORS.white,
     fontWeight: 'bold',
-    fontSize: 15,
+    fontSize: 16,
   },
   truckImage: {
-    width: 90,
-    height: 60,
+    width: 120,
+    height: 80,
     resizeMode: 'contain',
-    marginLeft: 8,
+    marginLeft: 10,
   },
   bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 60,
+    height: 70,
     borderTopWidth: 1,
     borderTopColor: '#E3E3E3',
     backgroundColor: COLORS.white,
-    paddingBottom: 4,
+    paddingBottom: 8,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   navItem: {
     alignItems: 'center',
     flex: 1,
   },
   navIcon: {
-    fontSize: 22,
-    color: COLORS.darkGreen,
+    fontSize: 24,
+    color: '#1C3301',
   },
   navLabel: {
     fontSize: 12,
-    color: COLORS.darkGreen,
-    marginTop: 2,
+    color: '#1C3301',
+    marginTop: 4,
+    fontWeight: '500',
   },
-  destinationNotification: {
-    position: 'absolute',
-    top: 100,
-    left: 20,
-    right: 20,
-    zIndex: 1000,
-  },
-  notificationContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 12,
+  arrivalNotification: {
+    backgroundColor: '#1C3301',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 15,
     alignItems: 'center',
   },
-  notificationTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.darkGreen,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  notificationText: {
+  arrivalText: {
+    color: COLORS.white,
     fontSize: 16,
-    color: '#666',
-    marginBottom: 16,
+    fontWeight: 'bold',
     textAlign: 'center',
   },
-  checkPaymentButton: {
-    backgroundColor: COLORS.darkGreen,
+  paymentButton: {
+    backgroundColor: '#1C3301',
     borderRadius: 20,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    marginTop: 10,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  checkPaymentText: {
-    color: '#fff',
+  paymentButtonText: {
+    color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
 }); 
