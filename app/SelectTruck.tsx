@@ -1,12 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { COLORS, DIMENSIONS, MOCKED_TRUCKS } from '../constants';
 
@@ -51,12 +51,12 @@ export default function SelectTruckScreen() {
         </View>
 
         {/* Banner with Filter Buttons */}
-      <View style={styles.bannerBg}>
-        <Image
-          source={require('../assets/images/blend.jpg')}
-          style={styles.bannerImage}
-          resizeMode="cover"
-        />
+        <View style={styles.bannerBg}>
+          <Image
+            source={require('../assets/images/blend.jpg')}
+            style={styles.bannerImage}
+            resizeMode="cover"
+          />
           <View style={styles.filterContainerOverlay}>
             {['all', 'Big Truck', 'Small Truck'].map(filter => (
               <TouchableOpacity
@@ -109,9 +109,9 @@ export default function SelectTruckScreen() {
                 <View style={styles.ratingContainer}>
                   <Text style={styles.ratingText}>Rating: {truck.rating}</Text>
                   <Text style={styles.ratingStars}>{'★'.repeat(Math.floor(truck.rating))}</Text>
-          </View>
-        </View>
-      </View>
+                </View>
+              </View>
+            </View>
             <View style={styles.truckActions}>
               <Text style={styles.priceText}>{truck.rate}</Text>
               <TouchableOpacity
@@ -121,9 +121,9 @@ export default function SelectTruckScreen() {
                 <Text style={styles.selectButtonText}>Select</Text>
               </TouchableOpacity>
             </View>
-        </View>
-      ))}
-    </ScrollView>
+          </View>
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -138,32 +138,41 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#E3F0D5',
-    paddingTop: 40,
+    paddingTop: 5, // Reduced even further to push header up more
+    marginTop: 35, // Increased margin top even more
+    marginBottom: 35, // Increased margin bottom even more
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
   },
   backButton: {
-    marginRight: 16,
+    position: 'absolute',
+    left: 16,
+    zIndex: 1,
   },
   backButtonText: {
-    fontSize: 24,
+    fontSize: 32, // Increased from 24
     fontWeight: 'bold',
     color: COLORS.primary,
   },
   headerContent: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center', // Center the logo horizontally
+    width: '100%', // Take full width for proper centering
   },
   headerLogo: {
-    width: 200,
-    height: 200,
+    width: 200, // Increased to 200 as requested
+    height: 80, // Set to 80 as requested
     resizeMode: 'contain',
   },
   bannerBg: {
     position: 'relative',
     height: 120,
     marginBottom: 10,
+    marginTop: -10, // Reduced further to prevent covering the logo
+    borderRadius: 15, // Added rounded corners
+    overflow: 'hidden', // Ensures the image respects the rounded corners
   },
   bannerImage: {
     width: '100%',
@@ -287,4 +296,4 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: 'bold',
   },
-}); 
+});
