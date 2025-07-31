@@ -1,24 +1,22 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Animated, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { COLORS, DIMENSIONS, USER_STATS } from '../constants';
-import { calculateEnvironmentalImpact, parseWeight } from '../constants/helpers';
+import React, { useEffect, useState } from 'react';
+import { Animated, Easing, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ConfettiCannon from 'react-native-confetti-cannon';
+import { DIMENSIONS } from '../constants';
 
 export default function EcoImpactCelebrationScreen() {
   const params = useLocalSearchParams();
   
   // Extract parameters from navigation
-
   const weight = params.weight as string || '8.5 kg';
 
   // Animation values
   const [fadeAnim] = useState(new Animated.Value(0));
   const [scaleAnim] = useState(new Animated.Value(0.8));
-
-  // Use memoized environmental impact calculations
-  const environmentalImpact = useMemo(() => {
-    return calculateEnvironmentalImpact(weight);
-  }, [weight]);
+  const [bounceAnim] = useState(new Animated.Value(0));
+  const [glitterAnim] = useState(new Animated.Value(0));
+  const [sparkleAnim] = useState(new Animated.Value(0));
+  const [showConfetti, setShowConfetti] = useState(true);
 
   useEffect(() => {
     // Animate in the celebration screen
@@ -34,24 +32,89 @@ export default function EcoImpactCelebrationScreen() {
         friction: 7,
         useNativeDriver: true,
       }),
+      Animated.sequence([
+        Animated.delay(500),
+        Animated.spring(bounceAnim, {
+          toValue: 1,
+          tension: 100,
+          friction: 5,
+          useNativeDriver: true,
+        }),
+      ]),
     ]).start();
-  }, [fadeAnim, scaleAnim]);
+
+    // Start glitter animation for celebration card
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glitterAnim, { 
+          toValue: 1, 
+          duration: 800, 
+          useNativeDriver: true, 
+          easing: Easing.linear 
+        }),
+        Animated.timing(glitterAnim, { 
+          toValue: 0, 
+          duration: 800, 
+          useNativeDriver: true, 
+          easing: Easing.linear 
+        }),
+      ])
+    ).start();
+
+    // Start sparkle animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(sparkleAnim, { 
+          toValue: 1, 
+          duration: 1200, 
+          useNativeDriver: true 
+        }),
+        Animated.timing(sparkleAnim, { 
+          toValue: 0, 
+          duration: 1200, 
+          useNativeDriver: true 
+        }),
+      ])
+    ).start();
+
+    // Stop confetti after 3 seconds
+    setTimeout(() => {
+      setShowConfetti(false);
+    }, 3000);
+  }, [fadeAnim, scaleAnim, bounceAnim, glitterAnim, sparkleAnim]);
 
   const handleReturnHome = () => {
-    // Navigate to home screen
-    router.push('/');
+    // Navigate to user home screen (user tabs)
+    router.push('/(tabs)');
   };
 
   const handleViewHistory = () => {
-    // Navigate to history screen
-    router.push('/history');
+    // Navigate to user history screen (user tabs)
+    router.push('/(tabs)/history');
   };
-
-  // Calculate weight in kg for calculations
-  const weightInKg = parseWeight(weight);
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Confetti Animation */}
+      {showConfetti && (
+        <ConfettiCannon
+          count={100}
+          origin={{ x: 200, y: 0 }}
+          fadeOut={true}
+          explosionSpeed={400}
+          fallSpeed={3000}
+          autoStart={true}
+          onAnimationEnd={() => setShowConfetti(false)}
+        />
+      )}
+
+      {/* Background Gradient Effect */}
+      <View style={styles.backgroundGradient}>
+        <View style={styles.gradientCircle1} />
+        <View style={styles.gradientCircle2} />
+        <View style={styles.gradientCircle3} />
+      </View>
+
       <Animated.View 
         style={[
           styles.content,
@@ -61,99 +124,156 @@ export default function EcoImpactCelebrationScreen() {
           }
         ]}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.celebrationTitle}>🎉 Congratulations!</Text>
-          <Text style={styles.celebrationSubtitle}>You&apos;ve made a difference!</Text>
-        </View>
+        <ScrollView 
+          style={styles.scrollContent}
+          contentContainerStyle={styles.scrollContentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+        {/* Celebration Header */}
+        <Animated.View 
+          style={[
+            styles.header,
+            {
+              transform: [{ scale: bounceAnim }]
+            }
+          ]}
+        >
+          <Text style={styles.celebrationTitle}>🎉 Thank You!</Text>
+          <Text style={styles.celebrationSubtitle}>You&apos;ve made a difference today!</Text>
+        </Animated.View>
 
-        {/* Impact Card */}
-        <View style={styles.impactCard}>
-          <Text style={styles.impactTitle}>This Pickup&apos;s Impact</Text>
-          <View style={styles.impactStats}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{weight}</Text>
-              <Text style={styles.statLabel}>Waste Recycled</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{environmentalImpact.co2Saved} kg</Text>
-              <Text style={styles.statLabel}>CO₂ Saved</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{environmentalImpact.treesEquivalent}</Text>
-              <Text style={styles.statLabel}>Trees Equivalent</Text>
-            </View>
+        {/* Celebration Card with Glitter Animation */}
+        <Animated.View 
+          style={[
+            styles.celebrationCard,
+            {
+              transform: [
+                { scale: bounceAnim },
+                { 
+                  scale: glitterAnim.interpolate({ 
+                    inputRange: [0, 1], 
+                    outputRange: [1, 1.05] 
+                  }) 
+                },
+                { 
+                  rotate: glitterAnim.interpolate({ 
+                    inputRange: [0, 1], 
+                    outputRange: ['0deg', '2deg'] 
+                  }) 
+                }
+              ],
+              shadowColor: '#FFD700',
+              shadowOpacity: glitterAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.15, 0.4]
+              }),
+              shadowRadius: glitterAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [15, 25]
+              }),
+            }
+          ]}
+        >
+          <View style={styles.decorationRow}>
+            <Text style={styles.decoration}>🎉</Text>
+            <Text style={styles.decoration}>✨</Text>
+            <Text style={styles.decoration}>🌱</Text>
+            <Text style={styles.decoration}>✨</Text>
+            <Text style={styles.decoration}>🎉</Text>
           </View>
-        </View>
-
-        {/* Total Impact Card */}
-        <View style={styles.totalImpactCard}>
-          <Text style={styles.totalImpactTitle}>Your Total Environmental Impact</Text>
-          <View style={styles.totalStats}>
-            <View style={styles.totalStatRow}>
-              <Text style={styles.totalStatLabel}>Total Pickups:</Text>
-              <Text style={styles.totalStatValue}>{USER_STATS.totalPickups}</Text>
-            </View>
-            <View style={styles.totalStatRow}>
-              <Text style={styles.totalStatLabel}>Total Waste Recycled:</Text>
-              <Text style={styles.totalStatValue}>{USER_STATS.totalWeight}</Text>
-            </View>
-            <View style={styles.totalStatRow}>
-              <Text style={styles.totalStatLabel}>Total CO₂ Saved:</Text>
-              <Text style={styles.totalStatValue}>{USER_STATS.co2Saved}</Text>
-            </View>
-            <View style={styles.totalStatRow}>
-              <Text style={styles.totalStatLabel}>Trees Equivalent:</Text>
-              <Text style={styles.totalStatValue}>{USER_STATS.treesEquivalent}</Text>
-            </View>
-            <View style={styles.totalStatRow}>
-              <Text style={styles.totalStatLabel}>Current Streak:</Text>
-              <Text style={styles.totalStatValue}>{USER_STATS.currentStreak} days</Text>
-            </View>
+          <Text style={styles.celebrationCardTitle}>You Did It!</Text>
+          <Text style={styles.celebrationMessage}>Thank you for making a positive impact on our environment!</Text>
+          <View style={styles.decorationRow}>
+            <Text style={styles.decoration}>🌍</Text>
+            <Text style={styles.decoration}>💚</Text>
+            <Text style={styles.decoration}>🌿</Text>
+            <Text style={styles.decoration}>💚</Text>
+            <Text style={styles.decoration}>🌍</Text>
           </View>
-        </View>
+          
+          {/* Sparkle Effect */}
+          <Animated.View
+            style={[
+              styles.sparkleEffect,
+              {
+                opacity: sparkleAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.8]
+                }),
+                transform: [
+                  { 
+                    scale: sparkleAnim.interpolate({ 
+                      inputRange: [0, 1], 
+                      outputRange: [0.8, 1.2] 
+                    }) 
+                  }
+                ]
+              }
+            ]}
+          >
+            <Text style={styles.sparkle}>✨</Text>
+          </Animated.View>
+        </Animated.View>
 
-        {/* Achievements */}
-        <View style={styles.achievementsCard}>
-          <Text style={styles.achievementsTitle}>Your Achievements</Text>
-          <View style={styles.badgesContainer}>
-            {USER_STATS.badges.map((badge) => (
-              <View 
-                key={badge.id} 
-                style={[
-                  styles.badge,
-                  { opacity: badge.earned ? 1 : 0.3 }
-                ]}
-              >
-                <Text style={styles.badgeIcon}>{badge.icon}</Text>
-                <Text style={[
-                  styles.badgeName,
-                  { color: badge.earned ? COLORS.primary : COLORS.lightGray }
-                ]}>
-                  {badge.name}
-                </Text>
-              </View>
-            ))}
+        {/* Contribution Summary */}
+        <Animated.View 
+          style={[
+            styles.contributionCard,
+            {
+              transform: [{ scale: bounceAnim }]
+            }
+          ]}
+        >
+          <Text style={styles.contributionTitle}>Your Contribution</Text>
+          <View style={styles.contributionItem}>
+            <Text style={styles.contributionLabel}>Waste Recycled:</Text>
+            <Text style={styles.contributionValue}>{weight}</Text>
           </View>
-        </View>
+          <View style={styles.contributionItem}>
+            <Text style={styles.contributionLabel}>Environmental Impact:</Text>
+            <Text style={styles.contributionValue}>Positive 🌱</Text>
+          </View>
+        </Animated.View>
 
-        {/* Environmental Fact */}
-        <View style={styles.factCard}>
-          <Text style={styles.factTitle}>🌍 Did You Know?</Text>
-          <Text style={styles.factText}>
-            Recycling {weight} of waste saves enough energy to power a light bulb for {Math.round(weightInKg * 2.5)} hours and reduces greenhouse gas emissions equivalent to driving a car for {Math.round(weightInKg * 0.3)} kilometers.
+        {/* Thank You Message */}
+        <Animated.View 
+          style={[
+            styles.thankYouCard,
+            {
+              transform: [{ scale: bounceAnim }]
+            }
+          ]}
+        >
+          <Text style={styles.thankYouTitle}>🌍 Together We Make a Difference</Text>
+          <Text style={styles.thankYouMessage}>
+            By choosing EcoWasteGo, you're helping to create a cleaner, greener future for Ghana. 
+            Every pickup counts towards our shared goal of environmental protection.
           </Text>
-        </View>
+          <Text style={styles.thankYouQuote}>
+            &quot;One Tap to a Greener Planet&quot;
+          </Text>
+        </Animated.View>
 
         {/* Action Buttons */}
-        <View style={styles.actionButtons}>
+        <Animated.View 
+          style={[
+            styles.actionButtons,
+            {
+              transform: [{ scale: bounceAnim }]
+            }
+          ]}
+        >
           <TouchableOpacity style={styles.historyButton} onPress={handleViewHistory}>
             <Text style={styles.historyButtonText}>View History</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.continueButton} onPress={handleReturnHome}>
             <Text style={styles.continueButtonText}>Return Home</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
+        
+        {/* Extra spacing to ensure buttons are visible */}
+        <View style={{ height: 50 }} />
+        </ScrollView>
       </Animated.View>
     </SafeAreaView>
   );
@@ -162,182 +282,229 @@ export default function EcoImpactCelebrationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F0F8F0',
+  },
+  backgroundGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  gradientCircle1: {
+    position: 'absolute',
+    top: -50,
+    right: -50,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(28, 51, 1, 0.1)',
+  },
+  gradientCircle2: {
+    position: 'absolute',
+    bottom: 100,
+    left: -50,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(28, 51, 1, 0.08)',
+  },
+  gradientCircle3: {
+    position: 'absolute',
+    top: 200,
+    left: 50,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(28, 51, 1, 0.06)',
   },
   content: {
     flex: 1,
     padding: DIMENSIONS.padding,
+    paddingBottom: 100, // Add extra padding to ensure buttons are visible
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    paddingBottom: 100,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
   },
   celebrationTitle: {
-    fontSize: 28,
+    fontSize: 36,
     fontWeight: 'bold',
-    color: COLORS.primary,
+    color: '#1C3301',
     textAlign: 'center',
     marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   celebrationSubtitle: {
-    fontSize: 16,
-    color: COLORS.darkGreen,
+    fontSize: 20,
+    color: '#2E5A02',
     textAlign: 'center',
+    fontWeight: '600',
   },
-  impactCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: DIMENSIONS.cardBorderRadius,
-    padding: 20,
-    marginBottom: DIMENSIONS.margin,
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+  celebrationCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 25,
+    padding: 28,
+    marginBottom: 24,
+    alignItems: 'center',
+    shadowColor: '#1C3301',
+    shadowOpacity: 0.15,
+    shadowRadius: 15,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(28, 51, 1, 0.1)',
+    position: 'relative',
   },
-  impactTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  impactStats: {
+  decorationRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    width: '100%',
+    marginVertical: 8,
   },
-  statItem: {
-    alignItems: 'center',
+  decoration: {
+    fontSize: 28,
   },
-  statValue: {
+  celebrationCardTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+  celebrationMessage: {
+    fontSize: 18,
+    color: '#2E5A02',
+    textAlign: 'center',
+    lineHeight: 26,
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  sparkleEffect: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+  },
+  sparkle: {
+    fontSize: 24,
+  },
+  contributionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 24,
+    shadowColor: '#1C3301',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(28, 51, 1, 0.08)',
+  },
+  contributionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: COLORS.secondary,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.gray,
+    color: '#1C3301',
     textAlign: 'center',
+    marginBottom: 20,
   },
-  totalImpactCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: DIMENSIONS.cardBorderRadius,
-    padding: 20,
-    marginBottom: DIMENSIONS.margin,
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  totalImpactTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 16,
-  },
-  totalStats: {
-    gap: 8,
-  },
-  totalStatRow: {
+  contributionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8FFF0',
+    borderRadius: 12,
   },
-  totalStatLabel: {
-    fontSize: 14,
-    color: COLORS.gray,
+  contributionLabel: {
+    fontSize: 16,
+    color: '#4A6B2A',
+    fontWeight: '500',
   },
-  totalStatValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  achievementsCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: DIMENSIONS.cardBorderRadius,
-    padding: 20,
-    marginBottom: DIMENSIONS.margin,
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  achievementsTitle: {
+  contributionValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.primary,
+    color: '#1C3301',
+  },
+  thankYouCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 32,
+    shadowColor: '#1C3301',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(28, 51, 1, 0.08)',
+  },
+  thankYouTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    textAlign: 'center',
     marginBottom: 16,
   },
-  badgesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    gap: 12,
-  },
-  badge: {
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: DIMENSIONS.borderRadius,
-    backgroundColor: '#F0F8F0',
-    minWidth: 80,
-  },
-  badgeIcon: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  badgeName: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  factCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: DIMENSIONS.cardBorderRadius,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  factTitle: {
+  thankYouMessage: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 8,
+    color: '#2E5A02',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 16,
+    fontWeight: '500',
   },
-  factText: {
-    fontSize: 14,
-    color: COLORS.gray,
-    lineHeight: 20,
+  thankYouQuote: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 16,
+    marginTop: 20,
+    marginBottom: 20,
   },
   historyButton: {
     flex: 1,
-    backgroundColor: COLORS.white,
-    paddingVertical: 16,
-    borderRadius: DIMENSIONS.borderRadius,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 18,
+    borderRadius: 25,
     borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderColor: '#1C3301',
     alignItems: 'center',
+    shadowColor: '#1C3301',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   historyButtonText: {
-    color: COLORS.primary,
+    color: '#1C3301',
     fontSize: 16,
     fontWeight: 'bold',
   },
   continueButton: {
     flex: 1,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 16,
-    borderRadius: DIMENSIONS.borderRadius,
+    backgroundColor: '#1C3301',
+    paddingVertical: 18,
+    borderRadius: 25,
     alignItems: 'center',
+    shadowColor: '#1C3301',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   continueButtonText: {
-    color: COLORS.white,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },

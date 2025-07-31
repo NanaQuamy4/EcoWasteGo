@@ -63,32 +63,20 @@ class RecyclerStats {
   }
 
   // Completed Pickups Management
-  addCompletedPickup(pickupId: string, earnings: number, paymentData?: {
-    customer: string;
-    wasteType: string;
-    weight: string;
-  }) {
+  addCompletedPickup(pickupId: string, earnings: number, paymentData?: { customer: string; wasteType: string; weight: string; }) {
     this.completedPickups.add(pickupId);
     this.todayEarnings += earnings;
-    
-    // Remove from active pickups when completed
-    this.removeActivePickup(pickupId);
-    
-    // Calculate and add 10% subscription fee
+    this.removeActivePickup(pickupId); // Crucial fix for counter
     const subscriptionFee = earnings * 0.10;
     this.weeklySubscriptionFees += subscriptionFee;
     this.weeklyPickupCount++;
     
-    // Add to payment history if payment data is provided
     if (paymentData) {
       const now = new Date();
-      const date = now.toISOString().split('T')[0];
-      const time = now.toTimeString().split(' ')[0].substring(0, 5);
-      
-      this.paymentHistory.unshift({
-        id: Date.now().toString(),
-        date: date,
-        time: time,
+      this.paymentHistory.push({
+        id: `payment_${Date.now()}`,
+        date: now.toISOString().split('T')[0],
+        time: now.toTimeString().split(' ')[0].substring(0, 5),
         pickupId: pickupId,
         amount: earnings,
         status: 'completed',
@@ -97,14 +85,6 @@ class RecyclerStats {
         weight: paymentData.weight
       });
     }
-    
-    console.log(`🔍 DEBUG: Pickup completed - ID: ${pickupId}`);
-    console.log(`💰 Earnings: GHS ${earnings.toFixed(2)}`);
-    console.log(`💸 Subscription fee (10%): GHS ${subscriptionFee.toFixed(2)}`);
-    console.log(`📊 Total weekly fees: GHS ${this.weeklySubscriptionFees.toFixed(2)}`);
-    console.log(`📈 Weekly pickup count: ${this.weeklyPickupCount}`);
-    console.log(`📉 Active pickups after completion: ${this.activePickups.size}`);
-    console.log(`📊 Total available requests: ${this.getTotalAvailableRequestsCount()}`);
   }
 
   getCompletedPickupsCount(): number {
@@ -149,79 +129,45 @@ class RecyclerStats {
   // Initialize with mock data
   initializeMockData() {
     if (this.isInitialized) {
-      console.warn('Mock data already initialized. Skipping.');
-      return;
+      return; // Already initialized
     }
+
     // Add some mock pending requests
-    this.addPendingRequest('1');
-    this.addPendingRequest('2');
-    this.addPendingRequest('3');
-    
+    this.addPendingRequest('request_001');
+    this.addPendingRequest('request_002');
+    this.addPendingRequest('request_003');
+
     // Add some mock active pickups
-    this.addActivePickup('5');
-    this.addActivePickup('6');
-    
+    this.addActivePickup('pickup_001');
+    this.addActivePickup('pickup_002');
+
     // Add some mock payment history
     this.paymentHistory = [
       {
-        id: '1',
+        id: 'payment_001',
         date: '2024-01-15',
         time: '14:30',
-        pickupId: 'PK-001',
-        amount: 25.00,
+        pickupId: 'pickup_001',
+        amount: 25.50,
         status: 'completed',
         customer: 'John Doe',
-        wasteType: 'Plastic',
-        weight: '12kg'
+        wasteType: 'Mixed Waste',
+        weight: '8.5 kg'
       },
       {
-        id: '2',
-        date: '2024-01-15',
+        id: 'payment_002',
+        date: '2024-01-14',
         time: '16:45',
-        pickupId: 'PK-002',
-        amount: 30.00,
+        pickupId: 'pickup_002',
+        amount: 18.75,
         status: 'completed',
-        customer: 'Sarah Wilson',
-        wasteType: 'Paper',
-        weight: '15kg'
-      },
-      {
-        id: '3',
-        date: '2024-01-14',
-        time: '10:20',
-        pickupId: 'PK-003',
-        amount: 18.50,
-        status: 'completed',
-        customer: 'Mike Johnson',
-        wasteType: 'Glass',
-        weight: '8kg'
-      },
-      {
-        id: '4',
-        date: '2024-01-14',
-        time: '13:15',
-        pickupId: 'PK-004',
-        amount: 22.00,
-        status: 'completed',
-        customer: 'Emma Davis',
+        customer: 'Jane Smith',
         wasteType: 'Plastic',
-        weight: '11kg'
-      },
-      {
-        id: '5',
-        date: '2024-01-13',
-        time: '09:30',
-        pickupId: 'PK-005',
-        amount: 28.00,
-        status: 'completed',
-        customer: 'David Brown',
-        wasteType: 'Paper',
-        weight: '14kg'
+        weight: '6.2 kg'
       }
     ];
-    
+
     this.isInitialized = true;
-    console.log('Mock data initialized successfully.');
   }
 
   // Get weekly subscription fees owed
@@ -239,7 +185,6 @@ class RecyclerStats {
     this.weeklySubscriptionFees = 0;
     this.weeklyPickupCount = 0;
     this.lastWeekReset = new Date();
-    console.log('Subscription fees paid and reset');
   }
 
   // Check if payment is required (fees > 0)

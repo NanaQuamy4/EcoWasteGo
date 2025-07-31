@@ -1,6 +1,7 @@
+import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, DIMENSIONS } from '../constants';
 import CommonHeader from './components/CommonHeader';
 
@@ -10,11 +11,14 @@ export default function TrackingScreen() {
   const pickup = params.pickup as string;
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [hasReachedDestination, setHasReachedDestination] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
+  const [showPaymentButton, setShowPaymentButton] = useState(false);
 
   // Timer-based simulation: Show destination reached after 10 seconds
   useEffect(() => {
     const destinationTimer = setTimeout(() => {
       setHasReachedDestination(true);
+      setShowPopup(true);
     }, 10000); // 10 seconds - show destination reached
 
     return () => {
@@ -91,6 +95,11 @@ export default function TrackingScreen() {
     });
   };
 
+  const handlePopupOK = () => {
+    setShowPopup(false);
+    setShowPaymentButton(true);
+  };
+
   return (
     <View style={styles.container}>
       <CommonHeader title="Track Your Recycler" />
@@ -125,14 +134,25 @@ export default function TrackingScreen() {
         </View>
       </View>
 
-      {/* Simple Arrival Notification */}
-      {hasReachedDestination && (
-        <View style={styles.arrivalNotification}>
-          <Text style={styles.arrivalText}>🎯 Recycler has arrived!</Text>
+      {/* Arrival Popup Modal */}
+      <Modal
+        visible={showPopup}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPopup(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.popupContainer}>
+            <Text style={styles.popupTitle}>🎯 Recycler has arrived!</Text>
+            <Text style={styles.popupMessage}>Your recycler has reached your location</Text>
+            <TouchableOpacity style={styles.okButton} onPress={handlePopupOK}>
+              <Text style={styles.okButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      )}
+      </Modal>
 
-      {/* Bottom Row: Status, Truck, and Buttons */}
+      {/* Bottom Row: Status */}
       <View style={styles.bottomRow}>
         <View style={styles.statusAndButtons}>
           <Text style={styles.statusText}>
@@ -141,22 +161,30 @@ export default function TrackingScreen() {
           <Text style={styles.timerText}>
             {hasReachedDestination ? 'Ready for pickup' : `${15 - timeElapsed}s until arrival`}
           </Text>
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.pillButton} onPress={handleCall}>
-              <Text style={styles.pillButtonText}>📞 Call</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.pillButton} onPress={handleText}>
-              <Text style={styles.pillButtonText}>💬 Text</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.pillButton} onPress={handleCancel}>
-              <Text style={styles.pillButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            {hasReachedDestination && (
-              <TouchableOpacity style={styles.paymentButton} onPress={handleCheckPaymentDue}>
-                <Text style={styles.paymentButtonText}>Check Payment Due</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+        </View>
+      </View>
+
+      {/* Payment Button */}
+      {showPaymentButton && (
+        <View style={styles.paymentButtonContainer}>
+          <TouchableOpacity style={styles.paymentButton} onPress={handleCheckPaymentDue}>
+            <Text style={styles.paymentButtonText}>Check Payment Due</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Action Buttons and Truck Row */}
+      <View style={styles.actionRow}>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity style={styles.pillButton} onPress={handleCall}>
+            <Text style={styles.pillButtonText}>📞 Call</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.pillButton} onPress={handleText}>
+            <Text style={styles.pillButtonText}>💬 Text</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.pillButton} onPress={handleCancel}>
+            <Text style={styles.pillButtonText}>Cancel</Text>
+          </TouchableOpacity>
         </View>
         <Image
           source={require('../assets/images/truck.png')}
@@ -164,21 +192,22 @@ export default function TrackingScreen() {
         />
       </View>
 
-      {/* Bottom Navigation Placeholder */}
+      {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>🏠</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/') }>
+          <Feather name="home" size={28} color={COLORS.darkGreen} />
           <Text style={styles.navLabel}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>⏪</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/history') }>
+          <Feather name="rotate-ccw" size={28} color={COLORS.darkGreen} />
           <Text style={styles.navLabel}>History</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>👤</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/user') }>
+          <Feather name="user" size={28} color={COLORS.darkGreen} />
           <Text style={styles.navLabel}>User</Text>
         </TouchableOpacity>
       </View>
+
     </View>
   );
 }
@@ -240,11 +269,13 @@ const styles = StyleSheet.create({
     padding: DIMENSIONS.margin,
     marginHorizontal: 16,
     marginTop: 20,
+    marginBottom: 20,
     borderRadius: 20,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+    minHeight: 300,
   },
 
   mapHeader: {
@@ -293,8 +324,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: DIMENSIONS.margin,
-    marginBottom: 80,
-    marginTop: 20,
+    marginBottom:10,
+    marginTop: 10,
   },
   statusAndButtons: {
     flex: 1,
@@ -309,8 +340,15 @@ const styles = StyleSheet.create({
   timerText: {
     color: COLORS.secondary,
     fontSize: 14,
-    marginBottom: 15,
+    marginBottom: -50,
     fontWeight: '600',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: DIMENSIONS.margin,
+    marginBottom: 15,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -319,10 +357,10 @@ const styles = StyleSheet.create({
   },
   pillButton: {
     backgroundColor: '#1C3301',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    marginRight: 10,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -331,7 +369,7 @@ const styles = StyleSheet.create({
   pillButtonText: {
     color: COLORS.white,
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 14,
   },
   truckImage: {
     width: 120,
@@ -339,64 +377,87 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
     marginLeft: 10,
   },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    height: 70,
-    borderTopWidth: 1,
-    borderTopColor: '#E3E3E3',
-    backgroundColor: COLORS.white,
-    paddingBottom: 8,
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  navItem: {
-    alignItems: 'center',
+
+  modalOverlay: {
     flex: 1,
-  },
-  navIcon: {
-    fontSize: 24,
-    color: '#1C3301',
-  },
-  navLabel: {
-    fontSize: 12,
-    color: '#1C3301',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  arrivalNotification: {
-    backgroundColor: '#1C3301',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginHorizontal: 16,
-    marginTop: 10,
-    borderRadius: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  arrivalText: {
+  popupContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 30,
+    marginHorizontal: 40,
+    alignItems: 'center',
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  popupTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  popupMessage: {
+    fontSize: 16,
+    color: COLORS.secondary,
+    marginBottom: 25,
+    textAlign: 'center',
+  },
+  okButton: {
+    backgroundColor: '#1C3301',
+    borderRadius: 15,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+  },
+  okButtonText: {
     color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
-    textAlign: 'center',
+  },
+  paymentButtonContainer: {
+    alignItems: 'flex-end',
+    marginTop: 20,
   },
   paymentButton: {
-    backgroundColor: '#1C3301',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    marginTop: 10,
+    backgroundColor: '#FFD700',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    width: 170,
+    marginBottom: 10,
   },
   paymentButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
+    color: '#1C3301',
+    fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderColor: COLORS.lightGreen,
+  },
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navLabel: {
+    color: COLORS.darkGreen,
+    fontSize: 13,
+    marginTop: 2,
+    fontWeight: 'bold',
   },
 }); 

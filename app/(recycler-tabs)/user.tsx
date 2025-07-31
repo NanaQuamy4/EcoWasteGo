@@ -34,7 +34,7 @@ export default function RecyclerUserTab() {
     
     if (newStatus === 'user') {
       // Navigate to user tabs
-      router.push('/(tabs)/' as any);
+      router.push('/(tabs)');
     } else if (newStatus === 'recycler') {
       // Already on recycler mode, just update the status
       Alert.alert(

@@ -376,7 +376,7 @@ export default function RewardsScreen() {
           )}
         </View>
       </RNModal>
-      <Modal isVisible={lockedModal.visible} onBackdropPress={() => { setLockedModal({visible: false, badge: null}); console.log('Closing locked badge modal'); }} backdropOpacity={0.7}>
+      <Modal isVisible={lockedModal.visible} onBackdropPress={() => { setLockedModal({visible: false, badge: null}); }} backdropOpacity={0.7}>
         <View style={styles.modalContentBetter}>
           {lockedModal.badge && (
             <>
@@ -384,7 +384,7 @@ export default function RewardsScreen() {
               <Text style={styles.modalTitleBetter}>{lockedModal.badge.title}</Text>
               <Text style={styles.modalDescBetter}>{lockedModal.badge.lockedDesc}</Text>
               <Text style={styles.modalMotivation}>Complete the requirements to unlock this badge!</Text>
-              <TouchableOpacity style={styles.modalCloseBtnBetter} onPress={() => { setLockedModal({visible: false, badge: null}); console.log('Closing locked badge modal'); }}>
+              <TouchableOpacity style={styles.modalCloseBtnBetter} onPress={() => { setLockedModal({visible: false, badge: null}); }}>
                 <Text style={styles.modalCloseTextBetter}>Close</Text>
               </TouchableOpacity>
             </>

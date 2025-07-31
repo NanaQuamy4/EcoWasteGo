@@ -31,7 +31,7 @@ export default function UserScreen() {
     
     if (newStatus === 'recycler') {
       // Navigate to recycler tabs
-      router.push('/(recycler-tabs)/' as any);
+      router.push('/(recycler-tabs)');
     } else if (newStatus === 'user') {
       // Already on user mode, just update the status
       Alert.alert(

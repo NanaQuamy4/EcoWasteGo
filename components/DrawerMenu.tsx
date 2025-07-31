@@ -60,7 +60,15 @@ export default function DrawerMenu({ open, onClose, user, menuItems }: DrawerMen
           <View style={{ backgroundColor: '#22330B', borderRadius: 24, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
             <Feather name="user" size={28} color="#fff" />
           </View>
-          <TouchableOpacity onPress={() => { onClose(); router.push('/user'); }}>
+          <TouchableOpacity onPress={() => { 
+            onClose(); 
+            // Navigate to correct user profile based on user type
+            if (isRecycler) {
+              router.push('/(recycler-tabs)/user');
+            } else {
+              router.push('/(tabs)/user');
+            }
+          }}>
             <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 19 }}>{userName}</Text>
             <Text style={{ color: '#22330B', fontSize: 13, marginTop: 0 }}>{userTitle}</Text>
           </TouchableOpacity>
@@ -83,7 +91,12 @@ export default function DrawerMenu({ open, onClose, user, menuItems }: DrawerMen
               } else if (item.key === 'history') {
                 setShowContactCard(false);
                 onClose();
-                router.push('/history');
+                // Navigate to user history for users, recycler history for recyclers
+                if (isRecycler) {
+                  router.push('/(recycler-tabs)/history');
+                } else {
+                  router.push('/(tabs)/history');
+                }
               } else if (item.key === 'earnings' && isRecycler) {
                 setShowContactCard(false);
                 onClose();

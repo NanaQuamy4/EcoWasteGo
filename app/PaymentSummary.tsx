@@ -18,14 +18,18 @@ export default function PaymentSummary() {
   const recyclerName = params.recyclerName as string;
   const pickup = params.pickup as string;
 
-  // Payment data
+  // Payment data - this should come from the recycler's actual calculation
   const paymentData: PaymentData = {
-    recycler: recyclerName || 'GreenFleet GH',
-    pickupDate: 'June 26, 2025',
-    weight: '10 kg',
-    rate: 'GHS 1.20/kg',
-    environmentalTax: 'GHS 0.60',
-    totalDue: 'GHS 12.60',
+    recycler: recyclerName || 'John Doe',
+    pickupDate: new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    }),
+    weight: '8.5 kg',
+    rate: 'GHS 1.50/kg',
+    environmentalTax: 'GHS 0.64',
+    totalDue: 'GHS 13.39',
   };
 
   const handleAccept = () => {
@@ -79,14 +83,7 @@ export default function PaymentSummary() {
     );
   };
 
-  const handleCalculate = () => {
-    // Recalculate payment (in real app, this would trigger recalculation)
-    Alert.alert(
-      'Payment Calculated',
-      'Payment has been recalculated based on the current details.',
-      [{ text: 'OK' }]
-    );
-  };
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -138,11 +135,14 @@ export default function PaymentSummary() {
                 <Text style={styles.valueText}>{paymentData.environmentalTax}</Text>
               </View>
             </View>
-          </View>
 
-          <TouchableOpacity style={styles.calculateButton} onPress={handleCalculate}>
-            <Text style={styles.calculateButtonText}>Calculate</Text>
-          </TouchableOpacity>
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, styles.boldLabel]}>Total Due</Text>
+              <View style={styles.detailValue}>
+                <Text style={[styles.valueText, styles.totalText]}>{paymentData.totalDue}</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* Note Section */}
@@ -231,6 +231,10 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
   },
+  boldLabel: {
+    fontWeight: 'bold',
+    color: '#1C3301',
+  },
   detailValue: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -244,28 +248,17 @@ const styles = StyleSheet.create({
     color: COLORS.darkGreen,
     fontWeight: '600',
   },
+  totalText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1C3301',
+  },
   dropdownArrow: {
     fontSize: 12,
     color: '#666',
     marginLeft: 8,
   },
-  calculateButton: {
-    backgroundColor: COLORS.darkGreen,
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    alignSelf: 'flex-end',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  calculateButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
+
   noteSection: {
     marginTop: 8,
   },

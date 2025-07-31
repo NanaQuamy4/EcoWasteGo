@@ -19,9 +19,7 @@ interface RecyclerData {
 export default function TextRecyclerScreen() {
   const params = useLocalSearchParams();
   const recyclerName = params.recyclerName as string;
-
-  // Log to verify image loading
-  console.log('Loading bin.png background image');
+  const pickup = params.pickup as string;
 
   // Mock data for the recycler (in real app, this would come from API)
   const recyclerData: RecyclerData = {

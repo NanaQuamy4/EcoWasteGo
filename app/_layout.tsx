@@ -17,7 +17,6 @@ export default function RootLayout() {
       <Stack.Screen name="TrackingScreen" options={{ headerShown: false }} />
       <Stack.Screen name="CallRecyclerScreen" options={{ headerShown: false }} />
       <Stack.Screen name="TextRecyclerScreen" options={{ headerShown: false }} />
-      <Stack.Screen name="RecyclerHasArrived" options={{ headerShown: false }} />
       <Stack.Screen name="PaymentSummary" options={{ headerShown: false }} />
       <Stack.Screen name="PaymentMade" options={{ headerShown: false }} />
       <Stack.Screen name="EcoImpactCelebration" options={{ headerShown: false }} />

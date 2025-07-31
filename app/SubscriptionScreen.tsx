@@ -12,13 +12,6 @@ export default function SubscriptionScreen() {
   const weeklySummary = recyclerStats.getWeeklySummary();
   const isPaymentRequired = recyclerStats.isPaymentRequired();
 
-  // Debug logging
-  console.log('🔍 SUBSCRIPTION SCREEN DEBUG:');
-  console.log(`📊 Weekly Summary:`, weeklySummary);
-  console.log(`💸 Payment Required: ${isPaymentRequired}`);
-  console.log(`💰 Fees Owed: ${recyclerStats.getSubscriptionFeeString()}`);
-  console.log(`📈 Pickup Count: ${weeklySummary.pickups}`);
-
   const handlePayFees = () => {
     if (!isPaymentRequired) {
       Alert.alert('No Payment Required', 'You have no outstanding subscription fees.');
@@ -144,17 +137,6 @@ export default function SubscriptionScreen() {
           />
           <Text style={[styles.payButtonText, isPaymentRequired ? styles.payButtonTextRequired : styles.payButtonTextDisabled]}>
             {isProcessing ? 'Processing...' : isPaymentRequired ? 'Pay Subscription Fees' : 'No Payment Required'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Test Button (for debugging) */}
-        <TouchableOpacity 
-          style={[styles.payButton, { backgroundColor: '#FF9800', marginTop: 10 }]}
-          onPress={handleTestAddFees}
-        >
-          <MaterialIcons name="bug-report" size={24} color="#fff" />
-          <Text style={[styles.payButtonText, { color: '#fff' }]}>
-            Add Test Fees (Debug)
           </Text>
         </TouchableOpacity>
 
