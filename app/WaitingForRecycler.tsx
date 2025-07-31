@@ -162,86 +162,109 @@ const styles = StyleSheet.create({
   bannerBg: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 8,
-    marginTop: 0,
+    marginBottom: 20, // Increased spacing
+    marginTop: 20, // Added top margin for better spacing
     position: 'relative',
+    // Removed marginHorizontal to center properly
   },
   bannerImage: {
     width: '100%',
-    height: 70,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    height: 100, // Increased height for better visual impact
+    borderRadius: 20, // Full rounded corners for modern look
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5, // Android shadow
   },
   headerCard: {
-    backgroundColor: 'transparent',
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
     position: 'absolute',
-    left: 18,
-    right: 18,
-    top: 30,
-    zIndex: 2,
+    left: 70,
+    right: 0,
+    top: 25,
+    bottom: 0,
+    justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 2,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    width: '70%',
+    height: '50%',
+    alignSelf: 'center',
+   
   },
   header: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
     textAlign: 'center',
-    marginBottom: 8,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 24, // Increased horizontal padding
+    paddingTop: 20, // Added top padding
   },
   loadingContainer: {
-    marginBottom: 30,
+    marginBottom: 40, // Increased spacing
+    alignItems: 'center',
   },
   loadingTruck: {
-    width: 80,
-    height: 60,
+    width: 100, // Increased size
+    height: 80, // Increased size
     resizeMode: 'contain',
   },
   successIcon: {
-    marginBottom: 20,
+    marginBottom: 30, // Increased spacing
+    alignItems: 'center',
   },
   successText: {
-    fontSize: 60,
+    fontSize: 80, // Increased size for better impact
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 18, // Increased font size
     color: COLORS.darkGreen,
     textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 22,
+    marginBottom: 25, // Increased spacing
+    lineHeight: 24, // Increased line height
+    fontWeight: '500', // Added medium weight
   },
   timeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 20, // Increased spacing
     backgroundColor: COLORS.lightGreen,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 20, // Increased padding
+    paddingVertical: 12, // Increased padding
     borderRadius: DIMENSIONS.borderRadius,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   timeLabel: {
-    fontSize: 14,
+    fontSize: 16, // Increased font size
     color: COLORS.darkGreen,
-    marginRight: 8,
+    marginRight: 10, // Increased spacing
+    fontWeight: '500', // Added medium weight
   },
   timeText: {
-    fontSize: 16,
+    fontSize: 18, // Increased font size
     fontWeight: 'bold',
     color: COLORS.secondary,
   },
   locationText: {
-    fontSize: 14,
+    fontSize: 16, // Increased font size
     color: COLORS.darkGreen,
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 35, // Increased spacing
+    fontWeight: '500', // Added medium weight
   },
   boldText: {
     fontWeight: 'bold',
@@ -249,33 +272,44 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: COLORS.red,
-    paddingHorizontal: 30,
-    paddingVertical: 12,
+    paddingHorizontal: 35, // Increased padding
+    paddingVertical: 15, // Increased padding
     borderRadius: DIMENSIONS.borderRadius,
-    marginBottom: 20,
+    marginBottom: 25, // Increased spacing
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   cancelButtonText: {
     color: COLORS.white,
-    fontSize: 14,
+    fontSize: 16, // Increased font size
     fontWeight: 'bold',
+    letterSpacing: 0.5, // Better text spacing
   },
   confirmButton: {
-    backgroundColor: COLORS.secondary,
-    paddingHorizontal: 40,
-    paddingVertical: 16,
+    backgroundColor: '#1C3301', // Updated to specific green color
+    paddingHorizontal: 45, // Increased padding
+    paddingVertical: 18, // Increased padding
     borderRadius: DIMENSIONS.borderRadius,
-    marginTop: 10,
+    marginTop: 15, // Increased spacing
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   confirmButtonText: {
     color: COLORS.white,
-    fontSize: 16,
+    fontSize: 18, // Increased font size
     fontWeight: 'bold',
+    letterSpacing: 0.5, // Better text spacing
   },
   statusMessage: {
-    fontSize: 12,
+    fontSize: 14, // Increased font size
     color: COLORS.gray,
     textAlign: 'center',
     fontStyle: 'italic',
-    marginTop: 20,
+    marginTop: 25, // Increased spacing
+    lineHeight: 18, // Added line height
   },
 }); 
