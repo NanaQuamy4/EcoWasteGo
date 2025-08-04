@@ -4,28 +4,30 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table (extends Supabase auth.users)
-CREATE TABLE IF NOT EXISTS public.users (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    email VARCHAR UNIQUE NOT NULL,
-    username VARCHAR NOT NULL,
-    phone VARCHAR,
-    role VARCHAR DEFAULT 'customer' CHECK (role IN ('customer', 'recycler', 'admin')),
-    email_verified BOOLEAN DEFAULT FALSE,
-    profile_image VARCHAR,
-    address TEXT,
-    city VARCHAR,
-    state VARCHAR,
-    country VARCHAR DEFAULT 'Ghana',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Users Table
+CREATE TABLE IF NOT EXISTS users (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  username VARCHAR(100),
+  phone VARCHAR(20),
+  role VARCHAR(20) DEFAULT 'customer' CHECK (role IN ('customer', 'recycler')),
+  email_verified BOOLEAN DEFAULT FALSE,
+  onboarding_completed BOOLEAN DEFAULT FALSE,
+  onboarding_completed_at TIMESTAMP WITH TIME ZONE,
+  privacy_policy_accepted BOOLEAN DEFAULT FALSE,
+  privacy_policy_version VARCHAR(10),
+  privacy_policy_accepted_at TIMESTAMP WITH TIME ZONE,
+  privacy_policy_withdrawn_at TIMESTAMP WITH TIME ZONE,
+  profile_image VARCHAR(500),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Waste collections table
-CREATE TABLE IF NOT EXISTS public.waste_collections (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    customer_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    recycler_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+CREATE TABLE IF NOT EXISTS waste_collections (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    customer_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    recycler_id UUID REFERENCES users(id) ON DELETE SET NULL,
     waste_type VARCHAR NOT NULL CHECK (waste_type IN ('plastic', 'paper', 'glass', 'metal', 'organic', 'electronics', 'mixed')),
     weight DECIMAL(10,2),
     description TEXT,
@@ -39,9 +41,9 @@ CREATE TABLE IF NOT EXISTS public.waste_collections (
 );
 
 -- Payments table
-CREATE TABLE IF NOT EXISTS public.payments (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    collection_id UUID REFERENCES public.waste_collections(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS payments (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    collection_id UUID REFERENCES waste_collections(id) ON DELETE CASCADE,
     amount DECIMAL(10,2) NOT NULL,
     currency VARCHAR DEFAULT 'GHS',
     status VARCHAR DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'refunded')),
@@ -52,9 +54,9 @@ CREATE TABLE IF NOT EXISTS public.payments (
 );
 
 -- Recycler profiles table
-CREATE TABLE IF NOT EXISTS public.recycler_profiles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS recycler_profiles (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     business_name VARCHAR,
     business_license VARCHAR,
     service_areas TEXT[], -- Array of areas served
@@ -70,9 +72,9 @@ CREATE TABLE IF NOT EXISTS public.recycler_profiles (
 );
 
 -- Customer preferences table
-CREATE TABLE IF NOT EXISTS public.customer_preferences (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS customer_preferences (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     preferred_pickup_time VARCHAR,
     preferred_pickup_days TEXT[], -- Array of days
     auto_schedule BOOLEAN DEFAULT FALSE,
@@ -82,9 +84,9 @@ CREATE TABLE IF NOT EXISTS public.customer_preferences (
 );
 
 -- Notifications table
-CREATE TABLE IF NOT EXISTS public.notifications (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     title VARCHAR NOT NULL,
     message TEXT NOT NULL,
     type VARCHAR DEFAULT 'info' CHECK (type IN ('info', 'success', 'warning', 'error')),
@@ -94,10 +96,10 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 
 -- Eco impact tracking table
-CREATE TABLE IF NOT EXISTS public.eco_impact (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    collection_id UUID REFERENCES public.waste_collections(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS eco_impact (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    collection_id UUID REFERENCES waste_collections(id) ON DELETE CASCADE,
     co2_saved DECIMAL(10,2), -- CO2 saved in kg
     trees_equivalent DECIMAL(10,2), -- Trees equivalent
     water_saved DECIMAL(10,2), -- Water saved in liters
@@ -105,116 +107,279 @@ CREATE TABLE IF NOT EXISTS public.eco_impact (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Tracking Sessions Table
+CREATE TABLE IF NOT EXISTS tracking_sessions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  pickup_id UUID REFERENCES waste_collections(id) ON DELETE CASCADE,
+  recycler_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  customer_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  start_location TEXT NOT NULL,
+  destination_location TEXT NOT NULL,
+  current_location TEXT,
+  current_speed DECIMAL(5,2) DEFAULT 0,
+  current_heading DECIMAL(5,2) DEFAULT 0,
+  status VARCHAR(20) DEFAULT 'en_route' CHECK (status IN ('en_route', 'arrived', 'picking_up', 'completed')),
+  started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  ended_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Recycler Registrations Table
+CREATE TABLE IF NOT EXISTS recycler_registrations (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  documents JSONB DEFAULT '{}',
+  personal_info JSONB DEFAULT '{}',
+  service_info JSONB DEFAULT '{}',
+  review_notes TEXT,
+  reviewed_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Request Rejections Table
+CREATE TABLE IF NOT EXISTS request_rejections (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  collection_id UUID REFERENCES waste_collections(id) ON DELETE CASCADE,
+  recycler_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT,
+  rejected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Email Verifications Table
+CREATE TABLE IF NOT EXISTS email_verifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  email VARCHAR(255) NOT NULL,
+  otp VARCHAR(6) NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Chat Messages Table
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  pickup_id UUID REFERENCES waste_collections(id) ON DELETE CASCADE,
+  sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  sender_type VARCHAR(20) CHECK (sender_type IN ('customer', 'recycler')),
+  message TEXT NOT NULL,
+  is_read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
-CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
-CREATE INDEX IF NOT EXISTS idx_waste_collections_customer_id ON public.waste_collections(customer_id);
-CREATE INDEX IF NOT EXISTS idx_waste_collections_recycler_id ON public.waste_collections(recycler_id);
-CREATE INDEX IF NOT EXISTS idx_waste_collections_status ON public.waste_collections(status);
-CREATE INDEX IF NOT EXISTS idx_payments_collection_id ON public.payments(collection_id);
-CREATE INDEX IF NOT EXISTS idx_payments_status ON public.payments(status);
-CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_waste_collections_customer_id ON waste_collections(customer_id);
+CREATE INDEX IF NOT EXISTS idx_waste_collections_recycler_id ON waste_collections(recycler_id);
+CREATE INDEX IF NOT EXISTS idx_waste_collections_status ON waste_collections(status);
+CREATE INDEX IF NOT EXISTS idx_payments_collection_id ON payments(collection_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+
+-- Indexes for tracking_sessions
+CREATE INDEX IF NOT EXISTS idx_tracking_sessions_pickup_id ON tracking_sessions(pickup_id);
+CREATE INDEX IF NOT EXISTS idx_tracking_sessions_recycler_id ON tracking_sessions(recycler_id);
+CREATE INDEX IF NOT EXISTS idx_tracking_sessions_customer_id ON tracking_sessions(customer_id);
+CREATE INDEX IF NOT EXISTS idx_tracking_sessions_status ON tracking_sessions(status);
+
+-- Indexes for recycler_registrations
+CREATE INDEX IF NOT EXISTS idx_recycler_registrations_user_id ON recycler_registrations(user_id);
+CREATE INDEX IF NOT EXISTS idx_recycler_registrations_status ON recycler_registrations(status);
+
+-- Indexes for request_rejections
+CREATE INDEX IF NOT EXISTS idx_request_rejections_collection_id ON request_rejections(collection_id);
+CREATE INDEX IF NOT EXISTS idx_request_rejections_recycler_id ON request_rejections(recycler_id);
+
+-- Indexes for email_verifications
+CREATE INDEX IF NOT EXISTS idx_email_verifications_user_id ON email_verifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_email_verifications_email ON email_verifications(email);
+CREATE INDEX IF NOT EXISTS idx_email_verifications_otp ON email_verifications(otp);
+CREATE INDEX IF NOT EXISTS idx_email_verifications_expires_at ON email_verifications(expires_at);
+CREATE INDEX IF NOT EXISTS idx_email_verifications_user_email ON email_verifications(user_id, email);
+
+-- Indexes for chat_messages
+CREATE INDEX IF NOT EXISTS idx_chat_messages_pickup_id ON chat_messages(pickup_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_sender_id ON chat_messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_is_read ON chat_messages(is_read);
 
 -- Enable Row Level Security (RLS)
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.waste_collections ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.recycler_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.customer_preferences ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.eco_impact ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE waste_collections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recycler_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customer_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE eco_impact ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tracking_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recycler_registrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE request_rejections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for users table
-CREATE POLICY "Users can view their own profile" ON public.users
+CREATE POLICY "Users can view their own profile" ON users
     FOR SELECT USING (auth.uid() = id);
 
-CREATE POLICY "Users can update their own profile" ON public.users
+CREATE POLICY "Users can update their own profile" ON users
     FOR UPDATE USING (auth.uid() = id);
 
-CREATE POLICY "Users can insert their own profile" ON public.users
+CREATE POLICY "Users can insert their own profile" ON users
     FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- RLS Policies for waste_collections table
-CREATE POLICY "Users can view their own collections" ON public.waste_collections
+CREATE POLICY "Users can view their own collections" ON waste_collections
     FOR SELECT USING (auth.uid() = customer_id OR auth.uid() = recycler_id);
 
-CREATE POLICY "Users can create their own collections" ON public.waste_collections
+CREATE POLICY "Users can create their own collections" ON waste_collections
     FOR INSERT WITH CHECK (auth.uid() = customer_id);
 
-CREATE POLICY "Users can update their own collections" ON public.waste_collections
+CREATE POLICY "Users can update their own collections" ON waste_collections
     FOR UPDATE USING (auth.uid() = customer_id OR auth.uid() = recycler_id);
 
 -- RLS Policies for payments table
-CREATE POLICY "Users can view their own payments" ON public.payments
+CREATE POLICY "Users can view their own payments" ON payments
     FOR SELECT USING (
         EXISTS (
-            SELECT 1 FROM public.waste_collections 
+            SELECT 1 FROM waste_collections 
             WHERE id = payments.collection_id 
             AND (customer_id = auth.uid() OR recycler_id = auth.uid())
         )
     );
 
-CREATE POLICY "Users can create payments for their collections" ON public.payments
+CREATE POLICY "Users can create payments for their collections" ON payments
     FOR INSERT WITH CHECK (
         EXISTS (
-            SELECT 1 FROM public.waste_collections 
+            SELECT 1 FROM waste_collections 
             WHERE id = payments.collection_id 
             AND customer_id = auth.uid()
         )
     );
 
 -- RLS Policies for recycler_profiles table
-CREATE POLICY "Recyclers can view their own profile" ON public.recycler_profiles
+CREATE POLICY "Recyclers can view their own profile" ON recycler_profiles
     FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY "Recyclers can update their own profile" ON public.recycler_profiles
+CREATE POLICY "Recyclers can update their own profile" ON recycler_profiles
     FOR UPDATE USING (auth.uid() = user_id);
 
-CREATE POLICY "Recyclers can insert their own profile" ON public.recycler_profiles
+CREATE POLICY "Recyclers can insert their own profile" ON recycler_profiles
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- RLS Policies for customer_preferences table
-CREATE POLICY "Users can view their own preferences" ON public.customer_preferences
+CREATE POLICY "Users can view their own preferences" ON customer_preferences
     FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can update their own preferences" ON public.customer_preferences
+CREATE POLICY "Users can update their own preferences" ON customer_preferences
     FOR UPDATE USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can insert their own preferences" ON public.customer_preferences
+CREATE POLICY "Users can insert their own preferences" ON customer_preferences
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- RLS Policies for notifications table
-CREATE POLICY "Users can view their own notifications" ON public.notifications
+CREATE POLICY "Users can view their own notifications" ON notifications
     FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can update their own notifications" ON public.notifications
+CREATE POLICY "Users can update their own notifications" ON notifications
     FOR UPDATE USING (auth.uid() = user_id);
 
 -- RLS Policies for eco_impact table
-CREATE POLICY "Users can view their own eco impact" ON public.eco_impact
+CREATE POLICY "Users can view their own eco impact" ON eco_impact
     FOR SELECT USING (auth.uid() = user_id);
 
--- Create functions for automatic timestamp updates
+-- RLS Policies for tracking_sessions
+CREATE POLICY "Recyclers can view own tracking sessions" ON tracking_sessions
+  FOR SELECT USING (auth.uid() = recycler_id);
+
+CREATE POLICY "Customers can view own pickup tracking" ON tracking_sessions
+  FOR SELECT USING (auth.uid() = customer_id);
+
+CREATE POLICY "Recyclers can insert own tracking sessions" ON tracking_sessions
+  FOR INSERT WITH CHECK (auth.uid() = recycler_id);
+
+CREATE POLICY "Recyclers can update own tracking sessions" ON tracking_sessions
+  FOR UPDATE USING (auth.uid() = recycler_id);
+
+-- RLS Policies for recycler_registrations
+CREATE POLICY "Users can view their own registrations" ON recycler_registrations
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own registrations" ON recycler_registrations
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own pending registrations" ON recycler_registrations
+  FOR UPDATE USING (auth.uid() = user_id AND status = 'pending');
+
+-- RLS Policies for request_rejections
+CREATE POLICY "Recyclers can view their own rejections" ON request_rejections
+  FOR SELECT USING (auth.uid() = recycler_id);
+
+CREATE POLICY "Recyclers can insert their own rejections" ON request_rejections
+  FOR INSERT WITH CHECK (auth.uid() = recycler_id);
+
+-- RLS Policies for email_verifications
+CREATE POLICY "Users can view their own verification records" ON email_verifications
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own verification records" ON email_verifications
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own verification records" ON email_verifications
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policies for chat_messages
+CREATE POLICY "Users can view messages for their pickups" ON chat_messages
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM waste_collections 
+      WHERE id = chat_messages.pickup_id 
+      AND (customer_id = auth.uid() OR recycler_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Users can send messages for their pickups" ON chat_messages
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM waste_collections 
+      WHERE id = chat_messages.pickup_id 
+      AND (customer_id = auth.uid() OR recycler_id = auth.uid())
+    ) AND sender_id = auth.uid()
+  );
+
+CREATE POLICY "Users can update their own messages" ON chat_messages
+  FOR UPDATE USING (sender_id = auth.uid());
+
+-- Create function for automatic timestamp updates (SINGLE DEFINITION)
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ LANGUAGE plpgsql;
 
 -- Create triggers for updated_at columns
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON public.users
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_waste_collections_updated_at BEFORE UPDATE ON public.waste_collections
+CREATE TRIGGER update_waste_collections_updated_at BEFORE UPDATE ON waste_collections
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_recycler_profiles_updated_at BEFORE UPDATE ON public.recycler_profiles
+CREATE TRIGGER update_recycler_profiles_updated_at BEFORE UPDATE ON recycler_profiles
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_customer_preferences_updated_at BEFORE UPDATE ON public.customer_preferences
+CREATE TRIGGER update_customer_preferences_updated_at BEFORE UPDATE ON customer_preferences
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_tracking_sessions_updated_at BEFORE UPDATE ON tracking_sessions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_recycler_registrations_updated_at BEFORE UPDATE ON recycler_registrations
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to calculate eco impact
@@ -223,7 +388,7 @@ RETURNS TRIGGER AS $$
 BEGIN
     -- Calculate CO2 saved based on waste type and weight
     -- These are approximate values - adjust based on research
-    INSERT INTO public.eco_impact (user_id, collection_id, co2_saved, trees_equivalent, water_saved, energy_saved)
+    INSERT INTO eco_impact (user_id, collection_id, co2_saved, trees_equivalent, water_saved, energy_saved)
     VALUES (
         NEW.customer_id,
         NEW.id,
@@ -266,16 +431,9 @@ BEGIN
     );
     RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ LANGUAGE plpgsql;
 
 -- Create trigger for eco impact calculation
 CREATE TRIGGER calculate_eco_impact_trigger 
-    AFTER INSERT ON public.waste_collections
-    FOR EACH ROW EXECUTE FUNCTION calculate_eco_impact();
-
--- Insert sample data for testing (optional)
--- INSERT INTO public.users (id, email, username, role) VALUES 
---     ('00000000-0000-0000-0000-000000000001', 'admin@ecowastego.com', 'Admin', 'admin'),
---     ('00000000-0000-0000-0000-000000000002', 'customer@ecowastego.com', 'TestCustomer', 'customer'),
---     ('00000000-0000-0000-0000-000000000003', 'recycler@ecowastego.com', 'TestRecycler', 'recycler'); 
- 
+    AFTER INSERT ON waste_collections
+    FOR EACH ROW EXECUTE FUNCTION calculate_eco_impact(); 
