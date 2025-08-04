@@ -1,0 +1,385 @@
+import { Request, Response } from 'express';
+import { supabase } from '../config/supabase';
+
+export class WasteController {
+  /**
+   * Create a new waste collection request
+   */
+  static async createCollection(req: Request, res: Response): Promise<void> {
+    try {
+      const customerId = req.user?.id;
+      const { 
+        waste_type, 
+        weight, 
+        description, 
+        pickup_date, 
+        pickup_time,
+        address,
+        special_instructions 
+      } = req.body;
+
+      if (!waste_type || !weight || !pickup_date || !pickup_time || !address) {
+        res.status(400).json({
+          success: false,
+          error: 'Missing required fields'
+        });
+        return;
+      }
+
+      const { data: collection, error } = await supabase
+        .from('waste_collections')
+        .insert({
+          customer_id: customerId,
+          waste_type,
+          weight: parseFloat(weight),
+          description,
+          pickup_date,
+          pickup_time,
+          address,
+          special_instructions,
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        res.status(400).json({
+          success: false,
+          error: 'Failed to create collection request'
+        });
+        return;
+      }
+
+      res.status(201).json({
+        success: true,
+        data: collection,
+        message: 'Waste collection request created successfully'
+      });
+    } catch (error) {
+      console.error('Error creating waste collection:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create collection request'
+      });
+    }
+  }
+
+  /**
+   * Get collections for current user
+   */
+  static async getUserCollections(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+      const { page = 1, limit = 10, status } = req.query;
+
+      let query = supabase
+        .from('waste_collections')
+        .select(`
+          *,
+          customers:customer_id(id, username, phone, address),
+          recyclers:recycler_id(id, username, phone)
+        `);
+
+      // Filter by user role
+      if (userRole === 'customer') {
+        query = query.eq('customer_id', userId);
+      } else if (userRole === 'recycler') {
+        query = query.eq('recycler_id', userId);
+      }
+
+      // Filter by status if provided
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      // Pagination
+      const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
+      query = query.range(offset, offset + parseInt(limit as string) - 1);
+      query = query.order('created_at', { ascending: false });
+
+      const { data: collections, error } = await query;
+
+      if (error) {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch collections'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: collections,
+        message: 'Collections retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting collections:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve collections'
+      });
+    }
+  }
+
+  /**
+   * Get specific collection details
+   */
+  static async getCollectionDetails(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      let query = supabase
+        .from('waste_collections')
+        .select(`
+          *,
+          customers:customer_id(id, username, phone, address),
+          recyclers:recycler_id(id, username, phone)
+        `)
+        .eq('id', id);
+
+      // Ensure user can only access their own collections
+      if (userRole === 'customer') {
+        query = query.eq('customer_id', userId);
+      } else if (userRole === 'recycler') {
+        query = query.eq('recycler_id', userId);
+      }
+
+      const { data: collection, error } = await query.single();
+
+      if (error || !collection) {
+        res.status(404).json({
+          success: false,
+          error: 'Collection not found'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: collection,
+        message: 'Collection details retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting collection details:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve collection details'
+      });
+    }
+  }
+
+  /**
+   * Get available collections for recyclers
+   */
+  static async getAvailableCollections(req: Request, res: Response): Promise<void> {
+    try {
+      const { page = 1, limit = 10 } = req.query;
+
+      const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
+
+      const { data: collections, error } = await supabase
+        .from('waste_collections')
+        .select(`
+          *,
+          customers:customer_id(id, username, phone, address)
+        `)
+        .eq('status', 'pending')
+        .range(offset, offset + parseInt(limit as string) - 1)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch available collections'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: collections,
+        message: 'Available collections retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error getting available collections:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve available collections'
+      });
+    }
+  }
+
+  /**
+   * Accept collection (recycler)
+   */
+  static async acceptCollection(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const recyclerId = req.user?.id;
+
+      const { data: collection, error } = await supabase
+        .from('waste_collections')
+        .update({
+          recycler_id: recyclerId,
+          status: 'accepted',
+          accepted_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('status', 'pending')
+        .select()
+        .single();
+
+      if (error || !collection) {
+        res.status(400).json({
+          success: false,
+          error: 'Failed to accept collection'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: collection,
+        message: 'Collection accepted successfully'
+      });
+    } catch (error) {
+      console.error('Error accepting collection:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to accept collection'
+      });
+    }
+  }
+
+  /**
+   * Start collection (recycler)
+   */
+  static async startCollection(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const recyclerId = req.user?.id;
+
+      const { data: collection, error } = await supabase
+        .from('waste_collections')
+        .update({
+          status: 'in_progress',
+          started_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('recycler_id', recyclerId)
+        .eq('status', 'accepted')
+        .select()
+        .single();
+
+      if (error || !collection) {
+        res.status(400).json({
+          success: false,
+          error: 'Failed to start collection'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: collection,
+        message: 'Collection started successfully'
+      });
+    } catch (error) {
+      console.error('Error starting collection:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to start collection'
+      });
+    }
+  }
+
+  /**
+   * Complete collection (recycler)
+   */
+  static async completeCollection(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const recyclerId = req.user?.id;
+      const { actual_weight, notes } = req.body;
+
+      const { data: collection, error } = await supabase
+        .from('waste_collections')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          actual_weight: actual_weight ? parseFloat(actual_weight) : null,
+          notes: notes || null
+        })
+        .eq('id', id)
+        .eq('recycler_id', recyclerId)
+        .eq('status', 'in_progress')
+        .select()
+        .single();
+
+      if (error || !collection) {
+        res.status(400).json({
+          success: false,
+          error: 'Failed to complete collection'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: collection,
+        message: 'Collection completed successfully'
+      });
+    } catch (error) {
+      console.error('Error completing collection:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to complete collection'
+      });
+    }
+  }
+
+  /**
+   * Cancel collection (customer)
+   */
+  static async cancelCollection(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const customerId = req.user?.id;
+
+      const { data: collection, error } = await supabase
+        .from('waste_collections')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('customer_id', customerId)
+        .in('status', ['pending', 'accepted'])
+        .select()
+        .single();
+
+      if (error || !collection) {
+        res.status(400).json({
+          success: false,
+          error: 'Failed to cancel collection'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: collection,
+        message: 'Collection cancelled successfully'
+      });
+    } catch (error) {
+      console.error('Error cancelling collection:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to cancel collection'
+      });
+    }
+  }
+} 
