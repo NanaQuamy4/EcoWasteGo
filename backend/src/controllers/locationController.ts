@@ -182,7 +182,7 @@ export class LocationController {
 
       // Filter for relevant places (you can customize this based on your needs)
       const relevantPlaces = pickupPoints.filter(place => 
-        place.types.some(type => 
+        place.types.some((type: string) => 
           ['recycling_center', 'waste_management', 'establishment'].includes(type)
         )
       );

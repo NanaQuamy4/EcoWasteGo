@@ -19,7 +19,7 @@ export class GoogleMapsService {
         },
       });
 
-      if (response.data.results.length > 0) {
+      if (response.data.results.length > 0 && response.data.results[0]?.geometry?.location) {
         const location = response.data.results[0].geometry.location;
         return {
           lat: location.lat,
@@ -45,7 +45,7 @@ export class GoogleMapsService {
         },
       });
 
-      if (response.data.results.length > 0) {
+      if (response.data.results.length > 0 && response.data.results[0]?.formatted_address) {
         return response.data.results[0].formatted_address;
       }
       return null;
@@ -78,14 +78,18 @@ export class GoogleMapsService {
 
       if (response.data.routes.length > 0) {
         const route = response.data.routes[0];
-        const leg = route.legs[0];
-        
-        return {
-          distance: leg.distance.text,
-          duration: leg.duration.text,
-          polyline: route.overview_polyline.points,
-          steps: leg.steps,
-        };
+        if (route) {
+          const leg = route.legs?.[0];
+          
+          if (leg && leg.distance && leg.duration && route.overview_polyline) {
+            return {
+              distance: leg.distance.text,
+              duration: leg.duration.text,
+              polyline: route.overview_polyline.points,
+              steps: leg.steps || [],
+            };
+          }
+        }
       }
       return null;
     } catch (error) {
@@ -118,7 +122,7 @@ export class GoogleMapsService {
         address: place.vicinity,
         location: place.geometry?.location,
         rating: place.rating,
-        types: place.types,
+        types: place.types || [],
       }));
     } catch (error) {
       console.error('Nearby places search error:', error);
