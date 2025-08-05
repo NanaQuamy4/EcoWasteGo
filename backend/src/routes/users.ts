@@ -15,7 +15,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
     
     const { data: user, error } = await supabase
       .from('users')
-      .select('*')
+      .select('id, username, email, phone, role, email_verified, created_at')
       .eq('id', userId)
       .single();
 
@@ -26,9 +26,19 @@ router.get('/profile', authenticateToken, async (req, res) => {
       });
     }
 
+    // Format response to match EditProfileScreen expectations
+    const profileData = {
+      name: user.username,
+      email: user.email,
+      phone: user.phone || '',
+      role: user.role,
+      emailVerified: user.email_verified,
+      createdAt: user.created_at
+    };
+
     res.json({
       success: true,
-      data: user,
+      data: profileData,
       message: 'User profile retrieved successfully'
     });
   } catch (error) {
@@ -48,35 +58,101 @@ router.get('/profile', authenticateToken, async (req, res) => {
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
     const userId = req.user?.id;
-    const { username, phone, address, city, state, profile_image } = req.body;
+    const { 
+      name, 
+      email, 
+      phone, 
+      currentPassword, 
+      newPassword, 
+      confirmNewPassword 
+    } = req.body;
 
-    const updateData: any = {};
-    if (username) updateData.username = username;
-    if (phone) updateData.phone = phone;
-    if (address) updateData.address = address;
-    if (city) updateData.city = city;
-    if (state) updateData.state = state;
-    if (profile_image) updateData.profile_image = profile_image;
+    // Validate password change if provided
+    if (newPassword || confirmNewPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          success: false,
+          error: 'Current password is required to change password'
+        });
+      }
 
-    const { data: user, error } = await supabase
-      .from('users')
-      .update(updateData)
-      .eq('id', userId)
-      .select()
-      .single();
+      if (!newPassword) {
+        return res.status(400).json({
+          success: false,
+          error: 'New password is required'
+        });
+      }
 
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        error: 'Failed to update profile'
+      if (newPassword !== confirmNewPassword) {
+        return res.status(400).json({
+          success: false,
+          error: 'New passwords do not match'
+        });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          error: 'New password must be at least 6 characters long'
+        });
+      }
+
+      // Verify current password with Supabase Auth
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication failed'
+        });
+      }
+
+      // Update password in Supabase Auth
+      const { error: passwordError } = await supabase.auth.updateUser({
+        password: newPassword
       });
+
+      if (passwordError) {
+        return res.status(400).json({
+          success: false,
+          error: passwordError.message
+        });
+      }
     }
 
-    res.json({
-      success: true,
-      data: user,
-      message: 'Profile updated successfully'
-    });
+    // Update profile data in database
+    const updateData: any = {};
+    if (name) updateData.username = name; // Map name to username field
+    if (email) updateData.email = email;
+    if (phone) updateData.phone = phone;
+
+    // Only update database if there are profile changes
+    if (Object.keys(updateData).length > 0) {
+      const { data: user, error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: 'Failed to update profile'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: user,
+        message: 'Profile updated successfully'
+      });
+    } else {
+      // If only password was changed, return success
+      res.json({
+        success: true,
+        message: 'Password updated successfully'
+      });
+    }
   } catch (error) {
     console.error('Error updating user profile:', error);
     return res.status(500).json({

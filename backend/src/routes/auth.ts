@@ -364,4 +364,101 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @route POST /api/auth/google
+ * @desc Login with Google
+ * @access Public
+ */
+router.post('/google', async (req, res) => {
+  try {
+    const { idToken, accessToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Google ID token is required'
+      });
+    }
+
+    // TODO: When Google API key is ready, verify the token with Google
+    // const googleApiKey = process.env.GOOGLE_CLIENT_ID;
+    // Verify token with Google's API
+
+    // For now, create a mock user session
+    const mockUser = {
+      id: 'google_user_123',
+      email: 'user@gmail.com',
+      username: 'Google User',
+      role: 'customer',
+      provider: 'google'
+    };
+
+    res.json({
+      success: true,
+      message: 'Google login successful',
+      data: {
+        user: mockUser,
+        session: {
+          access_token: 'mock_google_token',
+          refresh_token: 'mock_refresh_token'
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Google login error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Google login failed'
+    });
+  }
+});
+
+/**
+ * @route POST /api/auth/apple
+ * @desc Login with Apple
+ * @access Public
+ */
+router.post('/apple', async (req, res) => {
+  try {
+    const { identityToken, authorizationCode } = req.body;
+
+    if (!identityToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Apple identity token is required'
+      });
+    }
+
+    // TODO: When Apple Sign-In is configured, verify the token with Apple
+    // Verify token with Apple's API
+
+    // For now, create a mock user session
+    const mockUser = {
+      id: 'apple_user_123',
+      email: 'user@icloud.com',
+      username: 'Apple User',
+      role: 'customer',
+      provider: 'apple'
+    };
+
+    res.json({
+      success: true,
+      message: 'Apple login successful',
+      data: {
+        user: mockUser,
+        session: {
+          access_token: 'mock_apple_token',
+          refresh_token: 'mock_refresh_token'
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Apple login error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Apple login failed'
+    });
+  }
+});
+
 export default router; 

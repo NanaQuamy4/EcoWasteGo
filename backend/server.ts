@@ -9,10 +9,23 @@ import morgan from 'morgan';
 import analyticsRoutes from './src/routes/analytics';
 import authRoutes from './src/routes/auth';
 import historyRoutes from './src/routes/history';
+import locationsRoutes from './src/routes/locations';
 import notificationsRoutes from './src/routes/notifications';
+import onboardingRoutes from './src/routes/onboarding';
 import paymentsRoutes from './src/routes/payments';
+import privacyRoutes from './src/routes/privacy';
+import recyclerCelebrationRoutes from './src/routes/recycler-celebration';
+import recyclerNavigationRoutes from './src/routes/recycler-navigation';
+import recyclerPaymentSummaryRoutes from './src/routes/recycler-payment-summary';
+import recyclerRegistrationRoutes from './src/routes/recycler-registration';
+import recyclerRequestsRoutes from './src/routes/recycler-requests';
+import recyclerWeightEntryRoutes from './src/routes/recycler-weight-entry';
 import recyclersRoutes from './src/routes/recyclers';
+import registerRoutes from './src/routes/register';
 import rewardsRoutes from './src/routes/rewards';
+import supportRoutes from './src/routes/support';
+import textRecyclerRoutes from './src/routes/text-recycler';
+import trackingRoutes from './src/routes/tracking';
 import usersRoutes from './src/routes/users';
 import wasteRoutes from './src/routes/waste';
 
@@ -50,6 +63,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/register', registerRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/waste', wasteRoutes);
 app.use('/api/payments', paymentsRoutes);
@@ -58,6 +72,18 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/rewards', rewardsRoutes);
 app.use('/api/history', historyRoutes);
+app.use('/api/support', supportRoutes);
+app.use('/api/locations', locationsRoutes);
+app.use('/api/tracking', trackingRoutes);
+app.use('/api/onboarding', onboardingRoutes);
+app.use('/api/privacy', privacyRoutes);
+app.use('/api/recycler-celebration', recyclerCelebrationRoutes);
+app.use('/api/recycler-navigation', recyclerNavigationRoutes);
+app.use('/api/recycler-payment-summary', recyclerPaymentSummaryRoutes);
+app.use('/api/recycler-registration', recyclerRegistrationRoutes);
+app.use('/api/recycler-requests', recyclerRequestsRoutes);
+app.use('/api/recycler-weight-entry', recyclerWeightEntryRoutes);
+app.use('/api/text-recycler', textRecyclerRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

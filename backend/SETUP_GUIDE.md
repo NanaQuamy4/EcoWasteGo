@@ -50,7 +50,20 @@ Once your project is created:
    FRONTEND_URL=http://localhost:3000
    ```
 
-4. **Configure email settings** (optional for now):
+4. **Configure Google API (Optional - for location services):**
+   ```env
+   GOOGLE_PLACES_API_KEY=your_google_places_api_key_here
+   GOOGLE_CLIENT_ID=your_google_client_id_here
+   GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+   ```
+
+   **Google Maps API Services Needed:**
+   - **Places API**: For location search and suggestions
+   - **Directions API**: For route optimization and navigation
+   - **Distance Matrix API**: For ETA calculations
+   - **Geocoding API**: For address validation
+
+5. **Configure email settings** (optional for now):
    ```env
    EMAIL_HOST=smtp.gmail.com
    EMAIL_PORT=587
