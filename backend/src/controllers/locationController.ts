@@ -1,180 +1,155 @@
 import { Request, Response } from 'express';
+import googleMapsService from '../services/googleMapsService';
 
 export class LocationController {
   /**
-   * Search for pickup locations
+   * Search for locations using Google Maps API
    */
   static async searchLocations(req: Request, res: Response): Promise<Response | void> {
     try {
-      const { query, lat, lng, radius = 5000 } = req.query;
+      const { query } = req.query;
 
-      if (!query && !lat && !lng) {
+      if (!query || typeof query !== 'string') {
         return res.status(400).json({
           success: false,
-          error: 'Query or coordinates are required'
+          message: 'Query parameter is required'
         });
       }
 
-      // Use Google Places API for location search
-      const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+      // Use Google Maps Geocoding API
+      const coordinates = await googleMapsService.geocodeAddress(query);
       
-      if (!googleApiKey) {
-        return res.status(500).json({
+      if (!coordinates) {
+        return res.status(404).json({
           success: false,
-          error: 'Google Maps API key not configured'
+          message: 'Location not found'
         });
       }
 
-      let locations = [];
-      
-      if (query) {
-        // Search by text query
-        const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query as string)}&location=${lat},${lng}&radius=${radius}&key=${googleApiKey}`;
-        
-        try {
-          const response = await fetch(searchUrl);
-          const data = await response.json() as any;
-          
-          if (data.status === 'OK') {
-            locations = data.results.map((place: any) => ({
-              id: place.place_id,
-              name: place.name,
-              address: place.formatted_address,
-              lat: place.geometry.location.lat,
-              lng: place.geometry.location.lng,
-              type: place.types?.[0] || 'establishment',
-              rating: place.rating || 0
-            }));
-          }
-        } catch (error) {
-          console.error('Google Places API error:', error);
-        }
-      }
-
-      // Fallback to mock data if no results or API fails
-      if (locations.length === 0) {
-        const mockLocations = [
-          {
-            id: '1',
-            name: 'Gold Hostel, Komfo Anokye',
-            address: 'Komfo Anokye Teaching Hospital, Kumasi',
-            lat: 6.6734,
-            lng: -1.5714,
-            type: 'hostel',
-            rating: 4.2
-          },
-          {
-            id: '2',
-            name: 'Atonsu Unity Oil',
-            address: 'Atonsu, Kumasi',
-            lat: 6.6750,
-            lng: -1.5730,
-            type: 'gas_station',
-            rating: 4.0
-          },
-          {
-            id: '3',
-            name: 'KNUST Campus',
-            address: 'Kwame Nkrumah University of Science and Technology, Kumasi',
-            lat: 6.6728,
-            lng: -1.5693,
-            type: 'university',
-            rating: 4.5
-          },
-          {
-            id: '4',
-            name: 'Kumasi Central Market',
-            address: 'Central Market, Kumasi',
-            lat: 6.6745,
-            lng: -1.5720,
-            type: 'market',
-            rating: 4.1
-          }
-        ];
-
-        // Filter locations based on query if provided
-        const filteredLocations = query 
-          ? mockLocations.filter(location => 
-              location.name.toLowerCase().includes((query as string).toLowerCase()) ||
-              location.address.toLowerCase().includes((query as string).toLowerCase())
-            )
-          : mockLocations;
-
-        return res.json({
-          success: true,
-          data: {
-            locations: filteredLocations,
-            total: filteredLocations.length
-          },
-          message: 'Locations retrieved successfully'
-        });
-      }
+      // Get nearby places for additional context
+      const nearbyPlaces = await googleMapsService.searchNearbyPlaces(coordinates, 2000);
 
       return res.json({
         success: true,
         data: {
-          locations,
-          total: locations.length
-        },
-        message: 'Locations retrieved successfully'
+          query,
+          coordinates,
+          nearbyPlaces: nearbyPlaces.slice(0, 5), // Limit to 5 nearby places
+          formattedAddress: await googleMapsService.reverseGeocode(coordinates.lat, coordinates.lng)
+        }
       });
     } catch (error) {
-      console.error('Error searching locations:', error);
+      console.error('Location search error:', error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to search locations'
+        message: 'Error searching for location'
       });
     }
   }
 
   /**
-   * Get location suggestions based on query
+   * Get location suggestions based on partial input
    */
   static async getLocationSuggestions(req: Request, res: Response): Promise<Response | void> {
     try {
-      const { query } = req.query;
+      const { input } = req.query;
 
-      if (!query) {
+      if (!input || typeof input !== 'string') {
         return res.status(400).json({
           success: false,
-          error: 'Query is required'
+          message: 'Input parameter is required'
         });
       }
 
-      // Mock suggestions based on HomeScreen suggestions
-      const allSuggestions = [
-        'Gold Hostel, Komfo Anokye',
-        'Atonsu Unity Oil',
-        'KNUST Campus',
-        'Kumasi Central Market',
-        'Kejetia Market',
-        'Adum Shopping Center',
-        'Kumasi Airport',
-        'Prempeh Assembly Hall'
-      ];
+      // For now, we'll use geocoding with partial input
+      // In a production app, you might want to use Google Places Autocomplete API
+      const coordinates = await googleMapsService.geocodeAddress(input);
+      
+      if (!coordinates) {
+        return res.status(404).json({
+          success: false,
+          message: 'No suggestions found'
+        });
+      }
 
-      const filteredSuggestions = allSuggestions.filter(suggestion =>
-        suggestion.toLowerCase().includes((query as string).toLowerCase())
-      );
+      const address = await googleMapsService.reverseGeocode(coordinates.lat, coordinates.lng);
+      const nearbyPlaces = await googleMapsService.searchNearbyPlaces(coordinates, 1000);
+
+      const suggestions = [
+        {
+          id: 'geocoded',
+          name: address || input,
+          coordinates,
+          type: 'geocoded'
+        },
+        ...nearbyPlaces.slice(0, 4).map(place => ({
+          id: place.id,
+          name: place.name,
+          coordinates: place.location,
+          type: 'nearby'
+        }))
+      ];
 
       return res.json({
         success: true,
-        data: {
-          suggestions: filteredSuggestions
-        },
-        message: 'Location suggestions retrieved successfully'
+        data: suggestions
       });
     } catch (error) {
-      console.error('Error getting location suggestions:', error);
+      console.error('Location suggestions error:', error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to get location suggestions'
+        message: 'Error getting location suggestions'
       });
     }
   }
 
   /**
-   * Get nearby pickup points
+   * Get directions between two points
+   */
+  static async getDirections(req: Request, res: Response): Promise<Response | void> {
+    try {
+      const { origin, destination } = req.body;
+
+      if (!origin || !destination) {
+        return res.status(400).json({
+          success: false,
+          message: 'Origin and destination are required'
+        });
+      }
+
+      // Validate coordinates
+      if (!googleMapsService.validateCoordinates(origin.lat, origin.lng) ||
+          !googleMapsService.validateCoordinates(destination.lat, destination.lng)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid coordinates provided'
+        });
+      }
+
+      const directions = await googleMapsService.getDirections(origin, destination);
+
+      if (!directions) {
+        return res.status(404).json({
+          success: false,
+          message: 'Could not find route between points'
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: directions
+      });
+    } catch (error) {
+      console.error('Directions error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Error getting directions'
+      });
+    }
+  }
+
+  /**
+   * Find nearby pickup points
    */
   static async getNearbyPickupPoints(req: Request, res: Response): Promise<Response | void> {
     try {
@@ -183,158 +158,87 @@ export class LocationController {
       if (!lat || !lng) {
         return res.status(400).json({
           success: false,
-          error: 'Latitude and longitude are required'
+          message: 'Latitude and longitude are required'
         });
       }
 
-      // Use Google Places API for nearby search
-      const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
-      
-      if (!googleApiKey) {
-        return res.status(500).json({
+      const latitude = parseFloat(lat as string);
+      const longitude = parseFloat(lng as string);
+      const searchRadius = parseInt(radius as string);
+
+      if (!googleMapsService.validateCoordinates(latitude, longitude)) {
+        return res.status(400).json({
           success: false,
-          error: 'Google Maps API key not configured'
+          message: 'Invalid coordinates provided'
         });
       }
 
-      let nearbyPoints = [];
-      
-      try {
-        const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=establishment&key=${googleApiKey}`;
-        const response = await fetch(nearbyUrl);
-        const data = await response.json() as any;
-        
-        if (data.status === 'OK') {
-          nearbyPoints = data.results.map((place: any) => ({
-            id: place.place_id,
-            name: place.name,
-            address: place.vicinity || place.formatted_address,
-            distance: place.distance_meters ? `${(place.distance_meters / 1000).toFixed(1)} km` : 'Unknown',
-            lat: place.geometry.location.lat,
-            lng: place.geometry.location.lng,
-            type: place.types?.[0] || 'establishment'
-          }));
-        }
-      } catch (error) {
-        console.error('Google Places API error:', error);
-      }
+      // Search for recycling centers, waste management facilities, etc.
+      const pickupPoints = await googleMapsService.searchNearbyPlaces(
+        { lat: latitude, lng: longitude },
+        searchRadius,
+        'establishment'
+      );
 
-      // Fallback to mock data if no results or API fails
-      if (nearbyPoints.length === 0) {
-        nearbyPoints = [
-          {
-            id: '1',
-            name: 'Gold Hostel, Komfo Anokye',
-            address: 'Komfo Anokye Teaching Hospital, Kumasi',
-            distance: '0.5 km',
-            lat: parseFloat(lat as string) + 0.001,
-            lng: parseFloat(lng as string) + 0.001,
-            type: 'hostel'
-          },
-          {
-            id: '2',
-            name: 'Atonsu Unity Oil',
-            address: 'Atonsu, Kumasi',
-            distance: '1.2 km',
-            lat: parseFloat(lat as string) + 0.002,
-            lng: parseFloat(lng as string) + 0.002,
-            type: 'gas_station'
-          }
-        ];
-      }
+      // Filter for relevant places (you can customize this based on your needs)
+      const relevantPlaces = pickupPoints.filter(place => 
+        place.types.some(type => 
+          ['recycling_center', 'waste_management', 'establishment'].includes(type)
+        )
+      );
 
       return res.json({
         success: true,
         data: {
-          pickupPoints: nearbyPoints,
-          total: nearbyPoints.length
-        },
-        message: 'Nearby pickup points retrieved successfully'
+          location: { lat: latitude, lng: longitude },
+          radius: searchRadius,
+          pickupPoints: relevantPlaces,
+          totalFound: relevantPlaces.length
+        }
       });
     } catch (error) {
-      console.error('Error getting nearby pickup points:', error);
+      console.error('Nearby pickup points error:', error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to get nearby pickup points'
+        message: 'Error finding nearby pickup points'
       });
     }
   }
 
   /**
-   * Validate pickup location
+   * Validate location coordinates
    */
-  static async validatePickupLocation(req: Request, res: Response): Promise<Response | void> {
+  static async validateLocation(req: Request, res: Response): Promise<Response | void> {
     try {
-      const { location, lat, lng } = req.body;
+      const { lat, lng } = req.body;
 
-      if (!location) {
+      if (!lat || !lng) {
         return res.status(400).json({
           success: false,
-          error: 'Location is required'
+          message: 'Latitude and longitude are required'
         });
       }
 
-      // Use Google Geocoding API for address validation
-      const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
-      
-      if (!googleApiKey) {
-        return res.status(500).json({
-          success: false,
-          error: 'Google Maps API key not configured'
-        });
-      }
+      const latitude = parseFloat(lat);
+      const longitude = parseFloat(lng);
 
-      let isValid = false;
-      let validatedLocation = {
-        name: location,
-        address: location,
-        lat: lat || 6.6734,
-        lng: lng || -1.5714,
-        isValid: false
-      };
-
-      try {
-        const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${googleApiKey}`;
-        const response = await fetch(geocodeUrl);
-        const data = await response.json() as any;
-        
-        if (data.status === 'OK' && data.results.length > 0) {
-          const result = data.results[0];
-          isValid = true;
-          validatedLocation = {
-            name: location,
-            address: result.formatted_address,
-            lat: result.geometry.location.lat,
-            lng: result.geometry.location.lng,
-            isValid: true
-          };
-        }
-      } catch (error) {
-        console.error('Google Geocoding API error:', error);
-      }
-
-      // Fallback to mock validation
-      if (!isValid) {
-        isValid = true;
-        validatedLocation = {
-          name: location,
-          address: location,
-          lat: lat || 6.6734,
-          lng: lng || -1.5714,
-          isValid
-        };
-      }
+      const isValid = googleMapsService.validateCoordinates(latitude, longitude);
+      const address = isValid ? await googleMapsService.reverseGeocode(latitude, longitude) : null;
 
       return res.json({
         success: true,
-        data: validatedLocation,
-        message: 'Location validated successfully'
+        data: {
+          isValid,
+          coordinates: { lat: latitude, lng: longitude },
+          address,
+          validatedAt: new Date().toISOString()
+        }
       });
     } catch (error) {
-      console.error('Error validating pickup location:', error);
+      console.error('Location validation error:', error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to validate pickup location'
+        message: 'Error validating location'
       });
     }
   }

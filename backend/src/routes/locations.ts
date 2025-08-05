@@ -4,32 +4,19 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
-/**
- * @route GET /api/locations/search
- * @desc Search for pickup locations
- * @access Public
- */
+// Search locations using Google Maps API
 router.get('/search', LocationController.searchLocations);
 
-/**
- * @route GET /api/locations/suggestions
- * @desc Get location suggestions based on query
- * @access Public
- */
+// Get location suggestions
 router.get('/suggestions', LocationController.getLocationSuggestions);
 
-/**
- * @route GET /api/locations/nearby
- * @desc Get nearby pickup points
- * @access Public
- */
-router.get('/nearby', LocationController.getNearbyPickupPoints);
+// Get directions between two points
+router.post('/directions', authenticateToken, LocationController.getDirections);
 
-/**
- * @route POST /api/locations/validate
- * @desc Validate pickup location
- * @access Private
- */
-router.post('/validate', authenticateToken, LocationController.validatePickupLocation);
+// Find nearby pickup points
+router.get('/nearby-pickup-points', LocationController.getNearbyPickupPoints);
+
+// Validate location coordinates
+router.post('/validate', authenticateToken, LocationController.validateLocation);
 
 export default router; 
