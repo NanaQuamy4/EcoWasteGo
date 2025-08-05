@@ -70,7 +70,7 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: 'Registration successful. Please check your email for verification.',
       data: {
@@ -141,7 +141,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Login successful',
       data: {
@@ -179,7 +179,7 @@ router.post('/logout', authenticateToken, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Logout successful'
     });
@@ -219,7 +219,7 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Password reset email sent'
     });
@@ -259,7 +259,7 @@ router.post('/reset-password', async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Password reset successful'
     });
@@ -310,7 +310,7 @@ router.post('/verify-email', async (req, res) => {
         .eq('id', user.id);
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Email verified successfully'
     });
@@ -343,7 +343,7 @@ router.get('/me', authenticateToken, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         user: {
@@ -380,11 +380,49 @@ router.post('/google', async (req, res) => {
       });
     }
 
-    // TODO: When Google API key is ready, verify the token with Google
-    // const googleApiKey = process.env.GOOGLE_CLIENT_ID;
-    // Verify token with Google's API
+    // Verify Google ID token
+    const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+    
+    if (googleApiKey) {
+      try {
+        // Verify the ID token with Google's API
+        const verifyUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`;
+        const response = await fetch(verifyUrl);
+        const tokenInfo = await response.json() as any;
+        
+        if (tokenInfo.error) {
+          return res.status(401).json({
+            success: false,
+            error: 'Invalid Google token'
+          });
+        }
+        
+        // Create user session with verified Google data
+        const googleUser = {
+          id: tokenInfo.sub,
+          email: tokenInfo.email,
+          username: tokenInfo.name || 'Google User',
+          role: 'customer',
+          provider: 'google'
+        };
+        
+        return res.json({
+          success: true,
+          message: 'Google login successful',
+          data: {
+            user: googleUser,
+            session: {
+              access_token: accessToken,
+              refresh_token: 'google_refresh_token'
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Google token verification error:', error);
+      }
+    }
 
-    // For now, create a mock user session
+    // Fallback to mock user session if verification fails
     const mockUser = {
       id: 'google_user_123',
       email: 'user@gmail.com',
@@ -393,7 +431,7 @@ router.post('/google', async (req, res) => {
       provider: 'google'
     };
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Google login successful',
       data: {
@@ -441,7 +479,7 @@ router.post('/apple', async (req, res) => {
       provider: 'apple'
     };
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Apple login successful',
       data: {

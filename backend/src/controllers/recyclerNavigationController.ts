@@ -393,8 +393,37 @@ export class RecyclerNavigationController {
       };
     }
 
-    // TODO: When Google API key is ready, use Google Distance Matrix API
-    // Mock ETA calculation for now
+    // Use Google Distance Matrix API for accurate ETA calculation
+    const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+    
+    if (googleApiKey) {
+      try {
+        const distanceMatrixUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${currentLat},${currentLng}&destinations=${destLat},${destLng}&key=${googleApiKey}`;
+        const response = await fetch(distanceMatrixUrl);
+        const data = await response.json() as any;
+        
+        if (data.status === 'OK' && data.rows.length > 0 && data.rows[0].elements.length > 0) {
+          const element = data.rows[0].elements[0];
+          
+          if (element.status === 'OK') {
+            const distance = element.distance.text;
+            const duration = element.duration.text;
+            const durationValue = element.duration.value; // seconds
+            const estimatedArrival = new Date(Date.now() + durationValue * 1000).toISOString();
+            
+            return {
+              distance,
+              duration,
+              estimatedArrival
+            };
+          }
+        }
+      } catch (error) {
+        console.error('Google Distance Matrix API error:', error);
+      }
+    }
+
+    // Fallback to mock calculation if API fails or key not configured
     const distance = Math.sqrt(
       Math.pow(destLat - currentLat, 2) + Math.pow(destLng - currentLng, 2)
     ) * 111; // Rough conversion to km

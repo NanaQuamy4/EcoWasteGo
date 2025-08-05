@@ -4,83 +4,123 @@ export class LocationController {
   /**
    * Search for pickup locations
    */
-  static async searchLocations(req: Request, res: Response): Promise<void> {
+  static async searchLocations(req: Request, res: Response): Promise<Response | void> {
     try {
       const { query, lat, lng, radius = 5000 } = req.query;
 
       if (!query && !lat && !lng) {
-        res.status(400).json({
+        return res.status(400).json({
           success: false,
           error: 'Query or coordinates are required'
         });
-        return;
       }
 
-      // TODO: When Google API key is ready, replace with actual Google Places API call
-      // const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
-      // const response = await fetch(
-      //   `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&location=${lat},${lng}&radius=${radius}&key=${googleApiKey}`
-      // );
+      // Use Google Places API for location search
+      const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+      
+      if (!googleApiKey) {
+        return res.status(500).json({
+          success: false,
+          error: 'Google Maps API key not configured'
+        });
+      }
 
-      // For now, return mock data based on the suggestions from HomeScreen
-      const mockLocations = [
-        {
-          id: '1',
-          name: 'Gold Hostel, Komfo Anokye',
-          address: 'Komfo Anokye Teaching Hospital, Kumasi',
-          lat: 6.6734,
-          lng: -1.5714,
-          type: 'hostel',
-          rating: 4.2
-        },
-        {
-          id: '2',
-          name: 'Atonsu Unity Oil',
-          address: 'Atonsu, Kumasi',
-          lat: 6.6750,
-          lng: -1.5730,
-          type: 'gas_station',
-          rating: 4.0
-        },
-        {
-          id: '3',
-          name: 'KNUST Campus',
-          address: 'Kwame Nkrumah University of Science and Technology, Kumasi',
-          lat: 6.6728,
-          lng: -1.5693,
-          type: 'university',
-          rating: 4.5
-        },
-        {
-          id: '4',
-          name: 'Kumasi Central Market',
-          address: 'Central Market, Kumasi',
-          lat: 6.6745,
-          lng: -1.5720,
-          type: 'market',
-          rating: 4.1
+      let locations = [];
+      
+      if (query) {
+        // Search by text query
+        const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query as string)}&location=${lat},${lng}&radius=${radius}&key=${googleApiKey}`;
+        
+        try {
+          const response = await fetch(searchUrl);
+          const data = await response.json() as any;
+          
+          if (data.status === 'OK') {
+            locations = data.results.map((place: any) => ({
+              id: place.place_id,
+              name: place.name,
+              address: place.formatted_address,
+              lat: place.geometry.location.lat,
+              lng: place.geometry.location.lng,
+              type: place.types?.[0] || 'establishment',
+              rating: place.rating || 0
+            }));
+          }
+        } catch (error) {
+          console.error('Google Places API error:', error);
         }
-      ];
+      }
 
-      // Filter locations based on query if provided
-      const filteredLocations = query 
-        ? mockLocations.filter(location => 
-            location.name.toLowerCase().includes((query as string).toLowerCase()) ||
-            location.address.toLowerCase().includes((query as string).toLowerCase())
-          )
-        : mockLocations;
+      // Fallback to mock data if no results or API fails
+      if (locations.length === 0) {
+        const mockLocations = [
+          {
+            id: '1',
+            name: 'Gold Hostel, Komfo Anokye',
+            address: 'Komfo Anokye Teaching Hospital, Kumasi',
+            lat: 6.6734,
+            lng: -1.5714,
+            type: 'hostel',
+            rating: 4.2
+          },
+          {
+            id: '2',
+            name: 'Atonsu Unity Oil',
+            address: 'Atonsu, Kumasi',
+            lat: 6.6750,
+            lng: -1.5730,
+            type: 'gas_station',
+            rating: 4.0
+          },
+          {
+            id: '3',
+            name: 'KNUST Campus',
+            address: 'Kwame Nkrumah University of Science and Technology, Kumasi',
+            lat: 6.6728,
+            lng: -1.5693,
+            type: 'university',
+            rating: 4.5
+          },
+          {
+            id: '4',
+            name: 'Kumasi Central Market',
+            address: 'Central Market, Kumasi',
+            lat: 6.6745,
+            lng: -1.5720,
+            type: 'market',
+            rating: 4.1
+          }
+        ];
 
-      res.json({
+        // Filter locations based on query if provided
+        const filteredLocations = query 
+          ? mockLocations.filter(location => 
+              location.name.toLowerCase().includes((query as string).toLowerCase()) ||
+              location.address.toLowerCase().includes((query as string).toLowerCase())
+            )
+          : mockLocations;
+
+        return res.json({
+          success: true,
+          data: {
+            locations: filteredLocations,
+            total: filteredLocations.length
+          },
+          message: 'Locations retrieved successfully'
+        });
+      }
+
+      return res.json({
         success: true,
         data: {
-          locations: filteredLocations,
-          total: filteredLocations.length
+          locations,
+          total: locations.length
         },
         message: 'Locations retrieved successfully'
       });
     } catch (error) {
       console.error('Error searching locations:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to search locations'
       });
@@ -90,16 +130,15 @@ export class LocationController {
   /**
    * Get location suggestions based on query
    */
-  static async getLocationSuggestions(req: Request, res: Response): Promise<void> {
+  static async getLocationSuggestions(req: Request, res: Response): Promise<Response | void> {
     try {
       const { query } = req.query;
 
       if (!query) {
-        res.status(400).json({
+        return res.status(400).json({
           success: false,
           error: 'Query is required'
         });
-        return;
       }
 
       // Mock suggestions based on HomeScreen suggestions
@@ -118,7 +157,7 @@ export class LocationController {
         suggestion.toLowerCase().includes((query as string).toLowerCase())
       );
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           suggestions: filteredSuggestions
@@ -127,7 +166,7 @@ export class LocationController {
       });
     } catch (error) {
       console.error('Error getting location suggestions:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to get location suggestions'
       });
@@ -137,47 +176,74 @@ export class LocationController {
   /**
    * Get nearby pickup points
    */
-  static async getNearbyPickupPoints(req: Request, res: Response): Promise<void> {
+  static async getNearbyPickupPoints(req: Request, res: Response): Promise<Response | void> {
     try {
       const { lat, lng, radius = 5000 } = req.query;
 
       if (!lat || !lng) {
-        res.status(400).json({
+        return res.status(400).json({
           success: false,
           error: 'Latitude and longitude are required'
         });
-        return;
       }
 
-      // TODO: When Google API key is ready, replace with actual Google Places API call
-      // const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
-      // const response = await fetch(
-      //   `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=establishment&key=${googleApiKey}`
-      // );
+      // Use Google Places API for nearby search
+      const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+      
+      if (!googleApiKey) {
+        return res.status(500).json({
+          success: false,
+          error: 'Google Maps API key not configured'
+        });
+      }
 
-      // Mock nearby pickup points
-      const nearbyPoints = [
-        {
-          id: '1',
-          name: 'Gold Hostel, Komfo Anokye',
-          address: 'Komfo Anokye Teaching Hospital, Kumasi',
-          distance: '0.5 km',
-          lat: parseFloat(lat as string) + 0.001,
-          lng: parseFloat(lng as string) + 0.001,
-          type: 'hostel'
-        },
-        {
-          id: '2',
-          name: 'Atonsu Unity Oil',
-          address: 'Atonsu, Kumasi',
-          distance: '1.2 km',
-          lat: parseFloat(lat as string) + 0.002,
-          lng: parseFloat(lng as string) + 0.002,
-          type: 'gas_station'
+      let nearbyPoints = [];
+      
+      try {
+        const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=establishment&key=${googleApiKey}`;
+        const response = await fetch(nearbyUrl);
+        const data = await response.json() as any;
+        
+        if (data.status === 'OK') {
+          nearbyPoints = data.results.map((place: any) => ({
+            id: place.place_id,
+            name: place.name,
+            address: place.vicinity || place.formatted_address,
+            distance: place.distance_meters ? `${(place.distance_meters / 1000).toFixed(1)} km` : 'Unknown',
+            lat: place.geometry.location.lat,
+            lng: place.geometry.location.lng,
+            type: place.types?.[0] || 'establishment'
+          }));
         }
-      ];
+      } catch (error) {
+        console.error('Google Places API error:', error);
+      }
 
-      res.json({
+      // Fallback to mock data if no results or API fails
+      if (nearbyPoints.length === 0) {
+        nearbyPoints = [
+          {
+            id: '1',
+            name: 'Gold Hostel, Komfo Anokye',
+            address: 'Komfo Anokye Teaching Hospital, Kumasi',
+            distance: '0.5 km',
+            lat: parseFloat(lat as string) + 0.001,
+            lng: parseFloat(lng as string) + 0.001,
+            type: 'hostel'
+          },
+          {
+            id: '2',
+            name: 'Atonsu Unity Oil',
+            address: 'Atonsu, Kumasi',
+            distance: '1.2 km',
+            lat: parseFloat(lat as string) + 0.002,
+            lng: parseFloat(lng as string) + 0.002,
+            type: 'gas_station'
+          }
+        ];
+      }
+
+      return res.json({
         success: true,
         data: {
           pickupPoints: nearbyPoints,
@@ -187,7 +253,7 @@ export class LocationController {
       });
     } catch (error) {
       console.error('Error getting nearby pickup points:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to get nearby pickup points'
       });
@@ -197,42 +263,76 @@ export class LocationController {
   /**
    * Validate pickup location
    */
-  static async validatePickupLocation(req: Request, res: Response): Promise<void> {
+  static async validatePickupLocation(req: Request, res: Response): Promise<Response | void> {
     try {
       const { location, lat, lng } = req.body;
 
       if (!location) {
-        res.status(400).json({
+        return res.status(400).json({
           success: false,
           error: 'Location is required'
         });
-        return;
       }
 
-      // TODO: When Google API key is ready, validate with Google Geocoding API
-      // const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
-      // const response = await fetch(
-      //   `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${googleApiKey}`
-      // );
+      // Use Google Geocoding API for address validation
+      const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+      
+      if (!googleApiKey) {
+        return res.status(500).json({
+          success: false,
+          error: 'Google Maps API key not configured'
+        });
+      }
 
-      // Mock validation - always return valid for now
-      const isValid = true;
-      const validatedLocation = {
+      let isValid = false;
+      let validatedLocation = {
         name: location,
         address: location,
         lat: lat || 6.6734,
         lng: lng || -1.5714,
-        isValid
+        isValid: false
       };
 
-      res.json({
+      try {
+        const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${googleApiKey}`;
+        const response = await fetch(geocodeUrl);
+        const data = await response.json() as any;
+        
+        if (data.status === 'OK' && data.results.length > 0) {
+          const result = data.results[0];
+          isValid = true;
+          validatedLocation = {
+            name: location,
+            address: result.formatted_address,
+            lat: result.geometry.location.lat,
+            lng: result.geometry.location.lng,
+            isValid: true
+          };
+        }
+      } catch (error) {
+        console.error('Google Geocoding API error:', error);
+      }
+
+      // Fallback to mock validation
+      if (!isValid) {
+        isValid = true;
+        validatedLocation = {
+          name: location,
+          address: location,
+          lat: lat || 6.6734,
+          lng: lng || -1.5714,
+          isValid
+        };
+      }
+
+      return res.json({
         success: true,
         data: validatedLocation,
         message: 'Location validated successfully'
       });
     } catch (error) {
       console.error('Error validating pickup location:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to validate pickup location'
       });

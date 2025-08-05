@@ -264,13 +264,63 @@ export class TrackingController {
         return;
       }
 
-      // TODO: When Google API key is ready, get actual route from Google Directions API
-      // const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
-      // const response = await fetch(
-      //   `https://maps.googleapis.com/maps/api/directions/json?origin=${currentLat},${currentLng}&destination=${pickup.lat},${pickup.lng}&key=${googleApiKey}`
-      // );
+      // Use Google Directions API for route calculation
+      const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+      
+      if (!googleApiKey) {
+        res.status(500).json({
+          success: false,
+          error: 'Google Maps API key not configured'
+        });
+        return;
+      }
 
-      // Mock route data for now
+      let route = {
+        distance: '2.5 km',
+        duration: '8 minutes',
+        steps: [
+          {
+            instruction: 'Head north on Main St',
+            distance: '0.5 km',
+            duration: '2 min'
+          },
+          {
+            instruction: 'Turn right onto Oak Ave',
+            distance: '1.2 km',
+            duration: '4 min'
+          },
+          {
+            instruction: 'Turn left onto Pickup St',
+            distance: '0.8 km',
+            duration: '2 min'
+          }
+        ],
+        polyline: 'mock_polyline_data'
+      };
+
+      try {
+        const directionsUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${currentLat},${currentLng}&destination=${pickup.lat},${pickup.lng}&key=${googleApiKey}`;
+        const response = await fetch(directionsUrl);
+        const data = await response.json() as any;
+        
+        if (data.status === 'OK' && data.routes.length > 0) {
+          const routeData = data.routes[0];
+          const leg = routeData.legs[0];
+          
+          route = {
+            distance: leg.distance.text,
+            duration: leg.duration.text,
+            steps: leg.steps.map((step: any) => ({
+              instruction: step.maneuver.instruction,
+              distance: step.distance.text,
+              duration: step.duration.text
+            })),
+            polyline: routeData.overview_polyline.points
+          };
+        }
+      } catch (error) {
+        console.error('Google Directions API error:', error);
+      }
       const mockRoute = {
         distance: '2.5 km',
         duration: '8 minutes',
@@ -425,13 +475,37 @@ export class TrackingController {
         };
       }
 
-      // TODO: When Google API key is ready, use Google Distance Matrix API
-      // const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
-      // const response = await fetch(
-      //   `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${currentLat},${currentLng}&destinations=${destLat},${destLng}&key=${googleApiKey}`
-      // );
+      // Use Google Distance Matrix API for accurate ETA calculation
+      const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+      
+      if (googleApiKey) {
+        try {
+          const distanceMatrixUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${currentLat},${currentLng}&destinations=${destLat},${destLng}&key=${googleApiKey}`;
+          const response = await fetch(distanceMatrixUrl);
+          const data = await response.json() as any;
+          
+          if (data.status === 'OK' && data.rows.length > 0 && data.rows[0].elements.length > 0) {
+            const element = data.rows[0].elements[0];
+            
+            if (element.status === 'OK') {
+              const distance = element.distance.text;
+              const duration = element.duration.text;
+              const durationValue = element.duration.value; // seconds
+              const estimatedArrival = new Date(Date.now() + durationValue * 1000).toISOString();
+              
+              return {
+                distance,
+                duration,
+                estimatedArrival
+              };
+            }
+          }
+        } catch (error) {
+          console.error('Google Distance Matrix API error:', error);
+        }
+      }
 
-      // Mock ETA calculation for now
+      // Fallback to mock calculation if API fails or key not configured
       const distance = Math.sqrt(
         Math.pow(destLat - currentLat, 2) + Math.pow(destLng - currentLng, 2)
       ) * 111; // Rough conversion to km

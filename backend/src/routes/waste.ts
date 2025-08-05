@@ -52,7 +52,7 @@ router.post('/collections', authenticateCustomer, async (req, res) => {
       });
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: collection,
       message: 'Waste collection request created successfully'
@@ -111,7 +111,7 @@ router.get('/collections', authenticateToken, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: collections,
       message: 'Collections retrieved successfully'
@@ -161,7 +161,7 @@ router.get('/collections/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: collection,
       message: 'Collection details retrieved successfully'
@@ -219,7 +219,7 @@ router.put('/collections/:id/accept', authenticateRecycler, async (req, res) => 
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedCollection,
       message: 'Collection accepted successfully'
@@ -277,7 +277,7 @@ router.put('/collections/:id/start', authenticateRecycler, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedCollection,
       message: 'Collection started successfully'
@@ -338,7 +338,7 @@ router.put('/collections/:id/complete', authenticateRecycler, async (req, res) =
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedCollection,
       message: 'Collection completed successfully'
@@ -403,7 +403,7 @@ router.put('/collections/:id/cancel', authenticateToken, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedCollection,
       message: 'Collection cancelled successfully'
@@ -445,7 +445,7 @@ router.get('/available', authenticateRecycler, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: collections,
       message: 'Available collections retrieved successfully'

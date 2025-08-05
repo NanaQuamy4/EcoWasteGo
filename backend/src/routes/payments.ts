@@ -73,7 +73,7 @@ router.post('/create', authenticateCustomer, async (req, res) => {
       });
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: payment,
       message: 'Payment created successfully'
@@ -133,7 +133,7 @@ router.get('/', authenticateToken, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: payments,
       message: 'Payments retrieved successfully'
@@ -184,7 +184,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: payment,
       message: 'Payment details retrieved successfully'
@@ -242,7 +242,7 @@ router.put('/:id/confirm', authenticateRecycler, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedPayment,
       message: 'Payment confirmed successfully'
@@ -303,7 +303,7 @@ router.put('/:id/complete', authenticateRecycler, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedPayment,
       message: 'Payment completed successfully'
@@ -368,7 +368,7 @@ router.put('/:id/cancel', authenticateToken, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedPayment,
       message: 'Payment cancelled successfully'
@@ -437,7 +437,7 @@ router.get('/summary', authenticateToken, async (req, res) => {
       cancelledPayments: payments?.filter(p => p.status === 'cancelled').length || 0
     };
 
-    res.json({
+    return res.json({
       success: true,
       data: summary,
       message: 'Payment summary retrieved successfully'

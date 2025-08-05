@@ -36,7 +36,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
       createdAt: user.created_at
     };
 
-    res.json({
+    return res.json({
       success: true,
       data: profileData,
       message: 'User profile retrieved successfully'
@@ -141,14 +141,14 @@ router.put('/profile', authenticateToken, async (req, res) => {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: user,
         message: 'Profile updated successfully'
       });
     } else {
       // If only password was changed, return success
-      res.json({
+      return res.json({
         success: true,
         message: 'Password updated successfully'
       });
@@ -192,7 +192,7 @@ router.get('/recyclers', async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: recyclers,
       message: 'Recyclers retrieved successfully'
@@ -240,7 +240,7 @@ router.get('/recyclers/:id', async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: recycler,
       message: 'Recycler details retrieved successfully'
@@ -294,7 +294,7 @@ router.delete('/account', authenticateToken, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Account deleted successfully'
     });
