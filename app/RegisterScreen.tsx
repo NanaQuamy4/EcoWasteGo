@@ -1,7 +1,8 @@
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { FlatList, Image, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, Image, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
@@ -13,12 +14,14 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [countryCode, setCountryCode] = useState('+233');
   const [countryFlag, setCountryFlag] = useState('🇬🇭');
   const [countryModalVisible, setCountryModalVisible] = useState(false);
   const [search, setSearch] = useState('');
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { register } = useAuth();
 
   React.useEffect(() => {
     if (params.privacyAgreed === 'true') {
@@ -29,6 +32,63 @@ export default function RegisterScreen() {
   function validateEmail(email: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
+
+  function validatePassword(password: string) {
+    return password.length >= 6;
+  }
+
+  const handleRegister = async () => {
+    // Validation
+    if (!validateEmail(email)) {
+      setEmailError('Please enter a valid email address.');
+      return;
+    }
+
+    if (!username.trim()) {
+      Alert.alert('Error', 'Please enter a username.');
+      return;
+    }
+
+    if (!validatePassword(password)) {
+      Alert.alert('Error', 'Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match.');
+      return;
+    }
+
+    if (!agreed) {
+      Alert.alert('Error', 'Please agree to the Privacy Policy and Terms of Service.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      
+      const userData = {
+        email: email.trim(),
+        password,
+        username: username.trim(),
+        phone: contact.trim() ? `${countryCode}${contact.trim()}` : undefined,
+        role: 'customer' as const, // Default to customer role
+      };
+
+      await register(userData);
+      
+      // Navigate to main app
+      router.push('/');
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      Alert.alert(
+        'Registration Failed',
+        error.message || 'Registration failed. Please try again.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const countryCodes = [
     { code: '+93', country: 'Afghanistan', flag: '🇦🇫' },
@@ -66,7 +126,7 @@ export default function RegisterScreen() {
     { code: '+359', country: 'Bulgaria', flag: '🇧🇬' },
     { code: '+226', country: 'Burkina Faso', flag: '🇧🇫' },
     { code: '+257', country: 'Burundi', flag: '🇧🇮' },
-    { code: '+855', country: 'Cambodia', flag: '🇰🇭' },
+    { code: '+855', country: 'Cambodia', flag: '🇰��' },
     { code: '+237', country: 'Cameroon', flag: '🇨🇲' },
     { code: '+1', country: 'Canada', flag: '🇨🇦' },
     { code: '+238', country: 'Cape Verde', flag: '🇨🇻' },
@@ -134,7 +194,7 @@ export default function RegisterScreen() {
     { code: '+353', country: 'Ireland', flag: '🇮🇪' },
     { code: '+44-1624', country: 'Isle of Man', flag: '🇮🇲' },
     { code: '+972', country: 'Israel', flag: '🇮🇱' },
-    { code: '+39', country: 'Italy', flag: '🇮��' },
+    { code: '+39', country: 'Italy', flag: '🇮🇹' },
     { code: '+225', country: 'Ivory Coast', flag: '🇨🇮' },
     { code: '+1-876', country: 'Jamaica', flag: '🇯🇲' },
     { code: '+81', country: 'Japan', flag: '🇯🇵' },
@@ -424,16 +484,10 @@ export default function RegisterScreen() {
       </View>
       <TouchableOpacity
         style={[styles.signUpButton, !agreed && { backgroundColor: '#B6CDBD' }]}
-        onPress={() => {
-          if (!validateEmail(email)) {
-            setEmailError('Please enter a valid email address.');
-            return;
-          }
-          router.push('/')
-        }}
-        disabled={!agreed}
+        onPress={handleRegister}
+        disabled={isLoading || !agreed}
       >
-        <Text style={styles.signUpButtonText}>Sign up</Text>
+        <Text style={styles.signUpButtonText}>{isLoading ? 'Signing Up...' : 'Sign up'}</Text>
       </TouchableOpacity>
       <Text style={styles.orText}>or continue with google</Text>
       <TouchableOpacity style={styles.socialButton}>

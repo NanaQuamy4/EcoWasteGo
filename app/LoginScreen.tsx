@@ -1,7 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -9,11 +10,41 @@ export default function LoginScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { login } = useAuth();
 
   function validateEmail(email: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
+
+  const handleLogin = async () => {
+    if (!validateEmail(email)) {
+      setEmailError('Please enter a valid email address.');
+      return;
+    }
+
+    if (!password.trim()) {
+      Alert.alert('Error', 'Please enter your password.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await login(email.trim(), password);
+      
+      // Navigate based on user role (will be handled by auth context)
+      router.push('/');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      Alert.alert(
+        'Login Failed',
+        error.message || 'Invalid email or password. Please try again.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -32,6 +63,10 @@ export default function LoginScreen() {
           value={email}
           onChangeText={text => { setEmail(text); setEmailError(''); }}
           placeholderTextColor="#263A13"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!isLoading}
         />
       </View>
       {emailError ? <Text style={{ color: 'red', marginBottom: 4, alignSelf: 'flex-start', marginLeft: 32 }}>{emailError}</Text> : null}
@@ -44,43 +79,45 @@ export default function LoginScreen() {
           onChangeText={setPassword}
           secureTextEntry={!showPassword}
           placeholderTextColor="#263A13"
+          autoCapitalize="none"
+          editable={!isLoading}
         />
-        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} disabled={isLoading}>
           <Feather name={showPassword ? 'eye' : 'eye-off'} size={22} color="#263A13" style={styles.eyeIcon} />
         </TouchableOpacity>
       </View>
       <View style={styles.optionsRow}>
-        <TouchableOpacity style={styles.rememberMeRow} onPress={() => setRememberMe(!rememberMe)}>
+        <TouchableOpacity style={styles.rememberMeRow} onPress={() => setRememberMe(!rememberMe)} disabled={isLoading}>
           <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
             {rememberMe && <Text style={styles.checkboxTick}>✓</Text>}
           </View>
           <Text style={styles.rememberMeText}>Remember me</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/ForgotPasswordScreen')}>
+        <TouchableOpacity onPress={() => router.push('/ForgotPasswordScreen')} disabled={isLoading}>
           <Text style={styles.forgotText}>Forgotten password?</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.signInButton} onPress={() => {
-        if (!validateEmail(email)) {
-          setEmailError('Please enter a valid email address.');
-          return;
-        }
-        router.push('/')
-      }}>
-        <Text style={styles.signInButtonText}>Sign in</Text>
+      <TouchableOpacity 
+        style={[styles.signInButton, isLoading && styles.signInButtonDisabled]} 
+        onPress={handleLogin}
+        disabled={isLoading}
+      >
+        <Text style={styles.signInButtonText}>
+          {isLoading ? 'Signing in...' : 'Sign in'}
+        </Text>
       </TouchableOpacity>
       <Text style={styles.orText}>or continue with google</Text>
-      <TouchableOpacity style={styles.socialButton}>
+      <TouchableOpacity style={styles.socialButton} disabled={isLoading}>
         <Image source={require('../assets/images/google.png')} style={styles.socialIconImg} />
         <Text style={styles.socialText}>continue with Google</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.socialButton}>
+      <TouchableOpacity style={styles.socialButton} disabled={isLoading}>
         <Image source={require('../assets/images/apple.png')} style={styles.socialIconImg} />
         <Text style={styles.socialText}>continue with Apple</Text>
       </TouchableOpacity>
       <View style={styles.bottomRow}>
-        <Text style={styles.bottomText}>Don’t have an account? </Text>
-        <TouchableOpacity onPress={() => router.push('/RegisterScreen')}>
+        <Text style={styles.bottomText}>Don't have an account? </Text>
+        <TouchableOpacity onPress={() => router.push('/RegisterScreen')} disabled={isLoading}>
           <Text style={styles.signUpText}>Sign up</Text>
         </TouchableOpacity>
       </View>
@@ -245,5 +282,9 @@ const styles = StyleSheet.create({
   },
   eyeIcon: {
     marginLeft: 8,
+  },
+  signInButtonDisabled: {
+    backgroundColor: '#ccc',
+    opacity: 0.7,
   },
 }); 
