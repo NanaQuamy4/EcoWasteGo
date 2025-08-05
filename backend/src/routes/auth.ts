@@ -20,6 +20,30 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    // For testing purposes, skip Supabase auth and database operations
+    // TODO: Re-enable when database schema is deployed
+    const mockUser = {
+      id: 'test-user-id-' + Date.now(),
+      email,
+      username,
+      role,
+      email_verified: false,
+      onboarding_completed: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    return res.status(201).json({
+      success: true,
+      message: 'Registration successful (test mode).',
+      data: {
+        user: mockUser,
+        token: 'test-token-' + Date.now()
+      }
+    });
+
+    /* 
+    // Original code - uncomment when database is ready
     // Register user with Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -82,6 +106,7 @@ router.post('/register', async (req, res) => {
         }
       }
     });
+    */
   } catch (error) {
     console.error('Registration error:', error);
     return res.status(500).json({
@@ -107,6 +132,30 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    // For testing purposes, accept any email/password combination
+    // TODO: Re-enable when database schema is deployed
+    const mockUser = {
+      id: 'test-user-id-' + Date.now(),
+      email,
+      username: email.split('@')[0], // Use email prefix as username
+      role: 'customer',
+      email_verified: true,
+      onboarding_completed: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    return res.json({
+      success: true,
+      message: 'Login successful (test mode)',
+      data: {
+        user: mockUser,
+        token: 'test-token-' + Date.now()
+      }
+    });
+
+    /*
+    // Original code - uncomment when database is ready
     // Login with Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -154,6 +203,7 @@ router.post('/login', async (req, res) => {
         session: data.session
       }
     });
+    */
   } catch (error) {
     console.error('Login error:', error);
     return res.status(500).json({
