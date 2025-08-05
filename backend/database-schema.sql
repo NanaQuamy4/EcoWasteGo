@@ -53,6 +53,36 @@ CREATE TABLE IF NOT EXISTS payments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Payment Summaries table (for recycler payment calculations)
+CREATE TABLE IF NOT EXISTS payment_summaries (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    collection_id UUID REFERENCES waste_collections(id) ON DELETE CASCADE,
+    recycler_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    weight DECIMAL(10,2) NOT NULL,
+    rate_per_kg DECIMAL(10,2) NOT NULL,
+    base_amount DECIMAL(10,2) NOT NULL,
+    environmental_tax DECIMAL(10,2) DEFAULT 0,
+    total_amount DECIMAL(10,2) NOT NULL,
+    notes TEXT,
+    status VARCHAR DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'accepted', 'rejected')),
+    sent_at TIMESTAMP WITH TIME ZONE,
+    accepted_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Weight Entry Records table
+CREATE TABLE IF NOT EXISTS weight_entries (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    collection_id UUID REFERENCES waste_collections(id) ON DELETE CASCADE,
+    recycler_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    weight DECIMAL(10,2) NOT NULL,
+    waste_type VARCHAR NOT NULL,
+    notes TEXT,
+    photos TEXT[], -- Array of photo URLs
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Recycler profiles table
 CREATE TABLE IF NOT EXISTS recycler_profiles (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -170,6 +200,79 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Rewards Table
+CREATE TABLE IF NOT EXISTS rewards (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  title VARCHAR NOT NULL,
+  description TEXT,
+  points INTEGER DEFAULT 0,
+  type VARCHAR(20) CHECK (type IN ('achievement', 'milestone', 'bonus', 'referral')),
+  status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'claimed', 'expired')),
+  claimed_at TIMESTAMP WITH TIME ZONE,
+  expires_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Achievements Table
+CREATE TABLE IF NOT EXISTS achievements (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title VARCHAR NOT NULL,
+  description TEXT,
+  icon VARCHAR(100),
+  points INTEGER DEFAULT 0,
+  criteria JSONB, -- Criteria for earning the achievement
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- User Achievements Table (Many-to-Many relationship)
+CREATE TABLE IF NOT EXISTS user_achievements (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  achievement_id UUID REFERENCES achievements(id) ON DELETE CASCADE,
+  earned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, achievement_id)
+);
+
+-- Reviews Table
+CREATE TABLE IF NOT EXISTS reviews (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  collection_id UUID REFERENCES waste_collections(id) ON DELETE CASCADE,
+  reviewer_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  reviewed_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+  comment TEXT,
+  is_public BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Support Tickets Table
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  title VARCHAR NOT NULL,
+  description TEXT NOT NULL,
+  category VARCHAR(50) CHECK (category IN ('technical', 'billing', 'service', 'general')),
+  priority VARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
+  status VARCHAR(20) DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+  assigned_to UUID REFERENCES users(id),
+  resolved_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Support Messages Table
+CREATE TABLE IF NOT EXISTS support_messages (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  ticket_id UUID REFERENCES support_tickets(id) ON DELETE CASCADE,
+  sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  sender_type VARCHAR(20) CHECK (sender_type IN ('customer', 'support', 'admin')),
+  message TEXT NOT NULL,
+  is_internal BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
@@ -178,8 +281,19 @@ CREATE INDEX IF NOT EXISTS idx_waste_collections_recycler_id ON waste_collection
 CREATE INDEX IF NOT EXISTS idx_waste_collections_status ON waste_collections(status);
 CREATE INDEX IF NOT EXISTS idx_payments_collection_id ON payments(collection_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payment_summaries_collection_id ON payment_summaries(collection_id);
+CREATE INDEX IF NOT EXISTS idx_payment_summaries_status ON payment_summaries(status);
+CREATE INDEX IF NOT EXISTS idx_weight_entries_collection_id ON weight_entries(collection_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_rewards_user_id ON rewards(user_id);
+CREATE INDEX IF NOT EXISTS idx_rewards_status ON rewards(status);
+CREATE INDEX IF NOT EXISTS idx_user_achievements_user_id ON user_achievements(user_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_collection_id ON reviews(collection_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_reviewed_id ON reviews(reviewed_id);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_user_id ON support_tickets(user_id);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
+CREATE INDEX IF NOT EXISTS idx_support_messages_ticket_id ON support_messages(ticket_id);
 
 -- Indexes for tracking_sessions
 CREATE INDEX IF NOT EXISTS idx_tracking_sessions_pickup_id ON tracking_sessions(pickup_id);
@@ -212,6 +326,8 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_is_read ON chat_messages(is_read);
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE waste_collections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_summaries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE weight_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recycler_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customer_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
@@ -221,6 +337,12 @@ ALTER TABLE recycler_registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE request_rejections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rewards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE support_tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE support_messages ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for users table
 CREATE POLICY "Users can view their own profile" ON users
@@ -260,6 +382,32 @@ CREATE POLICY "Users can create payments for their collections" ON payments
             AND customer_id = auth.uid()
         )
     );
+
+-- RLS Policies for payment_summaries table
+CREATE POLICY "Users can view their own payment summaries" ON payment_summaries
+    FOR SELECT USING (auth.uid() = recycler_id OR 
+        EXISTS (
+            SELECT 1 FROM waste_collections 
+            WHERE id = payment_summaries.collection_id 
+            AND customer_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Recyclers can create payment summaries" ON payment_summaries
+    FOR INSERT WITH CHECK (auth.uid() = recycler_id);
+
+-- RLS Policies for weight_entries table
+CREATE POLICY "Users can view weight entries for their collections" ON weight_entries
+    FOR SELECT USING (auth.uid() = recycler_id OR 
+        EXISTS (
+            SELECT 1 FROM waste_collections 
+            WHERE id = weight_entries.collection_id 
+            AND customer_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Recyclers can create weight entries" ON weight_entries
+    FOR INSERT WITH CHECK (auth.uid() = recycler_id);
 
 -- RLS Policies for recycler_profiles table
 CREATE POLICY "Recyclers can view their own profile" ON recycler_profiles
@@ -354,6 +502,66 @@ CREATE POLICY "Users can send messages for their pickups" ON chat_messages
 CREATE POLICY "Users can update their own messages" ON chat_messages
   FOR UPDATE USING (sender_id = auth.uid());
 
+-- RLS Policies for rewards
+CREATE POLICY "Users can view their own rewards" ON rewards
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own rewards" ON rewards
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- RLS Policies for achievements (public read)
+CREATE POLICY "Anyone can view achievements" ON achievements
+  FOR SELECT USING (true);
+
+-- RLS Policies for user_achievements
+CREATE POLICY "Users can view their own achievements" ON user_achievements
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own achievements" ON user_achievements
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- RLS Policies for reviews
+CREATE POLICY "Users can view reviews" ON reviews
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can create reviews for their collections" ON reviews
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM waste_collections 
+      WHERE id = reviews.collection_id 
+      AND (customer_id = auth.uid() OR recycler_id = auth.uid())
+    ) AND reviewer_id = auth.uid()
+  );
+
+-- RLS Policies for support_tickets
+CREATE POLICY "Users can view their own tickets" ON support_tickets
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create their own tickets" ON support_tickets
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own tickets" ON support_tickets
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- RLS Policies for support_messages
+CREATE POLICY "Users can view messages for their tickets" ON support_messages
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM support_tickets 
+      WHERE id = support_messages.ticket_id 
+      AND user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can send messages for their tickets" ON support_messages
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM support_tickets 
+      WHERE id = support_messages.ticket_id 
+      AND user_id = auth.uid()
+    ) AND sender_id = auth.uid()
+  );
+
 -- Create function for automatic timestamp updates (SINGLE DEFINITION)
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -380,6 +588,12 @@ CREATE TRIGGER update_tracking_sessions_updated_at BEFORE UPDATE ON tracking_ses
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_recycler_registrations_updated_at BEFORE UPDATE ON recycler_registrations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_payment_summaries_updated_at BEFORE UPDATE ON payment_summaries
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_support_tickets_updated_at BEFORE UPDATE ON support_tickets
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to calculate eco impact
