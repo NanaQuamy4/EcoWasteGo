@@ -449,7 +449,14 @@ export default function RecyclerRegistrationScreen() {
             <TouchableOpacity style={styles.countryCodeWrapper} onPress={() => setCountryModalVisible(true)}>
               <Text style={styles.countryCodeText}>{countryFlag} {countryCode}</Text>
             </TouchableOpacity>
-            <TextInput value={phone} onChangeText={setPhone} editable style={styles.input} keyboardType="phone-pad" />
+            <TextInput 
+              value={phone} 
+              onChangeText={setPhone} 
+              editable 
+              style={styles.input} 
+              keyboardType="phone-pad" 
+              placeholder="Phone number (without country code)"
+            />
           </View>
           {/* Country Code Picker Modal */}
           <Modal

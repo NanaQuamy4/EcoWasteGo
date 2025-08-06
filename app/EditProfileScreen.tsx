@@ -317,7 +317,13 @@ export default function EditProfileScreen() {
               <Text style={styles.countryCodeText}>{countryFlag} {countryCode}</Text>
               <MaterialIcons name="arrow-drop-down" size={20} color="#263A13" />
             </TouchableOpacity>
-            <TextInput value={phone} onChangeText={setPhone} style={styles.input} placeholder="Phone" keyboardType="phone-pad" />
+            <TextInput 
+              value={phone} 
+              onChangeText={setPhone} 
+              style={styles.input} 
+              placeholder="Phone number (without country code)" 
+              keyboardType="phone-pad" 
+            />
           </View>
           {/* Current Password Field */}
           <View style={styles.inputRow}>

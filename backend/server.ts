@@ -26,7 +26,9 @@ import historyRoutes from './src/routes/history';
 import locationsRoutes from './src/routes/locations';
 import notificationsRoutes from './src/routes/notifications';
 import onboardingRoutes from './src/routes/onboarding';
+import optimizedUsersRoutes from './src/routes/optimizedUsers';
 import paymentsRoutes from './src/routes/payments';
+import performanceRoutes from './src/routes/performance';
 import privacyRoutes from './src/routes/privacy';
 import recyclerCelebrationRoutes from './src/routes/recycler-celebration';
 import recyclerNavigationRoutes from './src/routes/recycler-navigation';
@@ -52,10 +54,23 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:8081',
+    'http://localhost:19006',
+    'http://10.36.50.88:3000',
+    'http://10.36.50.88:8081',
+    'http://10.36.50.88:19006',
     'http://10.132.144.9:3000',
     'http://10.132.144.9:8081',
+    'http://10.133.121.133:3000',
+    'http://10.133.121.133:8081',
     'exp://localhost:8081',
-    'exp://10.132.144.9:8081'
+    'exp://localhost:19006',
+    'exp://10.36.50.88:8081',
+    'exp://10.36.50.88:19006',
+    'exp://10.132.144.9:8081',
+    'exp://10.133.121.133:8081',
+    'http://localhost:19000',
+    'http://localhost:19001',
+    'http://localhost:19002'
   ],
   credentials: true
 }));
@@ -95,6 +110,10 @@ app.use('/api/support', supportRoutes);
 app.use('/api/locations', locationsRoutes);
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/onboarding', onboardingRoutes);
+
+// Optimized routes with performance monitoring
+app.use('/api/optimized-users', optimizedUsersRoutes);
+app.use('/api/performance', performanceRoutes);
 app.use('/api/privacy', privacyRoutes);
 app.use('/api/recycler-celebration', recyclerCelebrationRoutes);
 app.use('/api/recycler-navigation', recyclerNavigationRoutes);

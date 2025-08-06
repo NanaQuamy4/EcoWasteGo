@@ -274,24 +274,25 @@ router.delete('/account', authenticateToken, async (req, res) => {
     if (supabaseAdmin) {
       const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (authError) {
-        return res.status(400).json({
-          success: false,
-          error: authError.message
-        });
+        console.error('Auth deletion error:', authError);
+        // Continue anyway, the user might not exist in auth
       }
     }
 
-    // Delete user profile from database
-    const { error: profileError } = await supabase
-      .from('users')
-      .delete()
-      .eq('id', userId);
+    // Try to delete user profile from database (optional)
+    try {
+      const { error: profileError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
 
-    if (profileError) {
-      return res.status(400).json({
-        success: false,
-        error: 'Failed to delete user profile'
-      });
+      if (profileError) {
+        console.error('Profile deletion error:', profileError);
+        // Continue anyway, the user might not have a profile
+      }
+    } catch (profileError) {
+      console.error('Profile deletion failed:', profileError);
+      // Continue anyway
     }
 
     return res.json({

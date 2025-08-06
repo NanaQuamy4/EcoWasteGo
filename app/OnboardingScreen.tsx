@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -27,7 +27,7 @@ const slides = [
 ];
 
 export default function OnboardingScreen() {
-  const navigation = useNavigation<any>();
+  const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -41,7 +41,7 @@ export default function OnboardingScreen() {
   };
 
   const handleGetStarted = () => {
-    navigation.navigate('RegisterScreen');
+    router.push('/RegisterScreen');
   };
 
   return (

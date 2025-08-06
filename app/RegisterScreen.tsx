@@ -1,7 +1,8 @@
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { FlatList, Image, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
+import { Alert, FlatList, Image, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { cleanPhoneInput, isValidPhone } from '../constants/helpers';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function RegisterScreen() {
@@ -14,6 +15,7 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [countryCode, setCountryCode] = useState('+233');
   const [countryFlag, setCountryFlag] = useState('🇬🇭');
@@ -21,7 +23,7 @@ export default function RegisterScreen() {
   const [search, setSearch] = useState('');
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { register } = useAuth();
+  const { register, user } = useAuth();
 
   React.useEffect(() => {
     if (params.privacyAgreed === 'true') {
@@ -29,12 +31,58 @@ export default function RegisterScreen() {
     }
   }, [params.privacyAgreed]);
 
+  // Handle navigation after successful registration
+  React.useEffect(() => {
+    if (user) {
+      console.log('RegisterScreen: User registered, navigating to main app');
+      if (user.role === 'recycler') {
+        router.replace('/(recycler-tabs)');
+      } else {
+        router.replace('/(tabs)');
+      }
+    }
+  }, [user, router]);
+
   function validateEmail(email: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
+  // Real-time password validation
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    if (text.length > 0) {
+      const validation = validatePassword(text);
+      setPasswordError(validation.valid ? '' : validation.message);
+    } else {
+      setPasswordError('');
+    }
+  };
+
   function validatePassword(password: string) {
-    return password.length >= 6;
+    // Password must be at least 8 characters with complexity requirements
+    const minLength = 8;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    
+    if (password.length < minLength) {
+      return { valid: false, message: 'Password must be at least 8 characters long' };
+    }
+    if (!hasUpperCase) {
+      return { valid: false, message: 'Password must contain at least one uppercase letter' };
+    }
+    if (!hasLowerCase) {
+      return { valid: false, message: 'Password must contain at least one lowercase letter' };
+    }
+    if (!hasNumbers) {
+      return { valid: false, message: 'Password must contain at least one number' };
+    }
+    if (!hasSpecialChar) {
+      return { valid: false, message: 'Password must contain at least one special character (!@#$%^&*(),.?":{}|<>)' };
+    }
+    
+    return { valid: true, message: 'Password is strong' };
   }
 
   const handleRegister = async () => {
@@ -49,8 +97,9 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (!validatePassword(password)) {
-      Alert.alert('Error', 'Password must be at least 6 characters long.');
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      Alert.alert('Password Requirements', passwordValidation.message);
       return;
     }
 
@@ -67,24 +116,49 @@ export default function RegisterScreen() {
     try {
       setIsLoading(true);
       
+      // Clean and validate phone number
+      let phoneNumber = undefined;
+      if (contact.trim()) {
+        const cleanedPhone = cleanPhoneInput(contact.trim(), countryCode);
+        if (!isValidPhone(cleanedPhone, countryCode)) {
+          Alert.alert('Error', 'Please enter a valid phone number.');
+          return;
+        }
+        phoneNumber = `${countryCode}${cleanedPhone}`;
+      }
+      
       const userData = {
         email: email.trim(),
         password,
         username: username.trim(),
-        phone: contact.trim() ? `${countryCode}${contact.trim()}` : undefined,
+        phone: phoneNumber,
         role: 'customer' as const, // Default to customer role
       };
 
       await register(userData);
       
-      // Navigate to main app
-      router.push('/');
+      // Show success message
+      Alert.alert(
+        'Registration Successful!',
+        'Your account has been created and you are now logged in.',
+        [{ text: 'OK' }]
+      );
     } catch (error: any) {
       console.error('Registration error:', error);
-      Alert.alert(
-        'Registration Failed',
-        error.message || 'Registration failed. Please try again.'
-      );
+      
+      // Handle specific email validation errors
+      if (error.message && error.message.includes('invalid')) {
+        Alert.alert(
+          'Invalid Email',
+          'Please use a valid email address from a recognized provider (Gmail, Outlook, Yahoo, etc.). Some email domains may not be supported.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Registration Failed',
+          error.message || 'Registration failed. Please try again.'
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -126,7 +200,7 @@ export default function RegisterScreen() {
     { code: '+359', country: 'Bulgaria', flag: '🇧🇬' },
     { code: '+226', country: 'Burkina Faso', flag: '🇧🇫' },
     { code: '+257', country: 'Burundi', flag: '🇧🇮' },
-    { code: '+855', country: 'Cambodia', flag: '🇰��' },
+    { code: '+855', country: 'Cambodia', flag: '🇰🇭' },
     { code: '+237', country: 'Cameroon', flag: '🇨🇲' },
     { code: '+1', country: 'Canada', flag: '🇨🇦' },
     { code: '+238', country: 'Cape Verde', flag: '🇨🇻' },
@@ -379,7 +453,7 @@ export default function RegisterScreen() {
         </TouchableOpacity>
         <TextInput
           style={styles.input}
-          placeholder="Contact"
+          placeholder="Phone number (without country code)"
           value={contact}
           onChangeText={setContact}
           placeholderTextColor="#263A13"

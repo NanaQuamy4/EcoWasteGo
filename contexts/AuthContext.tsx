@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { UserProfile } from '../constants/api';
 import apiService from '../services/apiService';
 
@@ -7,7 +7,7 @@ interface AuthContextType {
   user: UserProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   register: (userData: {
     email: string;
     password: string;
@@ -21,6 +21,9 @@ interface AuthContextType {
   verifyEmail: (email: string, token: string) => Promise<void>;
   updateProfile: (profileData: Partial<UserProfile>) => Promise<void>;
   refreshUser: () => Promise<void>;
+  switchRole: (newRole: 'customer' | 'recycler') => Promise<void>;
+  deleteAccount: () => Promise<void>;
+  handleAuthError: () => Promise<void>;
 }
 
 // Create the context
@@ -47,28 +50,85 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const initializeAuth = async () => {
     try {
       setIsLoading(true);
+      console.log('AuthContext: Starting initialization...');
       
       // Check if user is authenticated
-      if (apiService.isAuthenticated()) {
-        // Try to get current user
-        const currentUser = await apiService.getCurrentUser();
-        setUser(currentUser);
+      const isAuth = apiService.isAuthenticated();
+      console.log('AuthContext: Is authenticated check:', isAuth);
+      
+      if (isAuth) {
+        try {
+          console.log('AuthContext: Getting current user...');
+          // Try to get current user
+          const currentUser = await apiService.getCurrentUser();
+          console.log('AuthContext: Current user received:', currentUser);
+          setUser(currentUser);
+        } catch (error) {
+          console.error('Failed to get current user:', error);
+          // Clear any invalid tokens
+          await apiService.logout();
+          setUser(null);
+        }
+      } else {
+        console.log('AuthContext: No token found, user not authenticated');
+        // No token found, user is not authenticated
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth initialization failed:', error);
       // Clear any invalid tokens
       await apiService.logout();
+      setUser(null);
     } finally {
       setIsLoading(false);
+      console.log('AuthContext: Initialization complete');
     }
   };
 
   // Login function
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, rememberMe?: boolean) => {
     try {
       setIsLoading(true);
-      const authResponse = await apiService.login({ email, password });
-      setUser(authResponse.user as UserProfile);
+      console.log('AuthContext: Starting login process...');
+      const authResponse = await apiService.login({ email, password, rememberMe });
+      console.log('AuthContext: Login response received:', JSON.stringify(authResponse, null, 2));
+      
+      // Extract user data from the response - check all possible locations
+      let userData = null;
+      const response = authResponse as any;
+      if (response.user) {
+        userData = response.user;
+      } else if (response.session && response.session.user) {
+        userData = response.session.user;
+      } else if (response.data && response.data.user) {
+        userData = response.data.user;
+      }
+      
+      console.log('AuthContext: Extracted user data:', userData);
+      
+      if (userData) {
+        // Transform the user data to match UserProfile interface
+        const userProfile: UserProfile = {
+          id: userData.id,
+          email: userData.email,
+          username: (userData as any).user_metadata?.username || userData.email,
+          phone: userData.phone || (userData as any).user_metadata?.phone || '',
+          role: (userData as any).user_metadata?.role || 'customer',
+          email_verified: (userData as any).email_confirmed_at ? true : false,
+          onboarding_completed: (userData as any).user_metadata?.onboarding_completed || false,
+          privacy_policy_accepted: (userData as any).user_metadata?.privacy_policy_accepted || false,
+          profile_image: (userData as any).user_metadata?.profile_image,
+          created_at: userData.created_at,
+          updated_at: (userData as any).updated_at || userData.created_at
+        };
+        
+        console.log('AuthContext: Setting user profile:', userProfile);
+        setUser(userProfile);
+      } else {
+        console.error('AuthContext: No user data found in response');
+        console.log('AuthContext: Available keys in response:', Object.keys(response));
+        setUser(null);
+      }
     } catch (error) {
       console.error('Login failed:', error);
       throw error;
@@ -87,8 +147,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }) => {
     try {
       setIsLoading(true);
+      console.log('AuthContext: Starting registration...');
       const authResponse = await apiService.register(userData);
-      setUser(authResponse.user as UserProfile);
+      console.log('AuthContext: Registration response received:', JSON.stringify(authResponse, null, 2));
+      
+      // Extract user data from the response
+      let extractedUserData = null;
+      const response = authResponse as any;
+      if (response.user) {
+        extractedUserData = response.user;
+      } else if (response.session && response.session.user) {
+        extractedUserData = response.session.user;
+      } else if (response.data && response.data.user) {
+        extractedUserData = response.data.user;
+      }
+      
+      if (extractedUserData) {
+        console.log('AuthContext: Setting user data:', extractedUserData);
+        setUser(extractedUserData as UserProfile);
+        console.log('AuthContext: Registration successful, user logged in');
+      } else {
+        console.warn('AuthContext: No user data found in registration response');
+        throw new Error('Registration successful but no user data received');
+      }
     } catch (error) {
       console.error('Registration failed:', error);
       throw error;
@@ -101,14 +182,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     try {
       setIsLoading(true);
+      console.log('AuthContext: Starting logout...');
       await apiService.logout();
-      setUser(null);
+      console.log('AuthContext: ApiService logout completed');
     } catch (error) {
       console.error('Logout failed:', error);
-      // Clear user state even if API call fails
-      setUser(null);
+      // Don't throw the error, just log it
     } finally {
+      console.log('AuthContext: Clearing user state...');
+      setUser(null);
       setIsLoading(false);
+      console.log('AuthContext: Logout complete');
     }
   };
 
@@ -164,9 +248,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(currentUser);
       }
     } catch (error) {
-      console.error('User refresh failed:', error);
-      // If refresh fails, user might be logged out
+      console.error('Failed to refresh user:', error);
+      // If token is invalid, clear user and redirect to login
+      await handleAuthError();
+    }
+  };
+
+  // Handle authentication errors
+  const handleAuthError = async () => {
+    try {
+      console.log('Handling authentication error - clearing user data');
       setUser(null);
+      await apiService.logout();
+      // In a real app, you'd navigate to login screen here
+      // For now, we'll just clear the state
+    } catch (error) {
+      console.error('Error handling auth error:', error);
+    }
+  };
+
+  // Switch user role
+  const switchRole = async (newRole: 'customer' | 'recycler') => {
+    try {
+      setIsLoading(true);
+      const updatedUser = await apiService.switchRole(newRole);
+      setUser(updatedUser);
+    } catch (error) {
+      console.error('Role switch failed:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    try {
+      setIsLoading(true);
+      await apiService.deleteAccount();
+      // Clear user data after successful deletion
+      setUser(null);
+      await apiService.logout();
+    } catch (error) {
+      console.error('Delete account failed:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -183,6 +309,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     verifyEmail,
     updateProfile,
     refreshUser,
+    switchRole,
+    deleteAccount,
+    handleAuthError,
   };
 
   return (

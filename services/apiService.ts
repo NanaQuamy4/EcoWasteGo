@@ -1,10 +1,13 @@
-import { API_CONFIG, ApiResponse, AuthResponse, UserProfile, WasteCollection, Payment, RecyclerProfile } from '../constants/api';
+import { API_CONFIG, ApiResponse, AuthResponse, Payment, RecyclerProfile, UserProfile, WasteCollection } from '../constants/api';
 
 // Storage keys for local data
 const STORAGE_KEYS = {
   AUTH_TOKEN: 'ecowastego_auth_token',
   USER_PROFILE: 'ecowastego_user_profile',
 } as const;
+
+// Simple in-memory token storage (for development)
+let globalToken: string | null = null;
 
 // API Service Class
 class ApiService {
@@ -19,20 +22,38 @@ class ApiService {
   // Load token from storage
   private async loadToken(): Promise<void> {
     try {
-      // In a real app, you'd use AsyncStorage or SecureStore
-      // For now, we'll use a simple approach
-      this.token = null; // Will be set after login
+      // Use global token storage for now
+      this.token = globalToken;
+      console.log('Token loaded:', this.token ? this.token.substring(0, 20) + '...' : 'null');
     } catch (error) {
       console.error('Error loading token:', error);
+      this.token = null;
     }
   }
 
   // Save token to storage
-  private async saveToken(token: string): Promise<void> {
+  private async saveToken(token: string, rememberMe?: boolean): Promise<void> {
     try {
+      if (!token) {
+        console.warn('No token provided to saveToken');
+        return;
+      }
+      
       this.token = token;
+      globalToken = token; // Store in global variable
+      
+      // Store token with expiration based on rememberMe
+      const tokenData = {
+        token,
+        rememberMe: rememberMe || false,
+        expiresAt: rememberMe 
+          ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
+          : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+      };
+      
       // In a real app, save to AsyncStorage or SecureStore
-      console.log('Token saved');
+      console.log('Token saved:', token.substring(0, 20) + '...', 
+        rememberMe ? '(Remember Me - 30 days)' : '(Regular - 24 hours)');
     } catch (error) {
       console.error('Error saving token:', error);
     }
@@ -42,6 +63,7 @@ class ApiService {
   private async clearToken(): Promise<void> {
     try {
       this.token = null;
+      globalToken = null; // Clear global token
       // In a real app, clear from AsyncStorage or SecureStore
       console.log('Token cleared');
     } catch (error) {
@@ -49,11 +71,26 @@ class ApiService {
     }
   }
 
+  // Check if token is expired
+  private isTokenExpired(): boolean {
+    try {
+      // In a real app, this would check the stored token's expiration
+      // For now, we'll assume tokens are valid for the session
+      return false;
+    } catch (error) {
+      console.error('Error checking token expiration:', error);
+      return true;
+    }
+  }
+
   // Get headers for requests
   private getHeaders(): Record<string, string> {
-    const headers = { ...API_CONFIG.HEADERS };
+    const headers: Record<string, string> = { 
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
     
-    if (this.token) {
+    if (this.token && !this.isTokenExpired()) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
     
@@ -76,26 +113,40 @@ class ApiService {
       const response = await fetch(url, config);
       const data = await response.json();
 
-      if (!response.ok) {
-        // Handle authentication errors
-        if (response.status === 401) {
-          await this.clearToken();
-          throw new Error('Authentication failed. Please login again.');
-        }
+      // Handle authentication errors
+      if (response.status === 401) {
+        console.log('Authentication failed, clearing token and redirecting to login');
+        await this.clearToken();
+        
+        // In a real app, you'd navigate to login screen
+        // For now, we'll throw an error that can be caught by the UI
+        throw new Error('Authentication failed. Please login again.');
+      }
 
-        throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+      // Handle other errors
+      if (!response.ok) {
+        const errorMessage = data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
+        const error = new Error(errorMessage);
+        
+        // Add error code for specific handling
+        if (data.code) {
+          (error as any).code = data.code;
+        }
+        
+        throw error;
       }
 
       return data;
     } catch (error) {
       console.error(`API Request failed (attempt ${retryCount + 1}):`, error);
-
-      // Retry logic
-      if (retryCount < API_CONFIG.RETRY_ATTEMPTS) {
-        await new Promise(resolve => setTimeout(resolve, API_CONFIG.RETRY_DELAY));
-        return this.request<T>(endpoint, options, retryCount + 1);
+      
+      // Retry logic for network errors (not auth errors)
+      if (retryCount < 2 && error instanceof Error && !error.message.includes('Authentication failed')) {
+        console.log(`Retrying request (${retryCount + 1}/3)...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        return this.request(endpoint, options, retryCount + 1);
       }
-
+      
       throw error;
     }
   }
@@ -114,20 +165,37 @@ class ApiService {
     });
 
     if (response.success && response.data) {
-      await this.saveToken(response.data.token);
+      // Handle different token formats
+      const token = response.data.token || response.data.session?.access_token;
+      if (token) {
+        await this.saveToken(token);
+      } else {
+        console.warn('No token found in registration response');
+      }
     }
 
     return response.data!;
   }
 
-  async login(credentials: { email: string; password: string }): Promise<AuthResponse> {
+  async login(credentials: { email: string; password: string; rememberMe?: boolean }): Promise<AuthResponse> {
+    console.log('Attempting login for:', credentials.email);
     const response = await this.request<AuthResponse>(API_CONFIG.ENDPOINTS.AUTH.LOGIN, {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
 
     if (response.success && response.data) {
-      await this.saveToken(response.data.token);
+      // Handle different token formats
+      const token = response.data.token || response.data.session?.access_token;
+      if (token) {
+        console.log('Login successful, saving token...');
+        await this.saveToken(token, credentials.rememberMe);
+        console.log('Token saved successfully');
+      } else {
+        console.warn('No token found in login response');
+      }
+    } else {
+      console.error('Login response not successful:', response);
     }
 
     return response.data!;
@@ -135,11 +203,19 @@ class ApiService {
 
   async logout(): Promise<void> {
     try {
+      console.log('ApiService: Attempting logout...');
+      // Try to call the logout endpoint, but don't fail if it doesn't work
       await this.request(API_CONFIG.ENDPOINTS.AUTH.LOGOUT, {
         method: 'POST',
       });
+      console.log('ApiService: Logout API call successful');
+    } catch (error) {
+      console.log('ApiService: Logout API call failed, but continuing with local cleanup:', error);
+      // Don't throw the error, just log it
     } finally {
+      console.log('ApiService: Clearing local token...');
       await this.clearToken();
+      console.log('ApiService: Logout complete');
     }
   }
 
@@ -312,8 +388,8 @@ class ApiService {
 
   // Notifications Methods
   async getNotifications(): Promise<any[]> {
-    const response = await this.request(API_CONFIG.ENDPOINTS.NOTIFICATIONS.GET_ALL);
-    return response.data!;
+    const response = await this.request<any[]>(API_CONFIG.ENDPOINTS.NOTIFICATIONS.GET_ALL);
+    return response.data || [];
   }
 
   async markNotificationAsRead(id: string): Promise<ApiResponse> {
@@ -330,8 +406,8 @@ class ApiService {
 
   // Rewards Methods
   async getRewards(): Promise<any[]> {
-    const response = await this.request(API_CONFIG.ENDPOINTS.REWARDS.GET_ALL);
-    return response.data!;
+    const response = await this.request<any[]>(API_CONFIG.ENDPOINTS.REWARDS.GET_ALL);
+    return response.data || [];
   }
 
   async claimReward(id: string): Promise<ApiResponse> {
@@ -342,8 +418,8 @@ class ApiService {
 
   // History Methods
   async getHistory(): Promise<any[]> {
-    const response = await this.request(API_CONFIG.ENDPOINTS.HISTORY.GET_ALL);
-    return response.data!;
+    const response = await this.request<any[]>(API_CONFIG.ENDPOINTS.HISTORY.GET_ALL);
+    return response.data || [];
   }
 
   async getHistoryItem(id: string): Promise<any> {
@@ -361,13 +437,13 @@ class ApiService {
   }
 
   async getSupportTickets(): Promise<any[]> {
-    const response = await this.request(API_CONFIG.ENDPOINTS.SUPPORT.GET_TICKETS);
-    return response.data!;
+    const response = await this.request<any[]>(API_CONFIG.ENDPOINTS.SUPPORT.GET_TICKETS);
+    return response.data || [];
   }
 
   async getSupportMessages(ticketId: string): Promise<any[]> {
-    const response = await this.request(`${API_CONFIG.ENDPOINTS.SUPPORT.GET_MESSAGES}/${ticketId}`);
-    return response.data!;
+    const response = await this.request<any[]>(`${API_CONFIG.ENDPOINTS.SUPPORT.GET_MESSAGES}/${ticketId}`);
+    return response.data || [];
   }
 
   async sendSupportMessage(ticketId: string, message: string): Promise<any> {
@@ -380,8 +456,8 @@ class ApiService {
 
   // Location Methods
   async searchLocations(query: string): Promise<any[]> {
-    const response = await this.request(`${API_CONFIG.ENDPOINTS.LOCATIONS.SEARCH}?q=${encodeURIComponent(query)}`);
-    return response.data!;
+    const response = await this.request<any[]>(`${API_CONFIG.ENDPOINTS.LOCATIONS.SEARCH}?q=${encodeURIComponent(query)}`);
+    return response.data || [];
   }
 
   async getNearbyLocations(lat: number, lng: number, radius?: number): Promise<any[]> {
@@ -390,8 +466,8 @@ class ApiService {
       lng: lng.toString(),
       ...(radius && { radius: radius.toString() }),
     });
-    const response = await this.request(`${API_CONFIG.ENDPOINTS.LOCATIONS.NEARBY}?${params}`);
-    return response.data!;
+    const response = await this.request<any[]>(`${API_CONFIG.ENDPOINTS.LOCATIONS.NEARBY}?${params}`);
+    return response.data || [];
   }
 
   // Tracking Methods
@@ -453,13 +529,50 @@ class ApiService {
     return response.data;
   }
 
+  // Role Management
+  async switchRole(newRole: 'customer' | 'recycler'): Promise<UserProfile> {
+    const response = await this.request<UserProfile>(API_CONFIG.ENDPOINTS.AUTH.SWITCH_ROLE, {
+      method: 'POST',
+      body: JSON.stringify({ role: newRole }),
+    });
+    if (!response.data) {
+      throw new Error('No user data returned from role switch');
+    }
+    return response.data;
+  }
+
   // Utility Methods
   isAuthenticated(): boolean {
-    return !!this.token;
+    return this.token !== null && !this.isTokenExpired();
   }
 
   getToken(): string | null {
+    console.log('getToken called, returning:', this.token ? this.token.substring(0, 20) + '...' : 'null');
     return this.token;
+  }
+
+  // Check authentication status and refresh if needed
+  async checkAuthStatus(): Promise<boolean> {
+    try {
+      if (!this.isAuthenticated()) {
+        return false;
+      }
+
+      // Try to get current user to validate token
+      await this.getCurrentUser();
+      return true;
+    } catch (error) {
+      console.log('Token validation failed, user needs to re-authenticate');
+      await this.clearToken();
+      return false;
+    }
+  }
+
+  // Force re-authentication
+  async forceReAuth(): Promise<void> {
+    await this.clearToken();
+    // In a real app, you'd navigate to login screen here
+    console.log('User needs to re-authenticate');
   }
 }
 

@@ -1,7 +1,7 @@
 // API Configuration for EcoWasteGo Frontend
 export const API_CONFIG = {
   // Base URL for development - using computer's IP address for mobile access
-  BASE_URL: 'http://10.132.144.9:3000',
+  BASE_URL: 'http://10.36.50.88:3000',
   
   // API endpoints
   ENDPOINTS: {
@@ -14,6 +14,7 @@ export const API_CONFIG = {
       RESET_PASSWORD: '/api/auth/reset-password',
       VERIFY_EMAIL: '/api/auth/verify-email',
       ME: '/api/auth/me',
+      SWITCH_ROLE: '/api/auth/switch-role',
     },
     
     // Users
@@ -22,7 +23,7 @@ export const API_CONFIG = {
       UPDATE_PROFILE: '/api/users/profile',
       RECYCLERS: '/api/users/recyclers',
       RECYCLER_DETAILS: '/api/users/recycler',
-      DELETE_ACCOUNT: '/api/users/delete',
+      DELETE_ACCOUNT: '/api/users/account',
     },
     
     // Waste Collections
@@ -123,14 +124,14 @@ export const API_CONFIG = {
   HEADERS: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-  },
+  } as Record<string, string>,
   
   // Timeout settings
-  TIMEOUT: 10000, // 10 seconds
+  TIMEOUT: 30000, // 30 seconds
   
   // Retry settings
-  RETRY_ATTEMPTS: 3,
-  RETRY_DELAY: 1000, // 1 second
+  RETRY_ATTEMPTS: 5,
+  RETRY_DELAY: 2000, // 2 seconds
 } as const;
 
 // API Response types
@@ -146,13 +147,20 @@ export interface AuthResponse {
     id: string;
     email: string;
     username?: string;
+    phone?: string;
     role: 'customer' | 'recycler';
     email_verified: boolean;
     onboarding_completed: boolean;
     profile_image?: string;
     created_at: string;
   };
-  token: string;
+  session?: {
+    access_token: string;
+    refresh_token: string;
+    expires_at?: string;
+    rememberMe?: boolean;
+  };
+  token?: string; // For backward compatibility
 }
 
 export interface UserProfile {

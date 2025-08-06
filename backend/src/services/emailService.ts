@@ -1,15 +1,24 @@
 import nodemailer from 'nodemailer';
 
-// Create transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: parseInt(process.env.EMAIL_PORT || '587'),
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+// Create transporter with fallback for development
+const createTransporter = () => {
+  if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.warn('Email configuration not found. Using mock email service for development.');
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: parseInt(process.env.EMAIL_PORT || '587'),
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+};
+
+const transporter = createTransporter();
 
 /**
  * Send password reset email
@@ -38,6 +47,11 @@ export const sendPasswordResetEmail = async (email: string, resetToken: string):
   };
 
   try {
+    if (!transporter) {
+      console.log('Mock: Password reset email would be sent to:', email);
+      console.log('Mock: Reset URL:', resetUrl);
+      return;
+    }
     await transporter.sendMail(mailOptions);
     console.log('Password reset email sent to:', email);
   } catch (error) {
@@ -71,6 +85,11 @@ export const sendVerificationEmail = async (email: string, verificationToken: st
   };
 
   try {
+    if (!transporter) {
+      console.log('Mock: Verification email would be sent to:', email);
+      console.log('Mock: Verification URL:', verificationUrl);
+      return;
+    }
     await transporter.sendMail(mailOptions);
     console.log('Verification email sent to:', email);
   } catch (error) {
@@ -100,6 +119,12 @@ export const sendNotificationEmail = async (email: string, subject: string, mess
   };
 
   try {
+    if (!transporter) {
+      console.log('Mock: Notification email would be sent to:', email);
+      console.log('Mock: Subject:', subject);
+      console.log('Mock: Message:', message);
+      return;
+    }
     await transporter.sendMail(mailOptions);
     console.log('Notification email sent to:', email);
   } catch (error) {

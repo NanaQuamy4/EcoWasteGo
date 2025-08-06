@@ -1,75 +1,149 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import { COLORS } from '../../constants';
+import { useAuth } from '../../contexts/AuthContext';
+import apiService from '../../services/apiService';
 
 export default function UserScreen() {
-  const user = {
-    name: 'Williams Boampong',
-    email: 'nanaquamy4@gmail.com',
-    phone: '54 673 2719',
-    status: 'user',
-    type: 'user' as const,
-    totalPickups: 12,
-    totalWaste: '156.8 kg',
+  const { user, logout, switchRole, deleteAccount, isLoading } = useAuth();
+  const [userStats, setUserStats] = useState({
+    totalPickups: 0,
+    totalEarnings: 0,
     memberSince: 'Jan 2024',
-  };
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
 
-  const [currentStatus, setCurrentStatus] = useState(user.status);
+  const [currentStatus, setCurrentStatus] = useState(user?.role === 'recycler' ? 'recycler' : 'user');
   const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
   const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
   const [showStatusSwitch, setShowStatusSwitch] = useState(false);
   const [notificationCount, setNotificationCount] = useState(3); // Mock notification count
 
-  const handleStatusSwitch = (newStatus: string) => {
-    setCurrentStatus(newStatus);
-    setShowStatusSwitch(false);
+  // Load user data when component mounts
+  useEffect(() => {
+    console.log('UserScreen: User state changed:', user);
+    console.log('UserScreen: Loading state:', isLoading);
     
-    if (newStatus === 'recycler') {
-      // Navigate to recycler tabs
-      router.push('/(recycler-tabs)');
-    } else if (newStatus === 'user') {
-      // Already on user mode, just update the status
+    if (user) {
+      console.log('UserScreen: User found, updating stats...');
+      setIsLoadingStats(false);
+      // You can add API calls here to fetch user stats
+      // For now, we'll use placeholder data
+      setUserStats({
+        totalPickups: 0,
+        totalEarnings: 0,
+        memberSince: new Date(user.created_at).toLocaleDateString('en-US', { 
+          month: 'short', 
+          year: 'numeric' 
+        }),
+      });
+      
+      // Update current status based on user role
+      setCurrentStatus(user.role === 'recycler' ? 'recycler' : 'user');
+    } else if (!isLoading) {
+      console.log('UserScreen: No user and not loading, setting loading to false');
+      // User is not authenticated and loading is complete
+      setIsLoadingStats(false);
+    }
+  }, [user, isLoading]);
+
+  const handleStatusSwitch = async (newStatus: string) => {
+    try {
+      // Map the UI status to the API role
+      const newRole = newStatus === 'user' ? 'customer' : 'recycler';
+      
+      // Call the switchRole function from AuthContext
+      await switchRole(newRole);
+      
+      setCurrentStatus(newStatus);
+      setShowStatusSwitch(false);
+      
+      // Show success message
       Alert.alert(
-        'Status Changed',
+        'Role Switched',
         `You are now in ${newStatus} mode.`,
         [{ text: 'OK' }]
       );
+      
+      // Navigate based on the new role
+      if (newRole === 'recycler') {
+        router.replace('/(recycler-tabs)');
+      } else {
+        router.replace('/(tabs)');
+      }
+    } catch (error) {
+      console.error('Role switch failed:', error);
+      Alert.alert(
+        'Error',
+        'Failed to switch role. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
-    
-    Alert.alert(
-      'Status Changed',
-      `You are now in ${newStatus} mode.`,
-      [{ text: 'OK' }]
-    );
   };
 
   const handleDeleteYes = () => {
     setDeleteStep(2);
   };
-  const handleDeleteFinal = () => {
-    setShowDeletePrompt(false);
-    setDeleteStep(1);
-    // Add your delete logic here
+  const handleDeleteFinal = async () => {
+    try {
+      setShowDeletePrompt(false);
+      setDeleteStep(1);
+      
+      // Call the delete account function from AuthContext
+      await deleteAccount();
+      
+      // Show success message and navigate
+      Alert.alert(
+        'Account Deleted',
+        'Your account has been permanently deleted.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to login screen
+              router.replace('/LoginScreen');
+            }
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error('Delete account failed:', error);
+      Alert.alert(
+        'Delete Failed',
+        error.message || 'Failed to delete account. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
   const handleDeleteNo = () => {
     setShowDeletePrompt(false);
     setDeleteStep(1);
   };
-  const handleLogoutYes = () => {
+  const handleLogoutYes = async () => {
     setShowLogoutPrompt(false);
-    // Add your logout logic here
+    try {
+      console.log('UserScreen: Starting logout...');
+      await logout();
+      console.log('UserScreen: Logout successful, navigating to login...');
+      router.push('/LoginScreen');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // Even if logout fails, clear the user state and navigate to login
+      console.log('UserScreen: Logout failed, but navigating to login anyway...');
+      router.push('/LoginScreen');
+    }
   };
   const handleLogoutNo = () => {
     setShowLogoutPrompt(false);
   };
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const router = useRouter();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const getStatusColor = (status: string) => {
     return status === 'recycler' ? COLORS.darkGreen : COLORS.primary;
@@ -86,6 +160,58 @@ export default function UserScreen() {
     setNotificationCount(0);
   };
 
+  if (isLoadingStats) {
+    return (
+      <View style={styles.container}>
+        <AppHeader 
+          onMenuPress={() => setDrawerOpen(true)} 
+          onNotificationPress={handleNotificationPress}
+          notificationCount={notificationCount}
+        />
+        <View style={[styles.content, { justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={styles.loadingText}>Loading user data...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Show login prompt if user is not authenticated
+  if (!user && !isLoading) {
+    return (
+      <View style={styles.container}>
+        <AppHeader 
+          onMenuPress={() => setDrawerOpen(true)} 
+          onNotificationPress={handleNotificationPress}
+          notificationCount={notificationCount}
+        />
+        <View style={[styles.content, { justifyContent: 'center', alignItems: 'center' }]}>
+          <MaterialIcons name="account-circle" size={80} color={COLORS.darkGreen} />
+          <Text style={styles.userName}>Not Logged In</Text>
+          <Text style={styles.userEmail}>Please log in to view your profile</Text>
+          <TouchableOpacity 
+            style={[styles.actionButton, { marginTop: 20 }]}
+            onPress={() => router.push('/LoginScreen')}
+          >
+            <MaterialIcons name="login" size={20} color="white" />
+            <Text style={[styles.actionText, { color: 'white' }]}>Login</Text>
+          </TouchableOpacity>
+          
+          {/* Debug button */}
+          <TouchableOpacity 
+            style={[styles.actionButton, { marginTop: 10, backgroundColor: 'orange' }]}
+            onPress={() => {
+              console.log('Debug: Current token:', apiService.getToken());
+              console.log('Debug: Is authenticated:', apiService.isAuthenticated());
+              Alert.alert('Debug Info', `Token: ${apiService.getToken()}\nAuthenticated: ${apiService.isAuthenticated()}`);
+            }}
+          >
+            <Text style={[styles.actionText, { color: 'white' }]}>Debug Auth</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <AppHeader 
@@ -93,7 +219,13 @@ export default function UserScreen() {
         onNotificationPress={handleNotificationPress}
         notificationCount={notificationCount}
       />
-      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={user} />
+      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={{
+        name: user?.username || 'User',
+        email: user?.email,
+        phone: user?.phone,
+        status: user?.role,
+        type: user?.role === 'recycler' ? 'recycler' : 'user'
+      }} />
       
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
@@ -101,9 +233,9 @@ export default function UserScreen() {
           <View style={styles.profileImageContainer}>
             <MaterialIcons name="account-circle" size={80} color={COLORS.darkGreen} />
           </View>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
-          <Text style={styles.userPhone}>{user.phone}</Text>
+          <Text style={styles.userName}>{user?.username || 'User'}</Text>
+          <Text style={styles.userEmail}>{user?.email || 'No email'}</Text>
+          <Text style={styles.userPhone}>{user?.phone || 'No phone'}</Text>
           
           <View style={styles.statusContainer}>
             <MaterialIcons name={getStatusIcon(currentStatus)} size={16} color={getStatusColor(currentStatus)} />
@@ -129,17 +261,17 @@ export default function UserScreen() {
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <MaterialIcons name="local-shipping" size={24} color={COLORS.darkGreen} />
-            <Text style={styles.statNumber}>{user.totalPickups}</Text>
+            <Text style={styles.statNumber}>{userStats.totalPickups}</Text>
             <Text style={styles.statLabel}>Total Pickups</Text>
           </View>
           <View style={styles.statCard}>
-            <MaterialIcons name="eco" size={24} color={COLORS.darkGreen} />
-            <Text style={styles.statNumber}>{user.totalWaste}</Text>
-            <Text style={styles.statLabel}>Waste Recycled</Text>
+            <MaterialIcons name="attach-money" size={24} color={COLORS.darkGreen} />
+            <Text style={styles.statNumber}>₵{userStats.totalEarnings.toFixed(2)}</Text>
+            <Text style={styles.statLabel}>Total Earnings</Text>
           </View>
           <View style={styles.statCard}>
             <MaterialIcons name="event" size={24} color={COLORS.darkGreen} />
-            <Text style={styles.statNumber}>{user.memberSince}</Text>
+            <Text style={styles.statNumber}>{userStats.memberSince}</Text>
             <Text style={styles.statLabel}>Member Since</Text>
           </View>
         </View>
@@ -586,5 +718,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 18,
+  },
+  loadingText: {
+    fontSize: 18,
+    color: COLORS.darkGreen,
+    fontWeight: 'bold',
   },
 }); 

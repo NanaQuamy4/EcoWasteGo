@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginScreen() {
@@ -12,7 +12,18 @@ export default function LoginScreen() {
   const [emailError, setEmailError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
+
+  // Navigate when user is authenticated
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'recycler') {
+        router.replace('/(recycler-tabs)');
+      } else {
+        router.replace('/(tabs)');
+      }
+    }
+  }, [user, router]);
 
   function validateEmail(email: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -31,16 +42,40 @@ export default function LoginScreen() {
 
     try {
       setIsLoading(true);
-      await login(email.trim(), password);
-      
-      // Navigate based on user role (will be handled by auth context)
-      router.push('/');
+      console.log('LoginScreen: About to call AuthContext login...');
+      // Use AuthContext login instead of apiService directly
+      await login(email.trim(), password, rememberMe);
+      console.log('LoginScreen: AuthContext login completed');
+      // Navigation will be handled by useEffect when user state updates
     } catch (error: any) {
       console.error('Login error:', error);
-      Alert.alert(
-        'Login Failed',
-        error.message || 'Invalid email or password. Please try again.'
-      );
+      
+      // Handle specific error codes
+      if (error.code === 'ACCOUNT_NOT_FOUND' || error.message.includes('Account not found')) {
+        Alert.alert(
+          'Account Not Found',
+          'No account found with this email. Would you like to register?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Register', 
+              onPress: () => router.push('/RegisterScreen')
+            }
+          ]
+        );
+      } else if (error.code === 'INVALID_PASSWORD' || error.message.includes('Invalid password')) {
+        Alert.alert(
+          'Incorrect Password',
+          'The password you entered is incorrect. Please try again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Login Failed',
+          error.message || 'Invalid email or password. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
     } finally {
       setIsLoading(false);
     }

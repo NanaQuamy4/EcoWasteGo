@@ -122,9 +122,45 @@ export const isValidEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
-export const isValidPhone = (phone: string): boolean => {
-  const phoneRegex = /^(\+233|0)[0-9]{9}$/;
-  return phoneRegex.test(phone.replace(/\s/g, ''));
+// Updated phone validation to handle country codes properly
+export const isValidPhone = (phone: string, countryCode?: string): boolean => {
+  // Remove all non-digit characters
+  const cleaned = phone.replace(/\D/g, '');
+  
+  if (countryCode) {
+    // If country code is provided, validate without leading zero
+    const countryCodeDigits = countryCode.replace(/\D/g, '');
+    const phoneWithoutCountryCode = cleaned.replace(new RegExp(`^${countryCodeDigits}`), '');
+    
+    // Check if the remaining digits are valid (typically 9 digits for most countries)
+    return phoneWithoutCountryCode.length >= 7 && phoneWithoutCountryCode.length <= 10;
+  } else {
+    // Fallback to original validation for backward compatibility
+    const phoneRegex = /^(\+233|0)[0-9]{9}$/;
+    return phoneRegex.test(phone.replace(/\s/g, ''));
+  }
+};
+
+// Helper function to clean phone number input
+export const cleanPhoneInput = (input: string, countryCode?: string): string => {
+  // Remove all non-digit characters
+  let cleaned = input.replace(/\D/g, '');
+  
+  if (countryCode) {
+    const countryCodeDigits = countryCode.replace(/\D/g, '');
+    
+    // If the input starts with the country code, remove it
+    if (cleaned.startsWith(countryCodeDigits)) {
+      cleaned = cleaned.substring(countryCodeDigits.length);
+    }
+    
+    // Remove leading zero if present (common issue when country code is already selected)
+    if (cleaned.startsWith('0')) {
+      cleaned = cleaned.substring(1);
+    }
+  }
+  
+  return cleaned;
 };
 
 // Debounce utility for search/filter
