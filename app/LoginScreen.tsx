@@ -1,325 +1,324 @@
-import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { COLORS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
+import { LoginValidationData, validateLogin } from '../utils/validation';
 
 export default function LoginScreen() {
+  const router = useRouter();
+  const { selectedRole } = useLocalSearchParams<{ selectedRole?: string }>();
+  const { login, user } = useAuth();
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [emailError, setEmailError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
-  const { login, user } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Navigate when user is authenticated
+  // Navigate based on user role after login
   useEffect(() => {
     if (user) {
-      if (user.role === 'recycler') {
+      const userRole = user.role || 'customer';
+      console.log('LoginScreen: User logged in with role:', userRole);
+      console.log('LoginScreen: Full user object:', user);
+      
+      if (userRole === 'recycler') {
+        console.log('LoginScreen: Navigating to recycler screens');
         router.replace('/(recycler-tabs)');
       } else {
+        console.log('LoginScreen: Navigating to customer screens');
         router.replace('/(tabs)');
       }
     }
   }, [user, router]);
 
-  function validateEmail(email: string) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  }
-
   const handleLogin = async () => {
-    if (!validateEmail(email)) {
-      setEmailError('Please enter a valid email address.');
+    // Prepare validation data
+    const validationData: LoginValidationData = {
+      identifier: email,
+      password: password,
+    };
+
+    // Validate all fields
+    const validation = validateLogin(validationData);
+    
+    if (!validation.isValid) {
+      Alert.alert('Validation Error', validation.errors.join('\n'));
       return;
     }
 
-    if (!password.trim()) {
-      Alert.alert('Error', 'Please enter your password.');
-      return;
-    }
-
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      console.log('LoginScreen: About to call AuthContext login...');
-      // Use AuthContext login instead of apiService directly
-      await login(email.trim(), password, rememberMe);
-      console.log('LoginScreen: AuthContext login completed');
+      await login(email, password, selectedRole as 'customer' | 'recycler' | undefined);
       // Navigation will be handled by useEffect when user state updates
     } catch (error: any) {
       console.error('Login error:', error);
       
-      // Handle specific error codes
-      if (error.code === 'ACCOUNT_NOT_FOUND' || error.message.includes('Account not found')) {
-        Alert.alert(
-          'Account Not Found',
-          'No account found with this email. Would you like to register?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Register', 
-              onPress: () => router.push('/RegisterScreen')
-            }
-          ]
-        );
-      } else if (error.code === 'INVALID_PASSWORD' || error.message.includes('Invalid password')) {
-        Alert.alert(
-          'Incorrect Password',
-          'The password you entered is incorrect. Please try again.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert(
-          'Login Failed',
-          error.message || 'Invalid email or password. Please try again.',
-          [{ text: 'OK' }]
-        );
+      let message = 'Login failed. Please try again.';
+      if (error.message === 'ACCOUNT_NOT_FOUND') {
+        message = 'No account found with this email. Please check your email or create a new account.';
+      } else if (error.message === 'INVALID_PASSWORD') {
+        message = 'Incorrect password. Please try again.';
+      } else if (error.message === 'INVALID_CREDENTIALS') {
+        message = 'Invalid email or password. Please check your credentials.';
+      } else if (error.message?.includes('Authentication failed')) {
+        message = 'Session expired. Please log in again.';
+      } else if (error.message?.includes('Network')) {
+        message = 'Network error. Please check your internet connection.';
+      } else if (error.message?.includes('Access denied') || error.message?.includes('ROLE_MISMATCH')) {
+        message = error.message || 'This account is registered with a different role. Please log in using the correct role.';
       }
+      
+      // Show alert and stay on login screen for ALL login failures
+      Alert.alert(
+        'Login Failed', 
+        message,
+        [
+          {
+            text: 'Try Again',
+            onPress: () => {
+              // Clear the form for fresh attempt
+              setEmail('');
+              setPassword('');
+              // Navigate back to login screen with same role
+              router.replace({
+                pathname: '/LoginScreen',
+                params: { selectedRole }
+              });
+            }
+          }
+        ]
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleRegister = () => {
+    // Pass the selected role to registration
+    router.push({
+      pathname: '/RegisterScreen',
+      params: { selectedRole }
+    });
+  };
+
+  const handleBackToRoleSelection = () => {
+    router.push('/RoleSelectionScreen');
+  };
+
+  const handleForgotPassword = () => {
+    console.log('Forgot Password button clicked');
+    console.log('Navigating to ForgotPasswordScreen');
+    router.replace('/ForgotPasswordScreen');
+  };
+
   return (
-    <View style={styles.container}>
-      <View style={styles.logoRow}>
-        <Image source={require('../assets/images/logo landscape.png')} style={styles.logo} />
-      </View>
-      <View style={styles.formCard}>
-        <Text style={styles.loginTitle}>Login</Text>
-        <Text style={styles.loginSubtitle}>Sign in with your password to continue</Text>
-      </View>
-      <View style={styles.inputRow}>
-        <Image source={require('../assets/images/email.png')} style={styles.inputIconImg} />
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your Email"
-          value={email}
-          onChangeText={text => { setEmail(text); setEmailError(''); }}
-          placeholderTextColor="#263A13"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!isLoading}
-        />
-      </View>
-      {emailError ? <Text style={{ color: 'red', marginBottom: 4, alignSelf: 'flex-start', marginLeft: 32 }}>{emailError}</Text> : null}
-      <View style={styles.inputRow}>
-        <Image source={require('../assets/images/password.png')} style={styles.inputIconImg} />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!showPassword}
-          placeholderTextColor="#263A13"
-          autoCapitalize="none"
-          editable={!isLoading}
-        />
-        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} disabled={isLoading}>
-          <Feather name={showPassword ? 'eye' : 'eye-off'} size={22} color="#263A13" style={styles.eyeIcon} />
-        </TouchableOpacity>
-      </View>
-      <View style={styles.optionsRow}>
-        <TouchableOpacity style={styles.rememberMeRow} onPress={() => setRememberMe(!rememberMe)} disabled={isLoading}>
-          <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-            {rememberMe && <Text style={styles.checkboxTick}>✓</Text>}
-          </View>
-          <Text style={styles.rememberMeText}>Remember me</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/ForgotPasswordScreen')} disabled={isLoading}>
-          <Text style={styles.forgotText}>Forgotten password?</Text>
-        </TouchableOpacity>
-      </View>
-      <TouchableOpacity 
-        style={[styles.signInButton, isLoading && styles.signInButtonDisabled]} 
-        onPress={handleLogin}
-        disabled={isLoading}
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
       >
-        <Text style={styles.signInButtonText}>
-          {isLoading ? 'Signing in...' : 'Sign in'}
-        </Text>
-      </TouchableOpacity>
-      <Text style={styles.orText}>or continue with google</Text>
-      <TouchableOpacity style={styles.socialButton} disabled={isLoading}>
-        <Image source={require('../assets/images/google.png')} style={styles.socialIconImg} />
-        <Text style={styles.socialText}>continue with Google</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.socialButton} disabled={isLoading}>
-        <Image source={require('../assets/images/apple.png')} style={styles.socialIconImg} />
-        <Text style={styles.socialText}>continue with Apple</Text>
-      </TouchableOpacity>
-      <View style={styles.bottomRow}>
-        <Text style={styles.bottomText}>Don't have an account? </Text>
-        <TouchableOpacity onPress={() => router.push('/RegisterScreen')} disabled={isLoading}>
-          <Text style={styles.signUpText}>Sign up</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={handleBackToRoleSelection}
+            >
+              <MaterialIcons name="arrow-back" size={24} color={COLORS.darkGreen} />
+            </TouchableOpacity>
+            
+            <Text style={styles.title}>
+              {selectedRole === 'recycler' ? 'Recycler Login' : 'Customer Login'}
+            </Text>
+            <Text style={styles.subtitle}>
+              Welcome back! Please sign in to continue
+            </Text>
+          </View>
+
+          {/* Form */}
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email Address</Text>
+              <View style={styles.inputContainer}>
+                <MaterialIcons name="email" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Enter your email"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.inputContainer}>
+                <MaterialIcons name="lock" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter your password"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <MaterialIcons 
+                    name={showPassword ? "visibility" : "visibility-off"} 
+                    size={20} 
+                    color={COLORS.gray} 
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.forgotPassword} onPress={handleForgotPassword}>
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+              onPress={handleLogin}
+              disabled={isLoading}
+            >
+              <Text style={styles.loginButtonText}>
+                {isLoading ? 'Signing In...' : 'Sign In'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Don't have an account? </Text>
+            <TouchableOpacity onPress={handleRegister}>
+              <Text style={styles.registerText}>Sign Up</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAF6',
-    paddingHorizontal: 0,
-    paddingTop: 40,
+    backgroundColor: COLORS.white,
   },
-  logoRow: {
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+  },
+  header: {
     alignItems: 'center',
-    marginBottom: 8,
+    marginTop: 40,
+    marginBottom: 40,
   },
-  logo: {
-    width: 200,
-    height: 80,
-    resizeMode: 'contain',
-    marginBottom: 8,
+  backButton: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    padding: 8,
   },
-  formCard: {
-    backgroundColor: '#D9DED8',
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 0,
-    marginBottom: 16,
-  },
-  loginTitle: {
-    fontSize: 24,
+  title: {
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#263A13',
-    marginBottom: 2,
+    color: COLORS.darkGreen,
+    textAlign: 'center',
+    marginBottom: 8,
   },
-  loginSubtitle: {
+  subtitle: {
     fontSize: 16,
-    color: '#263A13',
+    color: COLORS.gray,
+    textAlign: 'center',
   },
-  inputRow: {
+  form: {
+    gap: 20,
+  },
+  inputGroup: {
+    gap: 8,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.darkGreen,
+  },
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#A3C47C',
-    borderRadius: 24,
-    paddingHorizontal: 12,
-    marginHorizontal: 8,
-    marginBottom: 12,
-    backgroundColor: '#fff',
-    height: 48,
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+    borderRadius: 8,
+    backgroundColor: COLORS.white,
   },
-  inputIconImg: {
-    width: 24,
-    height: 24,
+  inputIcon: {
+    marginLeft: 12,
     marginRight: 8,
-    resizeMode: 'contain',
-    color:'#fff',
   },
   input: {
     flex: 1,
-    height: 44,
+    padding: 12,
     fontSize: 16,
-    color: '#263A13',
   },
-  optionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginHorizontal: 8,
-    marginBottom: 16,
+  eyeButton: {
+    padding: 12,
   },
-  rememberMeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  forgotPassword: {
+    alignSelf: 'flex-end',
   },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderWidth: 2,
-    borderColor: '#263A13',
-    borderRadius: 4,
-    marginRight: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-  },
-  checkboxChecked: {
-    backgroundColor: '#A3C47C',
-    borderColor: '#A3C47C',
-  },
-  checkboxTick: {
-    color: '#263A13',
-    fontWeight: 'bold',
+  forgotPasswordText: {
+    color: COLORS.orange,
     fontSize: 14,
   },
-  rememberMeText: {
-    marginLeft: 4,
-    color: '#263A13',
-  },
-  forgotText: {
-    color: '#263A13',
-    fontSize: 14,
-  },
-  signInButton: {
-    backgroundColor: '#223E01',
-    borderRadius: 20,
-    paddingVertical: 12,
+  loginButton: {
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
-    marginHorizontal: 60,
-    marginBottom: 16,
+    marginTop: 20,
   },
-  signInButtonText: {
-    color: '#fff',
+  loginButtonDisabled: {
+    opacity: 0.6,
+  },
+  loginButtonText: {
+    color: COLORS.white,
     fontSize: 18,
     fontWeight: 'bold',
   },
-  orText: {
-    textAlign: 'center',
-    color: '#263A13',
-    marginBottom: 8,
-    fontSize: 16,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#A3C47C',
-    borderRadius: 24,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginHorizontal: 8,
-    marginBottom: 12,
-    backgroundColor: '#fff',
-  },
-  socialIconImg: {
-    width: 24,
-    height: 24,
-    marginRight: 12,
-    resizeMode: 'contain',
-  },
-  socialText: {
-    fontSize: 16,
-    color: '#263A13',
-  },
-  bottomRow: {
+  footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 12,
+    marginTop: 30,
   },
-  bottomText: {
-    color: '#263A13',
-    fontSize: 15,
+  footerText: {
+    color: COLORS.gray,
+    fontSize: 16,
   },
-  signUpText: {
-    color: '#263A13',
-    fontWeight: 'bold',
-    fontSize: 15,
-    textDecorationLine: 'underline',
-  },
-  eyeIcon: {
-    marginLeft: 8,
-  },
-  signInButtonDisabled: {
-    backgroundColor: '#ccc',
-    opacity: 0.7,
+  registerText: {
+    color: COLORS.orange,
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 

@@ -131,6 +131,42 @@ export class GoogleMapsService {
   }
 
   /**
+   * Search places using Google Places API
+   */
+  async searchPlaces(query: string, location?: { latitude: number; longitude: number }): Promise<any[]> {
+    try {
+      const params: any = {
+        input: query,
+        key: process.env.GOOGLE_MAPS_API_KEY!,
+        types: 'establishment|geocode',
+      };
+
+      if (location) {
+        params.location = `${location.latitude},${location.longitude}`;
+        params.radius = 50000; // 50km radius
+      }
+
+      const response = await this.client.findPlaceFromText({
+        params,
+      });
+
+      return response.data.candidates?.map(place => ({
+        id: place.place_id,
+        name: place.name,
+        address: place.formatted_address,
+        coordinate: place.geometry?.location ? {
+          latitude: place.geometry.location.lat,
+          longitude: place.geometry.location.lng,
+        } : null,
+        type: 'establishment',
+      })) || [];
+    } catch (error) {
+      console.error('Place search error:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get place details
    */
   async getPlaceDetails(placeId: string): Promise<any | null> {

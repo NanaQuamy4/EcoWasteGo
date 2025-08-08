@@ -8,15 +8,22 @@ import morgan from 'morgan';
 // Load environment variables first
 dotenv.config();
 
-// Set environment variables if not already set
-if (!process.env.SUPABASE_URL) {
-  process.env.SUPABASE_URL = 'https://esyardsjumxqwstdoaod.supabase.co';
-}
-if (!process.env.SUPABASE_ANON_KEY) {
-  process.env.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzeWFyZHNqdW14cXdzdGRvYW9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg2NjQsImV4cCI6MjA2OTg4NDY2NH0.UB8PO1jD1ahbiMW43Ao5keVxChnOMSqohqminGZm7tg';
-}
-if (!process.env.GOOGLE_MAPS_API_KEY) {
-  process.env.GOOGLE_MAPS_API_KEY = 'AIzaSyBUNUKncuC9GT6h4U-nDdjOea4-P7F_w4E';
+// Validate required environment variables
+const requiredEnvVars = [
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY', 
+  'SUPABASE_SERVICE_ROLE_KEY'
+];
+
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingVars);
+  console.error('Please update your .env file with your Supabase credentials');
+  console.error('Get them from: https://supabase.com/dashboard → Settings → API');
+  process.exit(1);
+} else {
+  console.log('✅ All required environment variables are configured');
 }
 
 // Import routes
@@ -39,6 +46,7 @@ import recyclerWeightEntryRoutes from './src/routes/recycler-weight-entry';
 import recyclersRoutes from './src/routes/recyclers';
 import registerRoutes from './src/routes/register';
 import rewardsRoutes from './src/routes/rewards';
+import roleBasedRoutes from './src/routes/roleBased';
 import supportRoutes from './src/routes/support';
 import textRecyclerRoutes from './src/routes/text-recycler';
 import trackingRoutes from './src/routes/tracking';
@@ -70,7 +78,10 @@ app.use(cors({
     'exp://10.133.121.133:8081',
     'http://localhost:19000',
     'http://localhost:19001',
-    'http://localhost:19002'
+    'http://localhost:19002',
+    // Add current IP for mobile access
+    'http://10.36.50.88:19006',
+    'exp://10.36.50.88:19006'
   ],
   credentials: true
 }));
@@ -98,6 +109,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/register', registerRoutes);
+app.use('/api/role-based', roleBasedRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/waste', wasteRoutes);
 app.use('/api/payments', paymentsRoutes);

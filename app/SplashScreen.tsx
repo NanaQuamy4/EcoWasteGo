@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import RoleBasedNavigator from '../components/RoleBasedNavigator';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function SplashScreen() {
@@ -14,7 +13,7 @@ export default function SplashScreen() {
       if (!isLoading) {
         if (user) {
           // User is authenticated, let RoleBasedNavigator handle navigation
-          // No need to navigate here as RoleBasedNavigator will handle it
+          // RoleBasedNavigator will automatically route to appropriate screen
         } else {
           // User is not authenticated, navigate to onboarding
           router.replace('/OnboardingScreen');
@@ -24,11 +23,6 @@ export default function SplashScreen() {
     
     return () => clearTimeout(timer);
   }, [user, isLoading, router]);
-
-  // If user is authenticated, show role-based navigation
-  if (!isLoading && user) {
-    return <RoleBasedNavigator />;
-  }
 
   return (
     <View style={styles.container}>

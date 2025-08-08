@@ -5,18 +5,21 @@ import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import { COLORS } from '../../constants';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function RecyclerUserTab() {
+  const { user } = useAuth();
+  const isVerified = user?.verification_status === 'verified';
   const recycler = {
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    phone: '+233 54 123 4567',
-    status: 'recycler',
-    totalPickups: 156,
-    totalEarnings: '₵2,450.80',
+    name: user?.username || 'Recycler',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    status: user?.verification_status || 'unverified',
+    totalPickups: isVerified ? 156 : 0,
+    totalEarnings: isVerified ? '₵2,450.80' : '₵0.00',
     memberSince: 'Mar 2023',
-    rating: 4.8,
-    completedPickups: 142,
+    rating: isVerified ? 4.8 : 0,
+    completedPickups: isVerified ? 142 : 0,
   };
 
   const [currentStatus, setCurrentStatus] = useState(recycler.status);
@@ -29,24 +32,10 @@ export default function RecyclerUserTab() {
   const router = useRouter();
 
   const handleStatusSwitch = (newStatus: string) => {
-    setCurrentStatus(newStatus);
-    setShowStatusSwitch(false);
-    
-    if (newStatus === 'user') {
-      // Navigate to user tabs
-      router.push('/(tabs)');
-    } else if (newStatus === 'recycler') {
-      // Already on recycler mode, just update the status
-      Alert.alert(
-        'Status Changed',
-        `You are now in ${newStatus} mode.`,
-        [{ text: 'OK' }]
-      );
-    }
-    
+    // Disable role switching for recyclers - they should stay in recycler mode
     Alert.alert(
-      'Status Changed',
-      `You are now in ${newStatus} mode.`,
+      'Role Switching Disabled',
+      'Recyclers cannot switch to customer mode. Please contact support if you need to change your account type.',
       [{ text: 'OK' }]
     );
   };
@@ -72,15 +61,19 @@ export default function RecyclerUserTab() {
   };
 
   const getStatusColor = (status: string) => {
-    return status === 'recycler' ? COLORS.darkGreen : COLORS.primary;
+    if (status === 'verified') return COLORS.darkGreen;
+    if (status === 'unverified') return COLORS.orange;
+    return COLORS.primary;
   };
 
   const getStatusIcon = (status: string) => {
-    return status === 'recycler' ? 'recycling' : 'verified-user';
+    if (status === 'verified') return 'verified-user';
+    if (status === 'unverified') return 'warning';
+    return 'recycling';
   };
 
   const handleNotificationPress = () => {
-    router.push('/NotificationScreen');
+    router.push('/recycler-screens/RecyclerNotificationScreen' as any);
     setNotificationCount(0);
   };
 
@@ -109,19 +102,27 @@ export default function RecyclerUserTab() {
           </View>
         </View>
 
-        {/* Status Switch Section */}
-        <View style={styles.statusSection}>
-          <View style={styles.statusRow}>
-            <MaterialIcons name="swap-horiz" size={16} color={COLORS.darkGreen} />
-            <Text style={styles.statusLabel}>Switch Mode</Text>
+        {/* Complete Registration Section for Unverified Recyclers */}
+        {!isVerified && (
+          <View style={styles.completeRegistrationSection}>
+            <View style={styles.completeRegistrationHeader}>
+              <MaterialIcons name="warning" size={24} color={COLORS.orange} />
+              <Text style={styles.completeRegistrationTitle}>Complete Your Registration</Text>
+            </View>
+            <Text style={styles.completeRegistrationText}>
+              To start receiving pickup requests and earning money, you need to complete your registration by providing additional business information.
+            </Text>
             <TouchableOpacity 
-              style={styles.switchButton}
-              onPress={() => setShowStatusSwitch(true)}
+              style={styles.completeRegistrationButton}
+              onPress={() => router.push('/recycler-screens/RecyclerRegistrationScreen' as any)}
             >
-              <Text style={styles.switchButtonText}>Switch</Text>
+              <MaterialIcons name="assignment" size={20} color={COLORS.white} />
+              <Text style={styles.completeRegistrationButtonText}>Complete Registration</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        )}
+
+
 
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
@@ -146,7 +147,7 @@ export default function RecyclerUserTab() {
         <View style={styles.actionsContainer}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => router.push('/EditProfileScreen')}
+                            onPress={() => router.push('/recycler-screens/RecyclerEditProfileScreen' as any)}
           >
             <MaterialIcons name="edit" size={20} color={COLORS.darkGreen} />
             <Text style={styles.actionText}>Edit Profile</Text>
@@ -162,7 +163,7 @@ export default function RecyclerUserTab() {
           
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => router.push('/Help')}
+                            onPress={() => router.push('/customer-screens/Help' as any)}
           >
             <MaterialIcons name="help" size={20} color={COLORS.darkGreen} />
             <Text style={styles.actionText}>Help & Support</Text>
@@ -185,38 +186,7 @@ export default function RecyclerUserTab() {
           </TouchableOpacity>
         </View>
 
-        {/* Status Switch Modal */}
-        {showStatusSwitch && (
-          <View style={styles.statusSwitchContainer} pointerEvents="box-none">
-            <View style={styles.statusSwitchModal}>
-              <Text style={styles.statusSwitchTitle}>Switch Mode</Text>
-              <Text style={styles.statusSwitchSubtitle}>Choose your mode:</Text>
-              
-              <TouchableOpacity 
-                style={styles.statusOption}
-                onPress={() => handleStatusSwitch('user')}
-              >
-                <MaterialIcons name="verified-user" size={24} color={COLORS.primary} />
-                <Text style={styles.statusOptionText}>User Mode</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.statusOption}
-                onPress={() => handleStatusSwitch('recycler')}
-              >
-                <MaterialIcons name="recycling" size={24} color={COLORS.darkGreen} />
-                <Text style={styles.statusOptionText}>Recycler Mode</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.cancelButton}
-                onPress={() => setShowStatusSwitch(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+
 
         {/* Delete Account Modal */}
         {showDeletePrompt && (
@@ -515,5 +485,48 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     color: COLORS.white,
+  },
+  completeRegistrationSection: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  completeRegistrationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  completeRegistrationTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.orange,
+    marginLeft: 8,
+  },
+  completeRegistrationText: {
+    fontSize: 14,
+    color: COLORS.gray,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  completeRegistrationButton: {
+    backgroundColor: COLORS.darkGreen,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  completeRegistrationButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 }); 

@@ -1,19 +1,25 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { forgotPassword } = useAuth();
+
+  useEffect(() => {
+    console.log('ForgotPasswordScreen rendered');
+  }, []);
 
   function validateEmail(email: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
-  const handleResetPassword = async () => {
+  const handleSendVerificationCode = async () => {
     if (!email.trim()) {
       setEmailError('Please enter your email address.');
       return;
@@ -28,25 +34,32 @@ export default function ForgotPasswordScreen() {
     setEmailError('');
 
     try {
-      // Simulate API call for password reset
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await forgotPassword(email);
       
       Alert.alert(
-        'Reset Link Sent',
-        'We\'ve sent a password reset link to your email address. Please check your inbox and follow the instructions.',
+        'Verification Code Sent',
+        'We\'ve sent a 6-digit verification code to your email address. Please check your inbox and enter the code.',
         [
           {
             text: 'OK',
-            onPress: () => router.push('/LoginScreen')
+            onPress: () => router.push({
+              pathname: '/VerificationScreen',
+              params: { email: email }
+            })
           }
         ]
       );
-    } catch (error) {
-      Alert.alert(
-        'Error',
-        'Failed to send reset link. Please try again.',
-        [{ text: 'OK' }]
-      );
+    } catch (error: any) {
+      console.error('Forgot password error:', error);
+      
+      let message = 'Failed to send verification code. Please try again.';
+      if (error.message === 'EMAIL_NOT_FOUND') {
+        message = 'No account found with this email address.';
+      } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
+        message = 'Network error. Please check your internet connection and try again.';
+      }
+      
+      Alert.alert('Error', message, [{ text: 'OK' }]);
     } finally {
       setIsLoading(false);
     }
@@ -60,7 +73,7 @@ export default function ForgotPasswordScreen() {
       
       <View style={styles.contentContainer}>
         <Text style={styles.title}>Forgotten Password?</Text>
-        <Text style={styles.subtitle}>Please Enter Your Email Address To Receive a Verification Code</Text>
+        <Text style={styles.subtitle}>Please Enter Your Email Address To Receive a 6-Digit Verification Code</Text>
 
         <View style={styles.inputContainer}>
           <Feather name="mail" size={20} color="#263A13" style={styles.inputIcon} />
@@ -82,11 +95,11 @@ export default function ForgotPasswordScreen() {
 
         <TouchableOpacity 
           style={[styles.sendButton, isLoading && styles.sendButtonDisabled]} 
-          onPress={handleResetPassword}
+          onPress={handleSendVerificationCode}
           disabled={isLoading}
         >
           <Text style={styles.sendButtonText}>
-            {isLoading ? 'Sending...' : 'Send'}
+            {isLoading ? 'Sending...' : 'Send Code'}
           </Text>
         </TouchableOpacity>
       </View>

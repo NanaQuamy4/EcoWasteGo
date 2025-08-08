@@ -1,41 +1,57 @@
-import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, FlatList, Image, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { cleanPhoneInput, isValidPhone } from '../constants/helpers';
+import React, { useEffect, useState } from 'react';
+import {
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import PhoneNumberInput from '../components/PhoneNumberInput';
+import { COLORS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
+import { SignupValidationData, validateSignup } from '../utils/validation';
 
 export default function RegisterScreen() {
-  const [email, setEmail] = useState('');
-  const [contact, setContact] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [username, setUsername] = useState('');
+  const router = useRouter();
+  const { selectedRole } = useLocalSearchParams<{ selectedRole?: string }>();
+  const { register, user } = useAuth();
+  
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+    companyName: '', // For recyclers
+  });
+  const [countryCode, setCountryCode] = useState('+233'); // Default to Ghana
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [agreed, setAgreed] = useState(false);
-  const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [countryCode, setCountryCode] = useState('+233');
-  const [countryFlag, setCountryFlag] = useState('🇬🇭');
-  const [countryModalVisible, setCountryModalVisible] = useState(false);
-  const [search, setSearch] = useState('');
-  const router = useRouter();
-  const params = useLocalSearchParams();
-  const { register, user } = useAuth();
+  const [emailError, setEmailError] = useState('');
+  
+  // Privacy policy agreement states
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [disagreeToTerms, setDisagreeToTerms] = useState(true);
 
-  React.useEffect(() => {
-    if (params.privacyAgreed === 'true') {
-      setAgreed(true);
-    }
-  }, [params.privacyAgreed]);
+  const isRecycler = selectedRole === 'recycler';
 
-  // Handle navigation after successful registration
-  React.useEffect(() => {
+  // Navigate based on user role after registration
+  useEffect(() => {
     if (user) {
-      console.log('RegisterScreen: User registered, navigating to main app');
-      if (user.role === 'recycler') {
+      const userRole = user.role || 'customer';
+      
+      if (userRole === 'recycler') {
+        // Always go to recycler home first, verification prompt will be shown there
         router.replace('/(recycler-tabs)');
       } else {
         router.replace('/(tabs)');
@@ -43,714 +59,699 @@ export default function RegisterScreen() {
     }
   }, [user, router]);
 
-  function validateEmail(email: string) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  }
-
-  // Real-time password validation
-  const handlePasswordChange = (text: string) => {
-    setPassword(text);
-    if (text.length > 0) {
-      const validation = validatePassword(text);
-      setPasswordError(validation.valid ? '' : validation.message);
-    } else {
-      setPasswordError('');
-    }
-  };
-
-  function validatePassword(password: string) {
-    // Password must be at least 8 characters with complexity requirements
+  const validatePassword = (password: string) => {
     const minLength = 8;
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumbers = /\d/.test(password);
     const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-    
-    if (password.length < minLength) {
-      return { valid: false, message: 'Password must be at least 8 characters long' };
+
+    const errors = [];
+    if (password.length < minLength) errors.push(`At least ${minLength} characters`);
+    if (!hasUpperCase) errors.push('One uppercase letter');
+    if (!hasLowerCase) errors.push('One lowercase letter');
+    if (!hasNumbers) errors.push('One number');
+    if (!hasSpecialChar) errors.push('One special character');
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  };
+
+  const handlePasswordChange = (password: string) => {
+    setFormData(prev => ({ ...prev, password }));
+    const validation = validatePassword(password);
+    setPasswordError(validation.errors.join(', '));
+  };
+
+  const handleConfirmPasswordChange = (confirmPassword: string) => {
+    setFormData(prev => ({ ...prev, confirmPassword }));
+  };
+
+  const handleFullNameChange = (fullName: string) => {
+    setFormData(prev => ({ ...prev, fullName }));
+  };
+
+  const handleCompanyNameChange = (companyName: string) => {
+    setFormData(prev => ({ ...prev, companyName }));
+  };
+
+  const [phoneError, setPhoneError] = useState('');
+  const [isPhoneValid, setIsPhoneValid] = useState(false);
+  const [emailExistsError, setEmailExistsError] = useState(false);
+
+  // Helper function to suggest email corrections
+  const suggestEmailCorrection = (email: string): string | null => {
+    const commonMistakes = [
+      { pattern: /@gmail\.comn$/, suggestion: email.replace(/@gmail\.comn$/, '@gmail.com'), message: 'Remove the extra "n"' },
+      { pattern: /@gmail\.con$/, suggestion: email.replace(/@gmail\.con$/, '@gmail.com'), message: 'Change "con" to "com"' },
+      { pattern: /@gmail\.co$/, suggestion: email + 'm', message: 'Add "m" to complete ".com"' },
+      { pattern: /@gmail\.c$/, suggestion: email + 'om', message: 'Add "om" to complete ".com"' },
+      { pattern: /@gmail\.$/, suggestion: email + 'com', message: 'Add "com" to complete the domain' },
+      { pattern: /@gmai\.com$/, suggestion: email.replace(/@gmai\.com$/, '@gmail.com'), message: 'Add "l" to "gmai"' },
+      { pattern: /@gmal\.com$/, suggestion: email.replace(/@gmal\.com$/, '@gmail.com'), message: 'Add "i" to "gmal"' },
+      { pattern: /@gmil\.com$/, suggestion: email.replace(/@gmil\.com$/, '@gmail.com'), message: 'Add "a" to "gmil"' },
+      { pattern: /@hotmai\.com$/, suggestion: email.replace(/@hotmai\.com$/, '@hotmail.com'), message: 'Add "l" to "hotmai"' },
+      { pattern: /@yahoo\.co$/, suggestion: email + 'm', message: 'Add "m" to complete ".com"' },
+    ];
+
+    for (const mistake of commonMistakes) {
+      if (mistake.pattern.test(email)) {
+        return `Did you mean "${mistake.suggestion}"? (${mistake.message})`;
+      }
     }
-    if (!hasUpperCase) {
-      return { valid: false, message: 'Password must contain at least one uppercase letter' };
-    }
-    if (!hasLowerCase) {
-      return { valid: false, message: 'Password must contain at least one lowercase letter' };
-    }
-    if (!hasNumbers) {
-      return { valid: false, message: 'Password must contain at least one number' };
-    }
-    if (!hasSpecialChar) {
-      return { valid: false, message: 'Password must contain at least one special character (!@#$%^&*(),.?":{}|<>)' };
-    }
-    
-    return { valid: true, message: 'Password is strong' };
-  }
+    return null;
+  };
+
+  const handlePhoneChange = (phone: string) => {
+    setFormData(prev => ({ ...prev, phone }));
+  };
+
+  const handlePhoneValidation = (isValid: boolean, error?: string) => {
+    setIsPhoneValid(isValid);
+    setPhoneError(error || '');
+  };
+
+  const handleAgreeToTerms = () => {
+    setAgreeToTerms(true);
+    setDisagreeToTerms(false);
+  };
+
+  const handleDisagreeToTerms = () => {
+    setDisagreeToTerms(true);
+    setAgreeToTerms(false);
+  };
 
   const handleRegister = async () => {
-    // Validation
-    if (!validateEmail(email)) {
-      setEmailError('Please enter a valid email address.');
+    // Clear previous validation errors
+    setValidationErrors([]);
+
+    // Check terms agreement
+    if (!agreeToTerms) {
+      Alert.alert('Required', 'You must agree to the Terms and Conditions to continue.');
       return;
     }
 
-    if (!username.trim()) {
-      Alert.alert('Error', 'Please enter a username.');
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return;
     }
 
-    const passwordValidation = validatePassword(password);
-    if (!passwordValidation.valid) {
-      Alert.alert('Password Requirements', passwordValidation.message);
+    // Prepare validation data
+    const validationData: SignupValidationData = {
+      email: formData.email,
+      phoneNumber: formData.phone,
+      countryCode: countryCode,
+      password: formData.password,
+      confirmPassword: formData.confirmPassword,
+      fullName: formData.fullName,
+      companyName: isRecycler ? formData.companyName : undefined,
+    };
+
+    // Validate all fields
+    const validation = validateSignup(validationData);
+    
+    if (!validation.isValid) {
+      setValidationErrors(validation.errors);
+      Alert.alert('Validation Error', validation.errors.join('\n'));
       return;
     }
 
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match.');
+    // Additional validation for recyclers
+    if (isRecycler && !formData.companyName.trim()) {
+      Alert.alert('Error', 'Company name is required for recyclers');
       return;
     }
 
-    if (!agreed) {
-      Alert.alert('Error', 'Please agree to the Privacy Policy and Terms of Service.');
-      return;
-    }
-
+    setIsLoading(true);
+    console.log('Starting registration process...');
+    console.log('Email value:', JSON.stringify(formData.email));
+    console.log('Registration data:', {
+      email: formData.email,
+      username: formData.fullName,
+      phone: formData.phone,
+      role: selectedRole,
+      companyName: isRecycler ? formData.companyName : undefined,
+      termsAgreed: true,
+    });
+    
     try {
-      setIsLoading(true);
-      
-      // Clean and validate phone number
-      let phoneNumber = undefined;
-      if (contact.trim()) {
-        const cleanedPhone = cleanPhoneInput(contact.trim(), countryCode);
-        if (!isValidPhone(cleanedPhone, countryCode)) {
-          Alert.alert('Error', 'Please enter a valid phone number.');
-          return;
-        }
-        phoneNumber = `${countryCode}${cleanedPhone}`;
-      }
-      
-      const userData = {
-        email: email.trim(),
-        password,
-        username: username.trim(),
-        phone: phoneNumber,
-        role: 'customer' as const, // Default to customer role
-      };
-
-      await register(userData);
-      
-      // Show success message
-      Alert.alert(
-        'Registration Successful!',
-        'Your account has been created and you are now logged in.',
-        [{ text: 'OK' }]
-      );
+      console.log('Calling register function...');
+      await register({
+        email: formData.email,
+        password: formData.password,
+        username: formData.fullName,
+        phone: validation.formattedPhone || formData.phone,
+        role: selectedRole as 'customer' | 'recycler',
+        companyName: isRecycler ? formData.companyName : undefined,
+      });
+      console.log('Registration successful!');
+      // Navigation will be handled by useEffect when user state updates
     } catch (error: any) {
       console.error('Registration error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       
-      // Handle specific email validation errors
-      if (error.message && error.message.includes('invalid')) {
+      let message = 'Registration failed. Please try again.';
+      if (error.message === 'EMAIL_EXISTS' || error.message?.includes('already exists')) {
+        message = 'An account with this email already exists. Please try logging in instead.';
+      } else if (error.message === 'INVALID_EMAIL') {
+        message = 'Please enter a valid email address.';
+      } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
+        message = 'Network error. Please check your internet connection and try again.';
+      } else if (error.message?.includes('invalid')) {
+        message = 'Please check your email format and try again.';
+      }
+      
+      if (error.message === 'EMAIL_EXISTS' || error.message?.includes('already exists')) {
+        setEmailExistsError(true);
         Alert.alert(
-          'Invalid Email',
-          'Please use a valid email address from a recognized provider (Gmail, Outlook, Yahoo, etc.). Some email domains may not be supported.',
-          [{ text: 'OK' }]
+          'Account Already Exists',
+          'An account with this email already exists. What would you like to do?',
+          [
+            {
+              text: 'Try Different Email',
+              style: 'cancel',
+            },
+            {
+              text: 'Forgot Password?',
+              onPress: () => router.push('/ForgotPasswordScreen'),
+            },
+            {
+              text: 'Go to Login',
+              onPress: () => router.push('/LoginScreen'),
+            },
+          ]
         );
       } else {
-        Alert.alert(
-          'Registration Failed',
-          error.message || 'Registration failed. Please try again.'
-        );
+        Alert.alert('Registration Failed', message);
       }
     } finally {
+      console.log('Registration process completed');
       setIsLoading(false);
     }
   };
 
-  const countryCodes = [
-    { code: '+93', country: 'Afghanistan', flag: '🇦🇫' },
-    { code: '+355', country: 'Albania', flag: '🇦🇱' },
-    { code: '+213', country: 'Algeria', flag: '🇩🇿' },
-    { code: '+1-684', country: 'American Samoa', flag: '🇦🇸' },
-    { code: '+376', country: 'Andorra', flag: '🇦🇩' },
-    { code: '+244', country: 'Angola', flag: '🇦🇴' },
-    { code: '+1-264', country: 'Anguilla', flag: '🇦🇮' },
-    { code: '+672', country: 'Antarctica', flag: '🇦🇶' },
-    { code: '+1-268', country: 'Antigua and Barbuda', flag: '🇦🇬' },
-    { code: '+54', country: 'Argentina', flag: '🇦🇷' },
-    { code: '+374', country: 'Armenia', flag: '🇦🇲' },
-    { code: '+297', country: 'Aruba', flag: '🇦🇼' },
-    { code: '+61', country: 'Australia', flag: '🇦🇺' },
-    { code: '+43', country: 'Austria', flag: '🇦🇹' },
-    { code: '+994', country: 'Azerbaijan', flag: '🇦🇿' },
-    { code: '+1-242', country: 'Bahamas', flag: '🇧🇸' },
-    { code: '+973', country: 'Bahrain', flag: '🇧🇭' },
-    { code: '+880', country: 'Bangladesh', flag: '🇧🇩' },
-    { code: '+1-246', country: 'Barbados', flag: '🇧🇧' },
-    { code: '+375', country: 'Belarus', flag: '🇧🇾' },
-    { code: '+32', country: 'Belgium', flag: '🇧🇪' },
-    { code: '+501', country: 'Belize', flag: '🇧🇿' },
-    { code: '+229', country: 'Benin', flag: '🇧🇯' },
-    { code: '+1-441', country: 'Bermuda', flag: '🇧🇲' },
-    { code: '+975', country: 'Bhutan', flag: '🇧🇹' },
-    { code: '+591', country: 'Bolivia', flag: '🇧🇴' },
-    { code: '+387', country: 'Bosnia and Herzegovina', flag: '🇧🇦' },
-    { code: '+267', country: 'Botswana', flag: '🇧🇼' },
-    { code: '+55', country: 'Brazil', flag: '🇧🇷' },
-    { code: '+246', country: 'British Indian Ocean Territory', flag: '🇮🇴' },
-    { code: '+1-284', country: 'British Virgin Islands', flag: '🇻🇬' },
-    { code: '+673', country: 'Brunei', flag: '🇧🇳' },
-    { code: '+359', country: 'Bulgaria', flag: '🇧🇬' },
-    { code: '+226', country: 'Burkina Faso', flag: '🇧🇫' },
-    { code: '+257', country: 'Burundi', flag: '🇧🇮' },
-    { code: '+855', country: 'Cambodia', flag: '🇰🇭' },
-    { code: '+237', country: 'Cameroon', flag: '🇨🇲' },
-    { code: '+1', country: 'Canada', flag: '🇨🇦' },
-    { code: '+238', country: 'Cape Verde', flag: '🇨🇻' },
-    { code: '+1-345', country: 'Cayman Islands', flag: '🇰🇾' },
-    { code: '+236', country: 'Central African Republic', flag: '🇨🇫' },
-    { code: '+235', country: 'Chad', flag: '🇹🇩' },
-    { code: '+56', country: 'Chile', flag: '🇨🇱' },
-    { code: '+86', country: 'China', flag: '🇨🇳' },
-    { code: '+61', country: 'Christmas Island', flag: '🇨🇽' },
-    { code: '+61', country: 'Cocos Islands', flag: '🇨🇨' },
-    { code: '+57', country: 'Colombia', flag: '🇨🇴' },
-    { code: '+269', country: 'Comoros', flag: '🇰🇲' },
-    { code: '+682', country: 'Cook Islands', flag: '🇨🇰' },
-    { code: '+506', country: 'Costa Rica', flag: '🇨🇷' },
-    { code: '+385', country: 'Croatia', flag: '🇭🇷' },
-    { code: '+53', country: 'Cuba', flag: '🇨🇺' },
-    { code: '+599', country: 'Curacao', flag: '🇨🇼' },
-    { code: '+357', country: 'Cyprus', flag: '🇨🇾' },
-    { code: '+420', country: 'Czech Republic', flag: '🇨🇿' },
-    { code: '+243', country: 'Democratic Republic of the Congo', flag: '🇨🇩' },
-    { code: '+45', country: 'Denmark', flag: '🇩🇰' },
-    { code: '+253', country: 'Djibouti', flag: '🇩🇯' },
-    { code: '+1-767', country: 'Dominica', flag: '🇩🇲' },
-    { code: '+1-809', country: 'Dominican Republic', flag: '🇩🇴' },
-    { code: '+670', country: 'East Timor', flag: '🇹🇱' },
-    { code: '+593', country: 'Ecuador', flag: '🇪🇨' },
-    { code: '+20', country: 'Egypt', flag: '🇪🇬' },
-    { code: '+503', country: 'El Salvador', flag: '🇸🇻' },
-    { code: '+240', country: 'Equatorial Guinea', flag: '🇬🇶' },
-    { code: '+291', country: 'Eritrea', flag: '🇪🇷' },
-    { code: '+372', country: 'Estonia', flag: '🇪🇪' },
-    { code: '+251', country: 'Ethiopia', flag: '🇪🇹' },
-    { code: '+500', country: 'Falkland Islands', flag: '🇫🇰' },
-    { code: '+298', country: 'Faroe Islands', flag: '🇫🇴' },
-    { code: '+679', country: 'Fiji', flag: '🇫🇯' },
-    { code: '+358', country: 'Finland', flag: '🇫🇮' },
-    { code: '+33', country: 'France', flag: '🇫🇷' },
-    { code: '+594', country: 'French Guiana', flag: '🇬🇫' },
-    { code: '+689', country: 'French Polynesia', flag: '🇵🇫' },
-    { code: '+241', country: 'Gabon', flag: '🇬🇦' },
-    { code: '+220', country: 'Gambia', flag: '🇬🇲' },
-    { code: '+995', country: 'Georgia', flag: '🇬🇪' },
-    { code: '+49', country: 'Germany', flag: '🇩🇪' },
-    { code: '+233', country: 'Ghana', flag: '🇬🇭' },
-    { code: '+350', country: 'Gibraltar', flag: '🇬🇮' },
-    { code: '+30', country: 'Greece', flag: '🇬🇷' },
-    { code: '+299', country: 'Greenland', flag: '🇬🇱' },
-    { code: '+1-473', country: 'Grenada', flag: '🇬🇩' },
-    { code: '+590', country: 'Guadeloupe', flag: '🇬🇵' },
-    { code: '+1-671', country: 'Guam', flag: '🇬🇺' },
-    { code: '+502', country: 'Guatemala', flag: '🇬🇹' },
-    { code: '+44-1481', country: 'Guernsey', flag: '🇬🇬' },
-    { code: '+224', country: 'Guinea', flag: '🇬🇳' },
-    { code: '+245', country: 'Guinea-Bissau', flag: '🇬🇼' },
-    { code: '+592', country: 'Guyana', flag: '🇬🇾' },
-    { code: '+509', country: 'Haiti', flag: '🇭🇹' },
-    { code: '+504', country: 'Honduras', flag: '🇭🇳' },
-    { code: '+852', country: 'Hong Kong', flag: '🇭🇰' },
-    { code: '+36', country: 'Hungary', flag: '🇭🇺' },
-    { code: '+354', country: 'Iceland', flag: '🇮🇸' },
-    { code: '+91', country: 'India', flag: '🇮🇳' },
-    { code: '+62', country: 'Indonesia', flag: '🇮🇩' },
-    { code: '+98', country: 'Iran', flag: '🇮🇷' },
-    { code: '+964', country: 'Iraq', flag: '🇮🇶' },
-    { code: '+353', country: 'Ireland', flag: '🇮🇪' },
-    { code: '+44-1624', country: 'Isle of Man', flag: '🇮🇲' },
-    { code: '+972', country: 'Israel', flag: '🇮🇱' },
-    { code: '+39', country: 'Italy', flag: '🇮🇹' },
-    { code: '+225', country: 'Ivory Coast', flag: '🇨🇮' },
-    { code: '+1-876', country: 'Jamaica', flag: '🇯🇲' },
-    { code: '+81', country: 'Japan', flag: '🇯🇵' },
-    { code: '+44-1534', country: 'Jersey', flag: '🇯🇪' },
-    { code: '+962', country: 'Jordan', flag: '🇯🇴' },
-    { code: '+7', country: 'Kazakhstan', flag: '🇰🇿' },
-    { code: '+254', country: 'Kenya', flag: '🇰🇪' },
-    { code: '+686', country: 'Kiribati', flag: '🇰🇮' },
-    { code: '+383', country: 'Kosovo', flag: '🇽🇰' },
-    { code: '+965', country: 'Kuwait', flag: '🇰🇼' },
-    { code: '+996', country: 'Kyrgyzstan', flag: '🇰🇬' },
-    { code: '+856', country: 'Laos', flag: '🇱🇦' },
-    { code: '+371', country: 'Latvia', flag: '🇱🇻' },
-    { code: '+961', country: 'Lebanon', flag: '🇱🇧' },
-    { code: '+266', country: 'Lesotho', flag: '🇱🇸' },
-    { code: '+231', country: 'Liberia', flag: '🇱🇷' },
-    { code: '+218', country: 'Libya', flag: '🇱🇾' },
-    { code: '+423', country: 'Liechtenstein', flag: '🇱🇮' },
-    { code: '+370', country: 'Lithuania', flag: '🇱🇹' },
-    { code: '+352', country: 'Luxembourg', flag: '🇱🇺' },
-    { code: '+853', country: 'Macau', flag: '🇲🇴' },
-    { code: '+389', country: 'Macedonia', flag: '🇲🇰' },
-    { code: '+261', country: 'Madagascar', flag: '🇲🇬' },
-    { code: '+265', country: 'Malawi', flag: '🇲🇼' },
-    { code: '+60', country: 'Malaysia', flag: '🇲🇾' },
-    { code: '+960', country: 'Maldives', flag: '🇲🇻' },
-    { code: '+223', country: 'Mali', flag: '🇲🇱' },
-    { code: '+356', country: 'Malta', flag: '🇲🇹' },
-    { code: '+692', country: 'Marshall Islands', flag: '🇲🇭' },
-    { code: '+596', country: 'Martinique', flag: '🇲🇶' },
-    { code: '+222', country: 'Mauritania', flag: '🇲🇷' },
-    { code: '+230', country: 'Mauritius', flag: '🇲🇺' },
-    { code: '+262', country: 'Mayotte', flag: '🇾🇹' },
-    { code: '+52', country: 'Mexico', flag: '🇲🇽' },
-    { code: '+691', country: 'Micronesia', flag: '🇫🇲' },
-    { code: '+373', country: 'Moldova', flag: '🇲🇩' },
-    { code: '+377', country: 'Monaco', flag: '🇲🇨' },
-    { code: '+976', country: 'Mongolia', flag: '🇲🇳' },
-    { code: '+382', country: 'Montenegro', flag: '🇲🇪' },
-    { code: '+1-664', country: 'Montserrat', flag: '🇲🇸' },
-    { code: '+212', country: 'Morocco', flag: '🇲🇦' },
-    { code: '+258', country: 'Mozambique', flag: '🇲🇿' },
-    { code: '+95', country: 'Myanmar', flag: '🇲🇲' },
-    { code: '+264', country: 'Namibia', flag: '🇳🇦' },
-    { code: '+674', country: 'Nauru', flag: '🇳🇷' },
-    { code: '+977', country: 'Nepal', flag: '🇳🇵' },
-    { code: '+31', country: 'Netherlands', flag: '🇳🇱' },
-    { code: '+599', country: 'Netherlands Antilles', flag: '🇳🇱' },
-    { code: '+687', country: 'New Caledonia', flag: '🇳🇨' },
-    { code: '+64', country: 'New Zealand', flag: '🇳🇿' },
-    { code: '+505', country: 'Nicaragua', flag: '🇳🇮' },
-    { code: '+227', country: 'Niger', flag: '🇳🇪' },
-    { code: '+234', country: 'Nigeria', flag: '🇳🇬' },
-    { code: '+683', country: 'Niue', flag: '🇳🇺' },
-    { code: '+672', country: 'Norfolk Island', flag: '🇳🇫' },
-    { code: '+850', country: 'North Korea', flag: '🇰🇵' },
-    { code: '+1-670', country: 'Northern Mariana Islands', flag: '🇲🇵' },
-    { code: '+47', country: 'Norway', flag: '🇳🇴' },
-    { code: '+968', country: 'Oman', flag: '🇴🇲' },
-    { code: '+92', country: 'Pakistan', flag: '🇵🇰' },
-    { code: '+680', country: 'Palau', flag: '🇵🇼' },
-    { code: '+970', country: 'Palestine', flag: '🇵🇸' },
-    { code: '+507', country: 'Panama', flag: '🇵🇦' },
-    { code: '+675', country: 'Papua New Guinea', flag: '🇵🇬' },
-    { code: '+595', country: 'Paraguay', flag: '🇵🇾' },
-    { code: '+51', country: 'Peru', flag: '🇵🇪' },
-    { code: '+63', country: 'Philippines', flag: '🇵🇭' },
-    { code: '+64', country: 'Pitcairn', flag: '🇵🇳' },
-    { code: '+48', country: 'Poland', flag: '🇵🇱' },
-    { code: '+351', country: 'Portugal', flag: '🇵🇹' },
-    { code: '+1-787', country: 'Puerto Rico', flag: '🇵🇷' },
-    { code: '+974', country: 'Qatar', flag: '🇶🇦' },
-    { code: '+242', country: 'Republic of the Congo', flag: '🇨🇬' },
-    { code: '+262', country: 'Reunion', flag: '🇷🇪' },
-    { code: '+40', country: 'Romania', flag: '🇷🇴' },
-    { code: '+7', country: 'Russia', flag: '🇷🇺' },
-    { code: '+250', country: 'Rwanda', flag: '🇷🇼' },
-    { code: '+590', country: 'Saint Barthelemy', flag: '🇧🇱' },
-    { code: '+290', country: 'Saint Helena', flag: '🇸🇭' },
-    { code: '+1-869', country: 'Saint Kitts and Nevis', flag: '🇰🇳' },
-    { code: '+1-758', country: 'Saint Lucia', flag: '🇱🇨' },
-    { code: '+590', country: 'Saint Martin', flag: '🇲🇫' },
-    { code: '+508', country: 'Saint Pierre and Miquelon', flag: '🇵🇲' },
-    { code: '+1-784', country: 'Saint Vincent and the Grenadines', flag: '🇻🇨' },
-    { code: '+685', country: 'Samoa', flag: '🇼🇸' },
-    { code: '+378', country: 'San Marino', flag: '🇸🇲' },
-    { code: '+239', country: 'Sao Tome and Principe', flag: '🇸🇹' },
-    { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦' },
-    { code: '+221', country: 'Senegal', flag: '🇸🇳' },
-    { code: '+381', country: 'Serbia', flag: '🇷🇸' },
-    { code: '+248', country: 'Seychelles', flag: '🇸🇨' },
-    { code: '+232', country: 'Sierra Leone', flag: '🇸🇱' },
-    { code: '+65', country: 'Singapore', flag: '🇸🇬' },
-    { code: '+1-721', country: 'Sint Maarten', flag: '🇸🇽' },
-    { code: '+421', country: 'Slovakia', flag: '🇸🇰' },
-    { code: '+386', country: 'Slovenia', flag: '🇸🇮' },
-    { code: '+677', country: 'Solomon Islands', flag: '🇸🇧' },
-    { code: '+252', country: 'Somalia', flag: '🇸🇴' },
-    { code: '+27', country: 'South Africa', flag: '🇿🇦' },
-    { code: '+82', country: 'South Korea', flag: '🇰🇷' },
-    { code: '+211', country: 'South Sudan', flag: '🇸🇸' },
-    { code: '+34', country: 'Spain', flag: '🇪🇸' },
-    { code: '+94', country: 'Sri Lanka', flag: '🇱🇰' },
-    { code: '+249', country: 'Sudan', flag: '🇸🇩' },
-    { code: '+597', country: 'Suriname', flag: '🇸🇷' },
-    { code: '+47', country: 'Svalbard and Jan Mayen', flag: '🇸🇯' },
-    { code: '+268', country: 'Swaziland', flag: '🇸🇿' },
-    { code: '+46', country: 'Sweden', flag: '🇸🇪' },
-    { code: '+41', country: 'Switzerland', flag: '🇨🇭' },
-    { code: '+963', country: 'Syria', flag: '🇸🇾' },
-    { code: '+886', country: 'Taiwan', flag: '🇹🇼' },
-    { code: '+992', country: 'Tajikistan', flag: '🇹🇯' },
-    { code: '+255', country: 'Tanzania', flag: '🇹🇿' },
-    { code: '+66', country: 'Thailand', flag: '🇹🇭' },
-    { code: '+228', country: 'Togo', flag: '🇹🇬' },
-    { code: '+690', country: 'Tokelau', flag: '🇹🇰' },
-    { code: '+676', country: 'Tonga', flag: '🇹🇴' },
-    { code: '+1-868', country: 'Trinidad and Tobago', flag: '🇹🇹' },
-    { code: '+216', country: 'Tunisia', flag: '🇹🇳' },
-    { code: '+90', country: 'Turkey', flag: '🇹🇷' },
-    { code: '+993', country: 'Turkmenistan', flag: '🇹🇲' },
-    { code: '+1-649', country: 'Turks and Caicos Islands', flag: '🇹🇨' },
-    { code: '+688', country: 'Tuvalu', flag: '🇹🇻' },
-    { code: '+256', country: 'Uganda', flag: '🇺🇬' },
-    { code: '+380', country: 'Ukraine', flag: '🇺🇦' },
-    { code: '+971', country: 'United Arab Emirates', flag: '🇦🇪' },
-    { code: '+44', country: 'United Kingdom', flag: '🇬🇧' },
-    { code: '+1', country: 'United States', flag: '🇺🇸' },
-    { code: '+598', country: 'Uruguay', flag: '🇺🇾' },
-    { code: '+998', country: 'Uzbekistan', flag: '🇺🇿' },
-    { code: '+678', country: 'Vanuatu', flag: '🇻🇺' },
-    { code: '+58', country: 'Venezuela', flag: '🇻🇪' },
-    { code: '+84', country: 'Vietnam', flag: '🇻🇳' },
-    { code: '+1-284', country: 'Virgin Islands, British', flag: '🇻🇬' },
-    { code: '+1-340', country: 'Virgin Islands, U.S.', flag: '🇻🇮' },
-    { code: '+681', country: 'Wallis and Futuna', flag: '🇼🇫' },
-    { code: '+212', country: 'Western Sahara', flag: '🇪🇭' },
-    { code: '+967', country: 'Yemen', flag: '🇾🇪' },
-    { code: '+260', country: 'Zambia', flag: '🇿🇲' },
-    { code: '+263', country: 'Zimbabwe', flag: '🇿🇼' },
-  ];
+  const handleBackToRoleSelection = () => {
+    router.push('/RoleSelectionScreen');
+  };
 
-  const filteredCountries = countryCodes.filter(item =>
-    item.country.toLowerCase().includes(search.toLowerCase()) ||
-    item.code.includes(search) ||
-    item.flag.includes(search)
-  );
+  const handleViewTerms = () => {
+    // For now, we'll use the same privacy policy screen for terms
+    // In the future, you might want to create a separate Terms screen
+    const privacyScreen = isRecycler ? '/recycler-screens/RecyclerPrivacyScreen' : '/customer-screens/CustomerPrivacyScreen';
+    router.push(privacyScreen as any);
+  };
+
+  // Check if user can register (all validations must pass)
+  const canRegister = 
+    agreeToTerms && 
+    formData.email.trim() !== '' &&
+    formData.fullName.trim() !== '' &&
+    formData.phone.trim() !== '' &&
+    formData.password.trim() !== '' &&
+    formData.confirmPassword.trim() !== '' &&
+    formData.password === formData.confirmPassword &&
+    !emailError &&
+    !passwordError &&
+    isPhoneValid &&
+    (isRecycler ? formData.companyName.trim() !== '' : true);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.logoRow}>
-        <Image source={require('../assets/images/logo landscape.png')} style={styles.logo} />
-      </View>
-      <View style={styles.formCard}>
-        <Text style={styles.registerTitle}>Register Now</Text>
-        <Text style={styles.registerSubtitle}>Sign in with your password to continue</Text>
-      </View>
-      <View style={styles.inputRow}>
-        <MaterialIcons name="person" size={22} color="#263A13" style={styles.inputIcon} />
-        <TextInput
-          style={styles.input}
-          placeholder="User name"
-          value={username}
-          onChangeText={setUsername}
-          placeholderTextColor="#263A13"
-        />
-      </View>
-      <View style={styles.inputRow}>
-        <Image source={require('../assets/images/email.png')} style={styles.inputIconImg} />
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your Email"
-          value={email}
-          onChangeText={text => { setEmail(text); setEmailError(''); }}
-          placeholderTextColor="#263A13"
-        />
-      </View>
-      {emailError ? <Text style={{ color: 'red', marginBottom: 4, alignSelf: 'flex-start', marginLeft: 32 }}>{emailError}</Text> : null}
-      <View style={styles.inputRow}>
-        <TouchableOpacity style={styles.countryCodeWrapper} onPress={() => setCountryModalVisible(true)}>
-          <Text style={styles.countryCodeText}>{countryFlag} {countryCode}</Text>
-        </TouchableOpacity>
-        <TextInput
-          style={styles.input}
-          placeholder="Phone number (without country code)"
-          value={contact}
-          onChangeText={setContact}
-          placeholderTextColor="#263A13"
-          keyboardType="phone-pad"
-        />
-      </View>
-      {/* Country Code Picker Modal */}
-      <Modal
-        visible={countryModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setCountryModalVisible(false)}
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setCountryModalVisible(false)}>
-          <View style={styles.countryModalContent}>
-            <Text style={styles.countryModalTitle}>Select Country Code</Text>
-            <TextInput
-              style={{
-                borderWidth: 1,
-                borderColor: '#ccc',
-                borderRadius: 8,
-                padding: 8,
-                marginBottom: 10,
-                width: '100%',
-              }}
-              placeholder="Search country or code"
-              value={search}
-              onChangeText={setSearch}
-            />
-            <FlatList
-              data={filteredCountries}
-              keyExtractor={item => item.code + item.country}
-              style={{ width: '100%' }}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.countryCodeItem}
-                  onPress={() => {
-                    setCountryCode(item.code);
-                    setCountryFlag(item.flag);
-                    setCountryModalVisible(false);
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={handleBackToRoleSelection}
+            >
+              <MaterialIcons name="arrow-back" size={24} color={COLORS.darkGreen} />
+            </TouchableOpacity>
+            
+            <Text style={styles.title}>
+              {isRecycler ? 'Recycler Registration' : 'Customer Registration'}
+            </Text>
+            <Text style={styles.subtitle}>
+              Create your account to get started
+            </Text>
+          </View>
+
+          {/* Form */}
+          <View style={styles.form}>
+            {isRecycler && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Company Name *</Text>
+                <View style={styles.inputContainer}>
+                  <MaterialIcons 
+                    name="business" 
+                    size={20} 
+                    color={COLORS.gray} 
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, formData.companyName.trim() === '' && styles.inputError]}
+                    value={formData.companyName}
+                    onChangeText={handleCompanyNameChange}
+                    placeholder="Enter company name"
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+            )}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                {isRecycler ? 'Your Full Name' : 'Full Name'} *
+              </Text>
+              <View style={styles.inputContainer}>
+                <MaterialIcons 
+                  name="person" 
+                  size={20} 
+                  color={COLORS.gray} 
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.input, formData.fullName.trim() === '' && styles.inputError]}
+                  value={formData.fullName}
+                  onChangeText={handleFullNameChange}
+                  placeholder={isRecycler ? "Enter your full name" : "Enter your full name"}
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email Address *</Text>
+              <View style={styles.inputContainer}>
+                <MaterialIcons 
+                  name="email" 
+                  size={20} 
+                  color={formData.email.trim() !== '' && !emailError ? COLORS.green : COLORS.gray} 
+                  style={styles.inputIcon} 
+                />
+                <TextInput
+                  style={[
+                    styles.input, 
+                    (formData.email.trim() === '' || emailError || emailExistsError) && styles.inputError,
+                    formData.email.trim() !== '' && !emailError && !emailExistsError && { borderColor: COLORS.green }
+                  ]}
+                  value={formData.email}
+                  onChangeText={(text) => {
+                    // Trim whitespace and remove any extra characters
+                    const cleanEmail = text.trim().toLowerCase();
+                    setFormData(prev => ({ ...prev, email: cleanEmail }));
+                    
+                    // Clear email error when user types
+                    setEmailError('');
+                    setEmailExistsError(false);
+                    
+                    // Enhanced email validation
+                    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                    
+                    if (cleanEmail) {
+                      // Check for common email mistakes
+                      if (cleanEmail.includes(' ')) {
+                        setEmailError('Email address cannot contain spaces');
+                      } else if (!cleanEmail.includes('@')) {
+                        setEmailError('Email address must contain @ symbol');
+                      } else if (!cleanEmail.includes('.')) {
+                        setEmailError('Email address must contain a domain (e.g., .com, .org)');
+                      } else if (cleanEmail.startsWith('@') || cleanEmail.endsWith('@')) {
+                        setEmailError('Email address cannot start or end with @');
+                      } else if (!emailRegex.test(cleanEmail)) {
+                        // Check for common email mistakes and suggest corrections
+                        const suggestion = suggestEmailCorrection(cleanEmail);
+                        if (suggestion) {
+                          setEmailError(suggestion);
+                        } else {
+                          setEmailError('Please enter a valid email address (e.g., user@example.com)');
+                        }
+                      }
+                    }
                   }}
+                  placeholder="Enter your email address"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                />
+              </View>
+              {emailError ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{emailError}</Text>
+                  {emailError.includes('Did you mean') && (
+                    <TouchableOpacity
+                      style={styles.quickFixButton}
+                      onPress={() => {
+                        const suggestion = suggestEmailCorrection(formData.email);
+                        if (suggestion) {
+                          // Extract the suggested email from the error message
+                          const match = suggestion.match(/Did you mean "([^"]+)"/);
+                          if (match) {
+                            setFormData(prev => ({ ...prev, email: match[1] }));
+                            setEmailError('');
+                          }
+                        }
+                      }}
+                    >
+                      <Text style={styles.quickFixText}>Quick Fix</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : null}
+              {emailExistsError ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>This email is already registered. Try a different email or log in.</Text>
+                  <TouchableOpacity
+                    style={styles.quickFixButton}
+                    onPress={() => router.push('/LoginScreen')}
+                  >
+                    <Text style={styles.quickFixText}>Login</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Phone Number *</Text>
+              <PhoneNumberInput
+                value={formData.phone}
+                onChangeText={handlePhoneChange}
+                onCountryChange={setCountryCode}
+                selectedCountryCode={countryCode.replace('+', '')}
+                placeholder="Enter your phone number"
+                error={phoneError || (formData.phone.trim() === '' ? 'Phone number is required' : undefined)}
+                onValidationChange={handlePhoneValidation}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Password *</Text>
+              <View style={styles.inputContainer}>
+                <MaterialIcons name="lock" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.input, (formData.password.trim() === '' || passwordError) && styles.inputError]}
+                  value={formData.password}
+                  onChangeText={handlePasswordChange}
+                  placeholder="Create a password"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
                 >
-                  <Text style={styles.countryCodeTextModal}>{item.flag} {item.country} ({item.code})</Text>
+                  <MaterialIcons 
+                    name={showPassword ? "visibility" : "visibility-off"} 
+                    size={20} 
+                    color={COLORS.gray} 
+                  />
                 </TouchableOpacity>
-              )}
-            />
+              </View>
+              {passwordError ? (
+                <Text style={styles.errorText}>{passwordError}</Text>
+              ) : null}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Confirm Password *</Text>
+              <View style={styles.inputContainer}>
+                <MaterialIcons name="lock" size={20} color={COLORS.gray} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.input, (formData.confirmPassword.trim() === '' || formData.password !== formData.confirmPassword) && styles.inputError]}
+                  value={formData.confirmPassword}
+                  onChangeText={handleConfirmPasswordChange}
+                  placeholder="Confirm your password"
+                  secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  <MaterialIcons 
+                    name={showConfirmPassword ? "visibility" : "visibility-off"} 
+                    size={20} 
+                    color={COLORS.gray} 
+                  />
+                </TouchableOpacity>
+              </View>
+              {formData.confirmPassword.trim() !== '' && formData.password !== formData.confirmPassword ? (
+                <Text style={styles.errorText}>Passwords do not match</Text>
+              ) : null}
+            </View>
+
+            {/* Privacy Policy Agreements */}
+            <View style={styles.agreementSection}>
+              <Text style={styles.agreementTitle}>Agreements</Text>
+              
+              <View style={styles.checkboxRow}>
+                <TouchableOpacity 
+                  style={styles.checkbox} 
+                  onPress={handleDisagreeToTerms}
+                >
+                  <View style={[styles.checkboxBox, disagreeToTerms && styles.checkboxChecked]}>
+                    {disagreeToTerms && <Text style={styles.checkboxTick}>✓</Text>}
+                  </View>
+                  <View style={styles.checkboxTextContainer}>
+                    <Text style={styles.checkboxLabel}>
+                      <Text style={{fontWeight:'bold'}}>I Disagree</Text> to the Terms and Conditions
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.checkboxRow}>
+                <TouchableOpacity 
+                  style={styles.checkbox} 
+                  onPress={handleAgreeToTerms}
+                >
+                  <View style={[styles.checkboxBox, agreeToTerms && styles.checkboxChecked]}>
+                    {agreeToTerms && <Text style={styles.checkboxTick}>✓</Text>}
+                  </View>
+                  <View style={styles.checkboxTextContainer}>
+                    <Text style={styles.checkboxLabel}>
+                      <Text style={{fontWeight:'bold'}}>I Agree</Text> to the{' '}
+                      <Text style={styles.linkText} onPress={handleViewTerms}>
+                        Terms and Conditions
+                      </Text>
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.registerButton, 
+                (!canRegister || isLoading) && styles.registerButtonDisabled
+              ]}
+              onPress={handleRegister}
+              disabled={!canRegister || isLoading}
+            >
+              <Text style={styles.registerButtonText}>
+                {isLoading ? 'Creating Account...' : 'Create Account'}
+              </Text>
+            </TouchableOpacity>
           </View>
-        </Pressable>
-      </Modal>
-      <View style={styles.inputRow}>
-        <Image source={require('../assets/images/password.png')} style={styles.inputIconImg} />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!showPassword}
-          placeholderTextColor="#263A13"
-        />
-        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-          <Feather name={showPassword ? 'eye' : 'eye-off'} size={22} color="#263A13" style={styles.eyeIcon} />
-        </TouchableOpacity>
-      </View>
-      <View style={styles.inputRow}>
-        <Image source={require('../assets/images/password.png')} style={styles.inputIconImg} />
-        <TextInput
-          style={styles.input}
-          placeholder="Confirm Password"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry={!showConfirmPassword}
-          placeholderTextColor="#263A13"
-        />
-        <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-          <Feather name={showConfirmPassword ? 'eye' : 'eye-off'} size={22} color="#263A13" style={styles.eyeIcon} />
-        </TouchableOpacity>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 24, marginBottom: 12 }}>
-        <TouchableOpacity onPress={() => setAgreed(!agreed)} style={{ marginRight: 8 }}>
-          <View style={{
-            width: 22,
-            height: 22,
-            borderWidth: 2,
-            borderColor: '#263A13',
-            borderRadius: 4,
-            backgroundColor: agreed ? '#263A13' : '#fff',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            {agreed && <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>✓</Text>}
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Already have an account? </Text>
+            <TouchableOpacity onPress={() => router.push('/LoginScreen')}>
+              <Text style={styles.loginText}>Sign In</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-        <Text style={{ color: '#263A13', fontSize: 15 }}>
-          I Agree to all{' '}
-          <Text
-            style={{ fontWeight: 'bold', textDecorationLine: 'underline', color: '#263A13' }}
-            onPress={() => router.push({ pathname: '/PrivacyScreen', params: { fromRegister: 'true' } })}
-          >
-            Terms and Conditions
-          </Text>
-        </Text>
-      </View>
-      <TouchableOpacity
-        style={[styles.signUpButton, !agreed && { backgroundColor: '#B6CDBD' }]}
-        onPress={handleRegister}
-        disabled={isLoading || !agreed}
-      >
-        <Text style={styles.signUpButtonText}>{isLoading ? 'Signing Up...' : 'Sign up'}</Text>
-      </TouchableOpacity>
-      <Text style={styles.orText}>or continue with google</Text>
-      <TouchableOpacity style={styles.socialButton}>
-        <Image source={require('../assets/images/google.png')} style={styles.socialIconImg} />
-        <Text style={styles.socialText}>continue with Google</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.socialButton}>
-        <Image source={require('../assets/images/apple.png')} style={styles.socialIconImg} />
-        <Text style={styles.socialText}>continue with Apple</Text>
-      </TouchableOpacity>
-      <View style={styles.bottomRow}>
-        <Text style={styles.bottomText}>Already have an account? </Text>
-        <TouchableOpacity onPress={() => router.push('/LoginScreen')}>
-          <Text style={styles.signInText}>Sign in</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAF6',
-    paddingHorizontal: 0,
-    paddingTop: 40,
+    backgroundColor: COLORS.white,
   },
-  logoRow: {
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+  },
+  header: {
     alignItems: 'center',
-    marginBottom: 8,
+    marginTop: 40,
+    marginBottom: 40,
   },
-  logo: {
-    width: 200,
-    height: 80,
-    resizeMode: 'contain',
-    marginBottom: 8,
+  backButton: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    padding: 8,
   },
-  formCard: {
-    backgroundColor: '#D9DED8',
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 0,
-    marginBottom: 16,
-  },
-  registerTitle: {
-    fontSize: 24,
+  title: {
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#263A13',
-    marginBottom: 2,
+    color: COLORS.darkGreen,
+    textAlign: 'center',
+    marginBottom: 8,
   },
-  registerSubtitle: {
+  subtitle: {
     fontSize: 16,
-    color: '#263A13',
+    color: COLORS.gray,
+    textAlign: 'center',
   },
-  inputRow: {
+  form: {
+    gap: 20,
+  },
+  inputGroup: {
+    gap: 8,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.darkGreen,
+  },
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#A3C47C',
-    borderRadius: 24,
-    paddingHorizontal: 12,
-    marginHorizontal: 8,
-    marginBottom: 20,
-    backgroundColor: '#fff',
-    height: 48,
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+    borderRadius: 8,
+    backgroundColor: COLORS.white,
   },
   inputIcon: {
-    fontSize: 20,
+    marginLeft: 12,
     marginRight: 8,
-    color: '#000', // Ensure black color for icons
-  },
-  inputIconImg: {
-    width: 24,
-    height: 24,
-    marginRight: 8,
-    resizeMode: 'contain',
   },
   input: {
     flex: 1,
-    height: 44,
+    padding: 12,
     fontSize: 16,
-    color: '#263A13',
   },
-  signUpButton: {
-    backgroundColor: '#223E01',
-    borderRadius: 20,
-    paddingVertical: 12,
+  inputError: {
+    borderColor: '#FF6B6B',
+    borderWidth: 1,
+  },
+  eyeButton: {
+    padding: 12,
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  errorContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 90,
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    marginTop: 4,
   },
-  signUpButtonText: {
-    color: '#fff',
+  quickFixButton: {
+    backgroundColor: COLORS.orange,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  quickFixText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  agreementSection: {
+    marginTop: 10,
+  },
+  agreementTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.darkGreen,
+    marginBottom: 12,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  checkbox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  checkboxBox: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderColor: COLORS.darkGreen,
+    borderRadius: 4,
+    marginRight: 12,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: COLORS.darkGreen,
+    borderColor: COLORS.darkGreen,
+  },
+  checkboxTick: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  checkboxTextContainer: {
+    flex: 1,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: COLORS.darkGreen,
+    lineHeight: 20,
+  },
+  linkText: {
+    color: COLORS.orange,
+    textDecorationLine: 'underline',
+    fontWeight: '600',
+  },
+  registerButton: {
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  registerButtonDisabled: {
+    opacity: 0.6,
+  },
+  registerButtonText: {
+    color: COLORS.white,
     fontSize: 18,
     fontWeight: 'bold',
   },
-  orText: {
-    textAlign: 'center',
-    color: '#263A13',
-    marginBottom: 8,
-    fontSize: 16,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#A3C47C',
-    borderRadius: 24,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginHorizontal: 8,
-    marginBottom: 12,
-    backgroundColor: '#fff',
-  },
-  socialIconImg: {
-    width: 24,
-    height: 24,
-    marginRight: 12,
-    resizeMode: 'contain',
-  },
-  socialText: {
-    fontSize: 16,
-    color: '#263A13',
-  },
-  bottomRow: {
+  footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 12,
+    marginTop: 30,
   },
-  bottomText: {
-    color: '#263A13',
-    fontSize: 15,
-  },
-  signInText: {
-    color: '#263A13',
-    fontWeight: 'bold',
-    fontSize: 15,
-    textDecorationLine: 'underline',
-  },
-  eyeIcon: {
-    marginLeft: 8,
-  },
-  countryCodeWrapper: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 8,
-    marginRight: 4,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    minWidth: 60,
-    height: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  countryCodeText: {
-    fontSize: 13,
-    color: '#263A13',
-    fontWeight: 'bold',
-    marginRight: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  countryModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-    width: '80%',
-    alignItems: 'center',
-  },
-  countryModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#263A13',
-    marginBottom: 15,
-  },
-  countryCodeItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  countryCodeTextModal: {
+  footerText: {
+    color: COLORS.gray,
     fontSize: 16,
-    color: '#263A13',
+  },
+  loginText: {
+    color: COLORS.orange,
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 

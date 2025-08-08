@@ -41,7 +41,7 @@ export default function OnboardingScreen() {
   };
 
   const handleGetStarted = () => {
-    router.push('/RegisterScreen');
+    router.push('/RoleSelectionScreen');
   };
 
   return (

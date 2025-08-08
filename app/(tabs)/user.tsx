@@ -53,37 +53,12 @@ export default function UserScreen() {
   }, [user, isLoading]);
 
   const handleStatusSwitch = async (newStatus: string) => {
-    try {
-      // Map the UI status to the API role
-      const newRole = newStatus === 'user' ? 'customer' : 'recycler';
-      
-      // Call the switchRole function from AuthContext
-      await switchRole(newRole);
-      
-      setCurrentStatus(newStatus);
-      setShowStatusSwitch(false);
-      
-      // Show success message
-      Alert.alert(
-        'Role Switched',
-        `You are now in ${newStatus} mode.`,
-        [{ text: 'OK' }]
-      );
-      
-      // Navigate based on the new role
-      if (newRole === 'recycler') {
-        router.replace('/(recycler-tabs)');
-      } else {
-        router.replace('/(tabs)');
-      }
-    } catch (error) {
-      console.error('Role switch failed:', error);
-      Alert.alert(
-        'Error',
-        'Failed to switch role. Please try again.',
-        [{ text: 'OK' }]
-      );
-    }
+    // Disable role switching for customers - they should stay in customer mode
+    Alert.alert(
+      'Role Switching Disabled',
+      'Customers cannot switch to recycler mode. Please contact support if you need to change your account type.',
+      [{ text: 'OK' }]
+    );
   };
 
   const handleDeleteYes = () => {
@@ -155,7 +130,7 @@ export default function UserScreen() {
 
   const handleNotificationPress = () => {
     // Navigate to notifications screen or show notification panel
-    router.push('/NotificationScreen');
+    router.push('/customer-screens/CustomerNotificationScreen' as any);
     // Clear notification count when opened
     setNotificationCount(0);
   };
@@ -231,48 +206,59 @@ export default function UserScreen() {
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.profileImageContainer}>
-            <MaterialIcons name="account-circle" size={80} color={COLORS.darkGreen} />
+            <View style={styles.profileImageBackground}>
+              <MaterialIcons name="account-circle" size={80} color={COLORS.white} />
+            </View>
+            <View style={styles.verificationBadge}>
+              <MaterialIcons name="verified" size={16} color={COLORS.white} />
+            </View>
           </View>
-          <Text style={styles.userName}>{user?.username || 'User'}</Text>
-          <Text style={styles.userEmail}>{user?.email || 'No email'}</Text>
-          <Text style={styles.userPhone}>{user?.phone || 'No phone'}</Text>
           
-          <View style={styles.statusContainer}>
-            <MaterialIcons name={getStatusIcon(currentStatus)} size={16} color={getStatusColor(currentStatus)} />
-            <Text style={[styles.statusText, { color: getStatusColor(currentStatus) }]}>{currentStatus}</Text>
+          <View style={styles.profileInfo}>
+            <Text style={styles.userName}>{user?.username || 'User'}</Text>
+            <Text style={styles.userEmail}>{user?.email || 'No email'}</Text>
+            <Text style={styles.userPhone}>{user?.phone || 'No phone'}</Text>
+            
+            <View style={styles.statusContainer}>
+              <MaterialIcons name={getStatusIcon(currentStatus)} size={16} color={COLORS.white} />
+              <Text style={styles.statusText}>{currentStatus}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Status Switch Section */}
-        <View style={styles.statusSection}>
-          <View style={styles.statusRow}>
-            <MaterialIcons name="swap-horiz" size={16} color={COLORS.darkGreen} />
-            <Text style={styles.statusLabel}>Switch Mode</Text>
-            <TouchableOpacity 
-              style={styles.switchButton}
-              onPress={() => setShowStatusSwitch(true)}
-            >
-              <Text style={styles.switchButtonText}>Switch</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+
 
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <MaterialIcons name="local-shipping" size={24} color={COLORS.darkGreen} />
+            <View style={styles.statIconContainer}>
+              <MaterialIcons name="local-shipping" size={28} color={COLORS.white} />
+            </View>
             <Text style={styles.statNumber}>{userStats.totalPickups}</Text>
             <Text style={styles.statLabel}>Total Pickups</Text>
+            <View style={styles.statProgress}>
+              <View style={[styles.progressBar, { width: `${Math.min(userStats.totalPickups * 10, 100)}%` }]} />
+            </View>
           </View>
           <View style={styles.statCard}>
-            <MaterialIcons name="attach-money" size={24} color={COLORS.darkGreen} />
+            <View style={styles.statIconContainer}>
+              <MaterialIcons name="attach-money" size={28} color={COLORS.white} />
+            </View>
             <Text style={styles.statNumber}>₵{userStats.totalEarnings.toFixed(2)}</Text>
             <Text style={styles.statLabel}>Total Earnings</Text>
+            <View style={styles.statProgress}>
+              <View style={[styles.progressBar, { width: `${Math.min(userStats.totalEarnings * 2, 100)}%` }]} />
+            </View>
           </View>
           <View style={styles.statCard}>
-            <MaterialIcons name="event" size={24} color={COLORS.darkGreen} />
+            <View style={styles.statIconContainer}>
+              <MaterialIcons name="event" size={28} color={COLORS.white} />
+            </View>
             <Text style={styles.statNumber}>{userStats.memberSince}</Text>
             <Text style={styles.statLabel}>Member Since</Text>
+            <View style={styles.statProgress}>
+              <View style={[styles.progressBar, { width: '100%' }]} />
+            </View>
           </View>
         </View>
 
@@ -280,78 +266,76 @@ export default function UserScreen() {
         <View style={styles.actionsContainer}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => router.push('/EditProfileScreen')}
+            onPress={() => router.push('/customer-screens/CustomerEditProfileScreen' as any)}
           >
-            <MaterialIcons name="edit" size={20} color={COLORS.darkGreen} />
-            <Text style={styles.actionText}>Edit Profile</Text>
+            <View style={styles.actionIconContainer}>
+              <MaterialIcons name="edit" size={24} color={COLORS.white} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionText}>Edit Profile</Text>
+              <Text style={styles.actionSubtext}>Update your personal information</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={COLORS.gray} />
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => router.push('/PrivacyScreen')}
           >
-            <MaterialIcons name="security" size={20} color={COLORS.darkGreen} />
-            <Text style={styles.actionText}>Privacy</Text>
+            <View style={styles.actionIconContainer}>
+              <MaterialIcons name="security" size={24} color={COLORS.white} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionText}>Privacy & Security</Text>
+              <Text style={styles.actionSubtext}>Manage your privacy settings</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={COLORS.gray} />
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => router.push('/Help')}
+            onPress={() => router.push('/customer-screens/Help' as any)}
           >
-            <MaterialIcons name="help" size={20} color={COLORS.darkGreen} />
-            <Text style={styles.actionText}>Help & Support</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => router.push('/RecyclerRegistrationScreen')}
-          >
-            <MaterialIcons name="recycling" size={20} color={COLORS.darkGreen} />
-            <Text style={styles.actionText}>Join as a Recycler</Text>
+            <View style={styles.actionIconContainer}>
+              <MaterialIcons name="help" size={24} color={COLORS.white} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionText}>Help & Support</Text>
+              <Text style={styles.actionSubtext}>Get help and contact support</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={COLORS.gray} />
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.actionButton} 
             onPress={() => setShowLogoutPrompt(true)}
           >
-            <MaterialIcons name="logout" size={20} color={COLORS.darkGreen} />
-            <Text style={styles.actionText}>Log out</Text>
+            <View style={styles.actionIconContainer}>
+              <MaterialIcons name="logout" size={24} color={COLORS.white} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionText}>Log out</Text>
+              <Text style={styles.actionSubtext}>Sign out of your account</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={COLORS.gray} />
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.actionButton} 
+            style={[styles.actionButton, styles.deleteActionButton]} 
             onPress={() => setShowDeletePrompt(true)}
           >
-            <MaterialIcons name="delete" size={20} color={COLORS.red} />
-            <Text style={[styles.actionText, { color: COLORS.red }]}>Delete Account</Text>
+            <View style={styles.deleteIconContainer}>
+              <MaterialIcons name="delete" size={24} color={COLORS.white} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.deleteActionText}>Delete Account</Text>
+              <Text style={styles.deleteActionSubtext}>Permanently delete your account</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={COLORS.red} />
           </TouchableOpacity>
         </View>
 
-        {/* Status Switch Modal */}
-        {showStatusSwitch && (
-          <View style={styles.statusSwitchContainer} pointerEvents="box-none">
-            <View style={styles.statusSwitchModal}>
-              <Text style={styles.statusSwitchTitle}>Switch Status</Text>
-              <TouchableOpacity 
-                style={[styles.statusOption, currentStatus === 'user' && styles.statusOptionActive]} 
-                onPress={() => handleStatusSwitch('user')}
-              >
-                <MaterialIcons name="verified-user" size={20} color={currentStatus === 'user' ? '#fff' : COLORS.darkGreen} />
-                <Text style={[styles.statusOptionText, currentStatus === 'user' && styles.statusOptionTextActive]}>User</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.statusOption, currentStatus === 'recycler' && styles.statusOptionActive]} 
-                onPress={() => handleStatusSwitch('recycler')}
-              >
-                <MaterialIcons name="recycling" size={20} color={currentStatus === 'recycler' ? '#fff' : COLORS.darkGreen} />
-                <Text style={[styles.statusOptionText, currentStatus === 'recycler' && styles.statusOptionTextActive]}>Recycler</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowStatusSwitch(false)}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+
 
         {/* Prompts */}
         {showLogoutPrompt && (
@@ -414,61 +398,86 @@ const styles = StyleSheet.create({
   profileHeader: {
     alignItems: 'center',
     marginBottom: 30,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingVertical: 24,
-    paddingHorizontal: 20,
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 12,
   },
   profileImageContainer: {
+    position: 'relative',
+    marginBottom: 20,
+  },
+  profileImageBackground: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#F2FFE5',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
     borderWidth: 4,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  verificationBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
     borderColor: COLORS.darkGreen,
+  },
+  profileInfo: {
+    alignItems: 'center',
   },
   userName: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: COLORS.darkGreen,
+    color: COLORS.white,
     marginBottom: 6,
     textAlign: 'center',
   },
   userEmail: {
     fontSize: 16,
-    color: '#666',
+    color: 'rgba(255, 255, 255, 0.8)',
     marginBottom: 4,
     textAlign: 'center',
   },
   userPhone: {
     fontSize: 16,
-    color: '#666',
+    color: 'rgba(255, 255, 255, 0.8)',
     marginBottom: 16,
     textAlign: 'center',
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2FFE5',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 20,
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginTop: 0,
-    borderWidth: 2,
-    borderColor: COLORS.darkGreen,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   statusText: {
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+    color: COLORS.white,
   },
   statusSection: {
     marginBottom: 24,
@@ -524,16 +533,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 12,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
     flex: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
     borderWidth: 1,
     borderColor: '#F0F0F0',
+  },
+  statIconContainer: {
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 16,
+    width: 56,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
   },
   statNumber: {
     fontSize: 26,
@@ -548,6 +571,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
   },
+  statProgress: {
+    width: '100%',
+    height: 4,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 2,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 2,
+  },
   actionsContainer: {
     marginTop: 24,
     backgroundColor: '#fff',
@@ -560,22 +596,76 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: '#fff',
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 20,
-    marginBottom: 12,
+    flex: 1,
+    marginHorizontal: 6,
     borderWidth: 1,
     borderColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  actionIconContainer: {
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 10,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   actionText: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.darkGreen,
+    flex: 1,
+  },
+  deleteActionButton: {
+    borderColor: '#FFE5E5',
+    backgroundColor: '#FFF5F5',
+  },
+  deleteIconContainer: {
+    backgroundColor: COLORS.red,
+    borderRadius: 10,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  deleteActionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.red,
+    flex: 1,
+  },
+  actionContent: {
+    flex: 1,
     marginLeft: 12,
+  },
+  actionSubtext: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginTop: 2,
+  },
+  deleteActionSubtext: {
+    fontSize: 12,
+    color: COLORS.red,
+    marginTop: 2,
+    opacity: 0.7,
   },
   statusSwitchContainer: {
     position: 'absolute',

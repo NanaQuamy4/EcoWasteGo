@@ -7,13 +7,14 @@ interface AuthContextType {
   user: UserProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  login: (email: string, password: string, role?: 'customer' | 'recycler', rememberMe?: boolean) => Promise<void>;
   register: (userData: {
     email: string;
     password: string;
     username?: string;
     phone?: string;
     role?: 'customer' | 'recycler';
+    companyName?: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
@@ -63,11 +64,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const currentUser = await apiService.getCurrentUser();
           console.log('AuthContext: Current user received:', currentUser);
           setUser(currentUser);
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to get current user:', error);
-          // Clear any invalid tokens
+          // Clear any invalid tokens and set user to null
           await apiService.logout();
           setUser(null);
+          console.log('AuthContext: Cleared invalid token, user set to null');
         }
       } else {
         console.log('AuthContext: No token found, user not authenticated');
@@ -86,11 +88,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Login function
-  const login = async (email: string, password: string, rememberMe?: boolean) => {
+  const login = async (email: string, password: string, role?: 'customer' | 'recycler', rememberMe?: boolean) => {
     try {
       setIsLoading(true);
       console.log('AuthContext: Starting login process...');
-      const authResponse = await apiService.login({ email, password, rememberMe });
+      const authResponse = await apiService.login({ email, password, role, rememberMe });
       console.log('AuthContext: Login response received:', JSON.stringify(authResponse, null, 2));
       
       // Extract user data from the response - check all possible locations
@@ -105,21 +107,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       
       console.log('AuthContext: Extracted user data:', userData);
+      console.log('AuthContext: User role from database:', userData.role);
+      console.log('AuthContext: User metadata role:', (userData as any).user_metadata?.role);
+      console.log('AuthContext: Company name from database:', userData.company_name);
+      console.log('AuthContext: Company name from metadata:', (userData as any).user_metadata?.company_name);
+      console.log('AuthContext: All user data keys:', Object.keys(userData));
+      console.log('AuthContext: User metadata keys:', Object.keys((userData as any).user_metadata || {}));
       
       if (userData) {
         // Transform the user data to match UserProfile interface
         const userProfile: UserProfile = {
           id: userData.id,
           email: userData.email,
-          username: (userData as any).user_metadata?.username || userData.email,
+          username: userData.username || (userData as any).user_metadata?.username || userData.email,
           phone: userData.phone || (userData as any).user_metadata?.phone || '',
-          role: (userData as any).user_metadata?.role || 'customer',
-          email_verified: (userData as any).email_confirmed_at ? true : false,
-          onboarding_completed: (userData as any).user_metadata?.onboarding_completed || false,
-          privacy_policy_accepted: (userData as any).user_metadata?.privacy_policy_accepted || false,
-          profile_image: (userData as any).user_metadata?.profile_image,
+          role: userData.role || (userData as any).user_metadata?.role || 'customer',
+          email_verified: userData.email_verified || (userData as any).email_confirmed_at ? true : false,
+          onboarding_completed: userData.onboarding_completed || (userData as any).user_metadata?.onboarding_completed || false,
+          privacy_policy_accepted: userData.privacy_policy_accepted || (userData as any).user_metadata?.privacy_policy_accepted || false,
+          profile_image: userData.profile_image || (userData as any).user_metadata?.profile_image,
+          company_name: userData.company_name || (userData as any).user_metadata?.company_name || (userData as any).user_metadata?.company_name || '',
+          business_location: userData.business_location || (userData as any).user_metadata?.business_location || '',
+          areas_of_operation: userData.areas_of_operation || (userData as any).user_metadata?.areas_of_operation || '',
+          available_resources: userData.available_resources || (userData as any).user_metadata?.available_resources || '',
+          verification_status: userData.verification_status || 'unverified',
           created_at: userData.created_at,
-          updated_at: (userData as any).updated_at || userData.created_at
+          updated_at: userData.updated_at || userData.created_at
         };
         
         console.log('AuthContext: Setting user profile:', userProfile);
@@ -144,6 +157,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     username?: string;
     phone?: string;
     role?: 'customer' | 'recycler';
+    companyName?: string;
   }) => {
     try {
       setIsLoading(true);

@@ -1,10 +1,14 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
+import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
+import { useAuth } from '../../contexts/AuthContext';
+import { locationSearchService, LocationSuggestion } from '../../services/locationSearchService';
 
 const SUGGESTIONS = [
   'Gold Hostel, komfo anokye',
@@ -17,32 +21,198 @@ export default function HomeScreen() {
   const [search, setSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const user = { 
-    name: 'Williams Boampong',
-    type: 'user' as const,
-    status: 'user'
-  };
+  const [nearbyRecyclers, setNearbyRecyclers] = useState<any[]>([]);
+  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<LocationSuggestion | null>(null);
+  const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const { user } = useAuth();
   const router = useRouter();
+
+  // Mock nearby recyclers data with recycling trucks and facilities (around Ghana)
+  const mockRecyclers = [
+    {
+      id: '1',
+      name: 'Green Waste Solutions Truck',
+      coordinate: { latitude: 6.6734, longitude: -1.5714 }, // Kumasi area
+      rating: 4.5,
+      distance: '0.5 km',
+      type: 'recycler',
+      status: 'Available',
+      truckType: 'Recycling Truck',
+    },
+    {
+      id: '2',
+      name: 'Eco Collectors Mobile Unit',
+      coordinate: { latitude: 6.6834, longitude: -1.5814 }, // Nearby Kumasi
+      rating: 4.2,
+      distance: '1.2 km',
+      type: 'recycler',
+      status: 'On Route',
+      truckType: 'Mobile Collection Unit',
+    },
+    {
+      id: '3',
+      name: 'Recycle Pro Facility',
+      coordinate: { latitude: 6.6634, longitude: -1.5614 }, // Kumasi area
+      rating: 4.8,
+      distance: '0.8 km',
+      type: 'destination',
+      status: 'Open',
+      truckType: 'Recycling Center',
+    },
+    {
+      id: '4',
+      name: 'Waste Management Truck',
+      coordinate: { latitude: 6.6934, longitude: -1.5914 }, // Nearby Kumasi
+      rating: 4.6,
+      distance: '1.5 km',
+      type: 'recycler',
+      status: 'Available',
+      truckType: 'Waste Collection Truck',
+    },
+    {
+      id: '5',
+      name: 'EcoWaste Mobile Unit',
+      coordinate: { latitude: 6.6534, longitude: -1.5514 }, // Kumasi area
+      rating: 4.3,
+      distance: '0.3 km',
+      type: 'recycler',
+      status: 'Nearby',
+      truckType: 'Mobile Recycling Unit',
+    },
+  ];
+
+  useEffect(() => {
+    setNearbyRecyclers(mockRecyclers);
+    console.log('HomeScreen: Setting up recyclers', mockRecyclers);
+    console.log('HomeScreen: Recyclers count:', mockRecyclers.length);
+    getCurrentLocation();
+  }, []);
+
+  const getCurrentLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        setUserLocation(location);
+      }
+    } catch (error) {
+      console.error('Error getting current location:', error);
+    }
+  };
+
+  const handleSearchChange = async (text: string) => {
+    setSearch(text);
+    setShowSuggestions(true);
+    
+    if (text.length > 2) {
+      setIsSearching(true);
+      try {
+        const suggestions = await locationSearchService.searchLocations(
+          text,
+          userLocation ? {
+            latitude: userLocation.coords.latitude,
+            longitude: userLocation.coords.longitude,
+          } : undefined
+        );
+        setLocationSuggestions(suggestions);
+      } catch (error) {
+        console.error('Search error:', error);
+        setLocationSuggestions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    } else {
+      setLocationSuggestions([]);
+    }
+  };
 
 
   const filteredSuggestions = SUGGESTIONS.filter(s =>
     s.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleSuggestionPress = (suggestion: string) => {
-    setSearch(suggestion);
+  const handleSuggestionPress = (suggestion: LocationSuggestion) => {
+    setSearch(suggestion.name);
+    setSelectedLocation(suggestion);
     setShowSuggestions(false);
     Keyboard.dismiss();
+  };
+
+  const handleMapLocationSelect = async (coordinate: { latitude: number; longitude: number }) => {
+    try {
+      const address = await locationSearchService.reverseGeocode(coordinate);
+      const locationSuggestion: LocationSuggestion = {
+        id: 'map-selected',
+        name: address,
+        address: address,
+        coordinate: coordinate,
+        type: 'geocode',
+      };
+      setSelectedLocation(locationSuggestion);
+      setSearch(address);
+    } catch (error) {
+      console.error('Error getting address from coordinates:', error);
+      Alert.alert(
+        'Location Selected',
+        `Latitude: ${coordinate.latitude.toFixed(4)}\nLongitude: ${coordinate.longitude.toFixed(4)}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Use This Location', onPress: () => {
+            setSearch('Selected Location');
+          }}
+        ]
+      );
+    }
+  };
+
+  const handleMapPress = (coordinate: { latitude: number; longitude: number }) => {
+    handleMapLocationSelect(coordinate);
+  };
+
+  const handleRecyclerPress = (recyclerId: string) => {
+    const recycler = nearbyRecyclers.find(r => r.id === recyclerId);
+    if (recycler) {
+      Alert.alert(
+        recycler.name,
+        `🚛 ${recycler.truckType}\n⭐ Rating: ${recycler.rating}\n📍 Distance: ${recycler.distance}\n📊 Status: ${recycler.status}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Request Pickup', onPress: () => {
+            router.push({
+              pathname: '/CallRecyclerScreen',
+              params: { recyclerName: recycler.name }
+            });
+          }},
+          { text: 'Track Truck', onPress: () => {
+            // Navigate to tracking screen
+            router.push({
+              pathname: '/TrackingScreen',
+              params: { recyclerId: recycler.id }
+            });
+          }}
+        ]
+      );
+    }
   };
 
   return (
     <View style={styles.container}>
       <AppHeader
         onMenuPress={() => setDrawerOpen(true)}
-        onNotificationPress={() => router.push('/NotificationScreen')}
+        onNotificationPress={() => router.push('/customer-screens/CustomerNotificationScreen' as any)}
         notificationCount={3}
       />
-      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={user} />
+      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={{
+        name: user?.username || 'User',
+        email: user?.email,
+        phone: user?.phone,
+        type: user?.role === 'recycler' ? 'recycler' : 'user',
+        status: user?.role === 'recycler' ? 'recycler' : 'user'
+      }} />
       
       {/* Search Section */}
       <View style={styles.searchSection}>
@@ -58,10 +228,7 @@ export default function HomeScreen() {
               style={styles.searchInput}
               placeholder="What's your pickup point?"
               value={search}
-              onChangeText={text => {
-                setSearch(text);
-                setShowSuggestions(true);
-              }}
+              onChangeText={handleSearchChange}
               onFocus={() => setShowSuggestions(true)}
               placeholderTextColor="#263A13"
             />
@@ -78,7 +245,7 @@ export default function HomeScreen() {
               disabled={search.length === 0}
               onPress={() => {
                 if (search.length > 0) {
-                  router.push({ pathname: '/SelectTruck', params: { pickup: search } });
+                  router.push({ pathname: '/customer-screens/SelectTruck', params: { pickup: search } } as any);
                 }
               }}
             >
@@ -87,16 +254,31 @@ export default function HomeScreen() {
           </View>
           {showSuggestions && search.length > 0 && (
             <View style={styles.suggestionsBox}>
-              <FlatList
-                data={filteredSuggestions}
-                keyExtractor={item => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSuggestionPress(item)}>
-                    <Feather name="search" size={16} color="#263A13" style={{ marginRight: 8 }} />
-                    <Text style={styles.suggestionText}>{item}</Text>
-                  </TouchableOpacity>
-                )}
-              />
+              {isSearching ? (
+                <View style={styles.suggestionItem}>
+                  <Feather name="loader" size={16} color="#263A13" style={{ marginRight: 8 }} />
+                  <Text style={styles.suggestionText}>Searching...</Text>
+                </View>
+              ) : locationSuggestions.length > 0 ? (
+                <FlatList
+                  data={locationSuggestions}
+                  keyExtractor={item => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSuggestionPress(item)}>
+                      <Feather name="map-pin" size={16} color="#263A13" style={{ marginRight: 8 }} />
+                      <View style={styles.suggestionContent}>
+                        <Text style={styles.suggestionText}>{item.name}</Text>
+                        <Text style={styles.suggestionAddress}>{item.address}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                />
+              ) : search.length > 2 ? (
+                <View style={styles.suggestionItem}>
+                  <Feather name="alert-circle" size={16} color="#263A13" style={{ marginRight: 8 }} />
+                  <Text style={styles.suggestionText}>No locations found</Text>
+                </View>
+              ) : null}
             </View>
           )}
         </ImageBackground>
@@ -104,17 +286,45 @@ export default function HomeScreen() {
 
       {/* Map Section */}
       <View style={styles.mapSection}>
-        <View style={styles.mapPlaceholder}>
-          <View style={styles.mapHeader}>
-            <Text style={styles.mapTitle}>User Dashboard</Text>
-            <Text style={styles.mapSubtitle}>Find recyclers and schedule pickups</Text>
-          </View>
+        <View style={styles.mapContainer}>
+          {/* Interactive Map */}
+          <MapComponent
+            markers={[
+              // Test marker to ensure markers are working
+              {
+                id: 'test-marker',
+                coordinate: { latitude: 6.6734, longitude: -1.5714 },
+                title: 'Test Truck',
+                description: 'Test marker to verify visibility',
+                type: 'recycler' as const,
+              },
+              ...nearbyRecyclers.map(recycler => ({
+                id: recycler.id,
+                coordinate: recycler.coordinate,
+                title: recycler.name,
+                description: `${recycler.rating} ⭐ • ${recycler.distance} • ${recycler.status}`,
+                type: recycler.type as 'recycler' | 'destination',
+              }))
+            ]}
+            onMarkerPress={handleRecyclerPress}
+            onMapPress={handleMapPress}
+            style={{ flex: 1 }}
+          />
           
-          {/* Blank map area for future Google Maps integration */}
-          <View style={styles.mapContent}>
-            <View style={styles.blankMapArea}>
-              <Text style={styles.blankMapText}>Map Area</Text>
-              <Text style={styles.blankMapSubtext}>Google Maps integration coming soon</Text>
+          {/* Map Legend */}
+          <View style={styles.mapLegend}>
+            <Text style={styles.legendTitle}>Recycling Services</Text>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendMarker, { backgroundColor: COLORS.orange }]}>
+                <MaterialIcons name="local-shipping" size={12} color={COLORS.white} />
+              </View>
+              <Text style={styles.legendText}>Recycling Trucks</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendMarker, { backgroundColor: COLORS.red }]}>
+                <MaterialIcons name="flag" size={12} color={COLORS.white} />
+              </View>
+              <Text style={styles.legendText}>Recycling Centers</Text>
             </View>
           </View>
         </View>
@@ -336,5 +546,49 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     textAlign: 'center',
     marginTop: 8,
+  },
+  mapLegend: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 8,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  legendTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginBottom: 8,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  legendMarker: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  legendText: {
+    fontSize: 12,
+    color: COLORS.gray,
+  },
+  suggestionContent: {
+    flex: 1,
+  },
+  suggestionAddress: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginTop: 2,
   },
 });

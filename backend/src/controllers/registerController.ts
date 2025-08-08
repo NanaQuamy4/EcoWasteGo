@@ -53,7 +53,7 @@ export class RegisterController {
         return;
       }
 
-      // Create user profile in database
+      // Create user profile in database with privacy policy acceptance
       const { data: user, error: profileError } = await supabase
         .from('users')
         .insert({
@@ -62,6 +62,9 @@ export class RegisterController {
           username,
           phone,
           role,
+          privacy_policy_accepted: true,
+          privacy_policy_version: '1.0',
+          privacy_policy_accepted_at: new Date().toISOString(),
           created_at: new Date().toISOString()
         })
         .select()

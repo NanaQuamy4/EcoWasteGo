@@ -3,21 +3,18 @@ import React, { useState } from 'react';
 import { Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
+import { useAuth } from '../../contexts/AuthContext';
 // import BottomNav from '../../components/BottomNav';
 
 export default function HistoryScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(1); // Mock notification count
-  const user = { 
-    name: 'Williams Boampong',
-    type: 'user' as const,
-    status: 'user'
-  };
+  const { user } = useAuth();
   const router = useRouter();
 
   const handleNotificationPress = () => {
     // Navigate to notifications screen or show notification panel
-    router.push('/NotificationScreen');
+    router.push('/customer-screens/CustomerNotificationScreen' as any);
     // Clear notification count when opened
     setNotificationCount(0);
   };
@@ -29,7 +26,13 @@ export default function HistoryScreen() {
         onNotificationPress={handleNotificationPress}
         notificationCount={notificationCount}
       />
-      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={user} />
+      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={{
+        name: user?.username || 'User',
+        email: user?.email,
+        phone: user?.phone,
+        type: user?.role === 'recycler' ? 'recycler' : 'user',
+        status: user?.role === 'recycler' ? 'recycler' : 'user'
+      }} />
       <View style={styles.greenSectionWrapper}>
         <ImageBackground
           source={require('../../assets/images/blend.jpg')}

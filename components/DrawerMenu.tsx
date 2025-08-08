@@ -5,7 +5,7 @@ import { Animated, Dimensions, Linking, Pressable, StyleSheet, Text, TouchableOp
 
 // Menu items for recyclers
 const RECYCLER_MENU_ITEMS = [
-  { label: 'Education', icon: <MaterialIcons name="chat-bubble-outline" size={22} color="#22330B" />, key: 'education' },
+  { label: 'Education', icon: <MaterialIcons name="add-circle-outline" size={22} color="#22330B" />, key: 'education' },
   { label: 'History', icon: <Feather name="rotate-ccw" size={22} color="#22330B" />, key: 'history' },
   { label: 'Earnings', icon: <FontAwesome5 name="dollar-sign" size={22} color="#22330B" />, key: 'earnings' },
   { label: 'Subscription', icon: <MaterialIcons name="check-circle-outline" size={22} color="#22330B" />, key: 'subscription' },
@@ -15,6 +15,7 @@ const RECYCLER_MENU_ITEMS = [
   { label: 'Help', icon: <MaterialIcons name="computer" size={22} color="#22330B" />, key: 'help' },
   { label: 'Contact Us', icon: <MaterialIcons name="person-outline" size={22} color="#22330B" />, key: 'contact' },
   { label: 'About', icon: <MaterialIcons name="info-outline" size={22} color="#22330B" />, key: 'about' },
+  { label: 'Privacy Policy', icon: <MaterialIcons name="security" size={22} color="#22330B" />, key: 'privacy' },
 ];
 
 // Menu items for regular users
@@ -26,6 +27,7 @@ const USER_MENU_ITEMS = [
   { label: 'Help', icon: <MaterialIcons name="computer" size={22} color="#22330B" />, key: 'help' },
   { label: 'Contact Us', icon: <MaterialIcons name="person-outline" size={22} color="#22330B" />, key: 'contact' },
   { label: 'About', icon: <MaterialIcons name="info-outline" size={22} color="#22330B" />, key: 'about' },
+  { label: 'Privacy Policy', icon: <MaterialIcons name="security" size={22} color="#22330B" />, key: 'privacy' },
 ];
 
 type DrawerMenuProps = {
@@ -45,7 +47,7 @@ export default function DrawerMenu({ open, onClose, user, menuItems }: DrawerMen
   const isRecycler = user.type === 'recycler' || user.status === 'recycler';
   const currentMenuItems = menuItems || (isRecycler ? RECYCLER_MENU_ITEMS : USER_MENU_ITEMS);
   const userTitle = isRecycler ? 'Recycler' : 'User';
-  const userName = isRecycler ? 'GreenFleet GH' : user.name || 'User';
+  const userName = user.name || (isRecycler ? 'GreenFleet GH' : 'User');
 
   // Drawer overlay
   const DrawerOverlay = open ? (
@@ -83,11 +85,11 @@ export default function DrawerMenu({ open, onClose, user, menuItems }: DrawerMen
               } else if (item.key === 'about') {
                 setShowContactCard(false);
                 onClose();
-                router.push('/AboutScreen');
+                router.push('/customer-screens/AboutScreen');
               } else if (item.key === 'education') {
                 setShowContactCard(false);
                 onClose();
-                router.push('/EducationScreen');
+                router.push('/customer-screens/EducationScreen');
               } else if (item.key === 'history') {
                 setShowContactCard(false);
                 onClose();
@@ -100,27 +102,39 @@ export default function DrawerMenu({ open, onClose, user, menuItems }: DrawerMen
               } else if (item.key === 'earnings' && isRecycler) {
                 setShowContactCard(false);
                 onClose();
-                router.push('/EarningsScreen');
+                router.push('/recycler-screens/EarningsScreen');
               } else if (item.key === 'subscription' && isRecycler) {
                 setShowContactCard(false);
                 onClose();
-                router.push('/SubscriptionScreen');
+                router.push('/recycler-screens/SubscriptionScreen');
               } else if (item.key === 'analytics' && isRecycler) {
                 setShowContactCard(false);
                 onClose();
-                router.push('/AnalyticsScreen');
+                router.push('/recycler-screens/AnalyticsScreen');
               } else if (item.key === 'rewards') {
                 setShowContactCard(false);
                 onClose();
-                router.push('/Rewards');
+                router.push('/customer-screens/Rewards');
               } else if (item.key === 'notification') {
                 setShowContactCard(false);
                 onClose();
-                router.push('/NotificationScreen');
+                if (isRecycler) {
+                  router.push('/recycler-screens/RecyclerNotificationScreen');
+                } else {
+                  router.push('/customer-screens/CustomerNotificationScreen');
+                }
               } else if (item.key === 'help') {
                 setShowContactCard(false);
                 onClose();
-                router.push('/Help');
+                router.push('/customer-screens/Help');
+              } else if (item.key === 'privacy') {
+                setShowContactCard(false);
+                onClose();
+                if (isRecycler) {
+                  router.push('/recycler-screens/RecyclerPrivacyScreen');
+                } else {
+                  router.push('/customer-screens/CustomerPrivacyScreen');
+                }
               } else {
                 setShowContactCard(false);
                 onClose();

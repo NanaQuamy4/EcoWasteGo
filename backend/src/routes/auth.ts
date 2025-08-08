@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import express from 'express';
-import validator from 'validator';
 import { supabase, supabaseAdmin } from '../config/supabase';
 import { authenticateToken } from '../middleware/auth';
 import { generateCSRFToken, storeCSRFToken } from '../middleware/csrf';
@@ -28,16 +27,20 @@ router.get('/csrf-token', (req, res) => {
 
 /**
  * @route POST /api/auth/register
- * @desc Register a new user using Supabase Auth
+
+ * @desc Register a new user using local database
  * @access Public
  */
 router.post('/register', async (req, res) => {
+  console.log('REGISTER ROUTE CALLED');
+  console.log('Request body:', req.body);
+  
   try {
-    const { email, password, username, phone, role = 'customer' } = req.body;
+    const { email, password, username, phone, role = 'customer', companyName } = req.body;
 
-    console.log('Registration request received:', { email, username, phone, role });
+    console.log('Registration request received:', { email, username, phone, role, companyName });
 
-    // Input validation and sanitization
+    // Input validation
     if (!email || !password || !username) {
       return res.status(400).json({
         success: false,
@@ -45,196 +48,120 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Sanitize and validate inputs
-    const sanitizedEmail = validator.escape(validator.trim(email.toLowerCase()));
-    const sanitizedUsername = validator.escape(validator.trim(username));
-    const sanitizedPhone = phone ? validator.escape(validator.trim(phone)) : null;
-
-    // Validate email format
-    if (!validator.isEmail(sanitizedEmail)) {
-      return res.status(400).json({
+    // Check if user already exists in Supabase
+    if (!supabaseAdmin) {
+      return res.status(500).json({
         success: false,
-        error: 'Please provide a valid email address'
+        error: 'Database configuration error'
       });
     }
 
-    // Validate username (alphanumeric, 3-20 characters)
-    if (!validator.isLength(sanitizedUsername, { min: 3, max: 20 }) || 
-        !validator.isAlphanumeric(sanitizedUsername.replace(/[_-]/g, ''))) {
-      return res.status(400).json({
+    const { data: existingUser, error: checkError } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Error checking existing user:', checkError);
+      return res.status(500).json({
         success: false,
-        error: 'Username must be 3-20 characters long and contain only letters, numbers, hyphens, and underscores'
+        error: 'Database error'
       });
     }
 
-    // Validate password strength
-    if (!validator.isLength(password, { min: 8 })) {
+    if (existingUser) {
       return res.status(400).json({
         success: false,
-        error: 'Password must be at least 8 characters long'
+        error: 'An account with this email already exists'
       });
     }
 
-    // Check for common weak passwords
-    const weakPasswords = ['password', '123456', 'qwerty', 'admin', 'letmein'];
-    if (weakPasswords.includes(password.toLowerCase())) {
-      return res.status(400).json({
-        success: false,
-        error: 'Please choose a stronger password'
-      });
-    }
-
-    try {
-      console.log('Starting Supabase registration...');
-      
-      // Use Supabase Auth to create user account
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: sanitizedEmail,
-        password,
-        options: {
-          data: {
-            username: sanitizedUsername,
-            phone: sanitizedPhone,
-            role
-          }
-        }
-      });
-
-      // For development: Auto-verify email if admin client is available
-      if (authData.user && supabaseAdmin) {
-        try {
-          const { error: verifyError } = await supabaseAdmin.auth.admin.updateUserById(
-            authData.user.id,
-            { email_confirm: true }
-          );
-          if (verifyError) {
-            console.log('Auto-verification failed (this is normal in production):', verifyError.message);
-          } else {
-            console.log('Email auto-verified for development');
-          }
-        } catch (verifyError) {
-          console.log('Auto-verification not available (this is normal in production)');
-        }
-      }
-
-      if (authError) {
-        console.error('Supabase auth error:', authError);
-        return res.status(400).json({
-          success: false,
-          error: authError.message
-        });
-      }
-
-      if (!authData.user) {
-        return res.status(400).json({
-          success: false,
-          error: 'Failed to create user account'
-        });
-      }
-
-      // Create user profile in database
-      const userData = {
-        id: authData.user.id,
-        email: sanitizedEmail,
-        username: sanitizedUsername,
-        phone: sanitizedPhone,
-        role,
-        email_verified: authData.user.email_confirmed_at ? true : false
-      };
-      
-      console.log('Inserting user profile:', userData);
-      
-      let profile = null;
-      // Try to create profile using admin client first, then fallback to regular client
-      try {
-        if (supabaseAdmin) {
-          const { data: profileData, error: profileError } = await supabaseAdmin
-            .from('users')
-            .insert(userData)
-            .select()
-            .single();
-
-          if (profileError) {
-            console.error('Admin profile creation error:', profileError);
-            throw profileError;
-          } else {
-            profile = profileData;
-          }
-        } else {
-          // Fallback to regular supabase client
-          const { data: profileData, error: profileError } = await supabase
-            .from('users')
-            .insert(userData)
-            .select()
-            .single();
-
-          if (profileError) {
-            console.error('Regular profile creation error:', profileError);
-            throw profileError;
-          } else {
-            profile = profileData;
-          }
-        }
-      } catch (profileError) {
-        console.error('Profile creation failed:', profileError);
-        // Continue anyway, profile can be created later
-        // But we should still return the user data
-        profile = userData;
-      }
-
-      // Auto-sign in the user after registration for better UX
-      let session = authData.session;
-      if (!session && authData.user) {
-        try {
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email,
-            password
-          });
-          
-          if (!signInError && signInData.session) {
-            session = signInData.session;
-            console.log('Auto-sign in successful after registration');
-          }
-        } catch (signInError) {
-          console.log('Auto-sign in failed, user will need to login manually:', signInError);
-        }
-      }
-
-      return res.status(201).json({
-        success: true,
-        message: 'Registration successful! You are now logged in.',
+    // Create user with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: email.toLowerCase(),
+      password: password,
+      options: {
         data: {
-          user: profile || userData,
-          session: session,
-          token: session?.access_token || null
+          username: username,
+          phone: phone || '',
+          role: role,
+          company_name: role === 'recycler' ? companyName : null
         }
-      });
+      }
+    });
 
-    } catch (dbError) {
-      console.error('Database error:', dbError);
-      
-      // Fallback to test mode if database fails
-      const mockUser = {
-        id: 'test-user-id-' + Date.now(),
-        email,
-        username,
-        phone,
-        role,
-        email_verified: false,
-        onboarding_completed: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      return res.status(201).json({
-        success: true,
-        message: 'Registration successful (test mode).',
-        data: {
-          user: mockUser,
-          token: 'test-token-' + Date.now()
-        }
+    if (authError) {
+      console.error('Supabase auth error:', authError);
+      return res.status(400).json({
+        success: false,
+        error: authError.message
       });
     }
+
+    if (!authData.user) {
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to create user account'
+      });
+    }
+
+    // Create user profile in database
+    const userData = {
+      id: authData.user.id,
+      email: email.toLowerCase(),
+      username: username,
+      phone: phone || '',
+      role: role,
+      email_verified: authData.user.email_confirmed_at ? true : false,
+      onboarding_completed: false,
+      company_name: role === 'recycler' ? companyName : null,
+      verification_status: role === 'recycler' ? 'unverified' : 'verified',
+      status: 'active'
+    };
+
+    console.log('Inserting user profile:', userData);
+
+    // Insert user profile using admin client for better permissions
+    let profile = null;
+    let profileError = null;
+    
+    if (supabaseAdmin) {
+      const result = await supabaseAdmin
+        .from('users')
+        .insert(userData)
+        .select()
+        .single();
+      profile = result.data;
+      profileError = result.error;
+    } else {
+      const result = await supabase
+        .from('users')
+        .insert(userData)
+        .select()
+        .single();
+      profile = result.data;
+      profileError = result.error;
+    }
+
+    if (profileError) {
+      console.error('Profile creation error:', profileError);
+      // Continue anyway, profile can be created later
+      console.log('Profile creation failed, but user auth was successful');
+    }
+
+    console.log('User saved to Supabase:', profile || userData);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Registration successful!',
+      data: {
+        user: profile || userData,
+        session: authData.session,
+        token: authData.session?.access_token || null
+      }
+    });
+
   } catch (error) {
     console.error('Registration error:', error);
     return res.status(500).json({
@@ -246,12 +173,12 @@ router.post('/register', async (req, res) => {
 
 /**
  * @route POST /api/auth/login
- * @desc Login user using Supabase Auth
+ * @desc Login user using local database
  * @access Public
  */
 router.post('/login', async (req, res) => {
   try {
-    const { email, password, rememberMe } = req.body;
+    const { email, password, role, rememberMe } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -262,63 +189,17 @@ router.post('/login', async (req, res) => {
 
     // Login with Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
+      email: email.toLowerCase(),
+      password: password
     });
 
     if (error) {
-      console.log('Login error:', error.message);
-      
-      // For development, provide more specific error messages
-      if (error.message.includes('Invalid login credentials') || error.message.includes('Invalid email or password')) {
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid credentials',
-          code: 'INVALID_CREDENTIALS',
-          message: 'Invalid email or password. Please check your credentials and try again.'
-        });
-      }
-      
-      // Handle email not confirmed error - for testing, allow login anyway
-      if (error.message.includes('Email not confirmed')) {
-        console.log('Email not confirmed, creating test session for:', email);
-        
-        // Create a test user session for unverified users
-        const testUser = {
-          id: 'test-user-' + Date.now(),
-          email: email,
-          username: email.split('@')[0],
-          role: 'customer',
-          email_verified: false,
-          onboarding_completed: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        // Set session duration based on rememberMe
-        const sessionDuration = rememberMe ? 30 * 24 * 60 * 60 : 24 * 60 * 60; // 30 days or 24 hours
-        const expiresAt = new Date(Date.now() + sessionDuration * 1000);
-
-        return res.json({
-          success: true,
-          message: 'Login successful (test mode - email not verified)',
-          data: {
-            user: testUser,
-            session: {
-              access_token: 'test-token-' + Date.now(),
-              refresh_token: 'test-refresh-token-' + Date.now(),
-              expires_at: expiresAt.toISOString(),
-              rememberMe: rememberMe || false
-            }
-          }
-        });
-      }
-      
+      console.error('Login error:', error);
       return res.status(401).json({
         success: false,
-        error: error.message,
-        code: 'LOGIN_ERROR',
-        message: 'Login failed. Please try again.'
+        error: 'Invalid credentials',
+        code: 'INVALID_CREDENTIALS',
+        message: 'Invalid email or password. Please check your credentials and try again.'
       });
     }
 
@@ -329,70 +210,47 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Get user profile
+    // Get user profile from database
     const { data: profile, error: profileError } = await supabase
       .from('users')
       .select('*')
       .eq('id', data.user.id)
       .single();
 
-    if (profileError || !profile) {
-      // If profile doesn't exist, create one from auth data
-      const newProfile = {
-        id: data.user.id,
-        email: data.user.email,
-        username: data.user.email?.split('@')[0] || 'user',
-        role: 'customer',
-        email_verified: data.user.email_confirmed_at ? true : false,
-        onboarding_completed: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      if (supabaseAdmin) {
-        const { data: createdProfile, error: createError } = await supabaseAdmin
-          .from('users')
-          .insert(newProfile)
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('Profile creation error:', createError);
-        } else {
-          // Set session duration based on rememberMe
-          const sessionDuration = rememberMe ? 30 * 24 * 60 * 60 : 24 * 60 * 60; // 30 days or 24 hours
-          const expiresAt = new Date(Date.now() + sessionDuration * 1000);
-
-          return res.json({
-            success: true,
-            message: 'Login successful',
-            data: {
-              user: createdProfile,
-              session: {
-                ...data.session,
-                expires_at: expiresAt.toISOString(),
-                rememberMe: rememberMe || false
-              }
-            }
-          });
-        }
-      }
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      // Continue with auth data if profile fetch fails
     }
 
-    // Set session duration based on rememberMe
-    const sessionDuration = rememberMe ? 30 * 24 * 60 * 60 : 24 * 60 * 60; // 30 days or 24 hours
-    const expiresAt = new Date(Date.now() + sessionDuration * 1000);
+    const userData = profile || {
+      id: data.user.id,
+      email: data.user.email,
+      username: data.user.user_metadata?.username || data.user.email?.split('@')[0],
+      role: data.user.user_metadata?.role || 'customer',
+      email_verified: data.user.email_confirmed_at ? true : false,
+      onboarding_completed: false
+    };
+
+    // Validate role if specified
+    if (role && userData.role !== role) {
+      console.error('Role mismatch:', { requestedRole: role, userRole: userData.role });
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        code: 'ROLE_MISMATCH',
+        message: `This account is registered as a ${userData.role}. Please log in using the correct role.`
+      });
+    }
+
+    console.log('User logged in:', userData);
 
     return res.json({
       success: true,
-      message: 'Login successful',
+      message: 'Login successful!',
       data: {
-        user: profile,
-        session: {
-          ...data.session,
-          expires_at: expiresAt.toISOString(),
-          rememberMe: rememberMe || false
-        }
+        user: userData,
+        session: data.session,
+        token: data.session?.access_token || null
       }
     });
 
@@ -401,6 +259,39 @@ router.post('/login', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Login failed'
+    });
+  }
+});
+
+/**
+ * @route GET /api/auth/users
+ * @desc Get all users (for testing)
+ * @access Public
+ */
+router.get('/users', async (req, res) => {
+  try {
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching users:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch users'
+      });
+    }
+    
+    return res.json({
+      success: true,
+      data: users
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch users'
     });
   }
 });
@@ -449,7 +340,7 @@ router.post('/logout', authenticateToken, async (req, res) => {
 
 /**
  * @route POST /api/auth/forgot-password
- * @desc Send password reset email
+ * @desc Send 6-digit verification code to email
  * @access Public
  */
 router.post('/forgot-password', async (req, res) => {
@@ -463,48 +354,199 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password`
-    });
+    // Check if user exists in database
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database configuration error'
+      });
+    }
 
-    if (error) {
+    const { data: existingUser, error: checkError } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Error checking existing user:', checkError);
+      return res.status(500).json({
+        success: false,
+        error: 'Database error'
+      });
+    }
+
+    if (!existingUser) {
       return res.status(400).json({
         success: false,
-        error: error.message
+        error: 'EMAIL_NOT_FOUND'
+      });
+    }
+
+    // Generate 6-digit verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store verification code in database with expiration (10 minutes)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+    
+    const { error: insertError } = await supabaseAdmin!
+      .from('email_verifications')
+      .upsert({
+        user_id: existingUser.id,
+        email: email.toLowerCase(),
+        otp: verificationCode,
+        expires_at: expiresAt.toISOString(),
+        is_used: false
+      });
+
+    if (insertError) {
+      console.error('Error storing verification code:', insertError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to generate verification code'
+      });
+    }
+
+    // Send email with verification code (using Supabase email service)
+    const { error: emailError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verification?email=${encodeURIComponent(email)}&code=${verificationCode}`
+    });
+
+    if (emailError) {
+      console.error('Email sending error:', emailError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to send verification email'
       });
     }
 
     return res.json({
       success: true,
-      message: 'Password reset email sent'
+      message: 'Verification code sent to email'
     });
   } catch (error) {
     console.error('Forgot password error:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to send reset email'
+      error: 'Failed to send verification code'
+    });
+  }
+});
+
+/**
+ * @route POST /api/auth/verify-email
+ * @desc Verify 6-digit code and mark email as verified
+ * @access Public
+ */
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and verification code are required'
+      });
+    }
+
+    // Check if verification code exists and is valid
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database configuration error'
+      });
+    }
+
+    const { data: verificationData, error: checkError } = await supabaseAdmin
+      .from('email_verifications')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .eq('otp', code)
+      .eq('is_used', false)
+      .single();
+
+    if (checkError || !verificationData) {
+      return res.status(400).json({
+        success: false,
+        error: 'INVALID_CODE'
+      });
+    }
+
+    // Check if code has expired
+    if (new Date(verificationData.expires_at) < new Date()) {
+      return res.status(400).json({
+        success: false,
+        error: 'CODE_EXPIRED'
+      });
+    }
+
+    // Mark code as used
+    const { error: updateError } = await supabaseAdmin
+      .from('email_verifications')
+      .update({ is_used: true })
+      .eq('id', verificationData.id);
+
+    if (updateError) {
+      console.error('Error marking code as used:', updateError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to verify code'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Email verified successfully'
+    });
+  } catch (error) {
+    console.error('Verify email error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Email verification failed'
     });
   }
 });
 
 /**
  * @route POST /api/auth/reset-password
- * @desc Reset password with token
+ * @desc Reset password with verified email
  * @access Public
  */
 router.post('/reset-password', async (req, res) => {
   try {
-    const { password, token } = req.body;
+    const { password, email } = req.body;
 
-    if (!password || !token) {
+    if (!password || !email) {
       return res.status(400).json({
         success: false,
-        error: 'Password and token are required'
+        error: 'Password and email are required'
       });
     }
 
-    const { error } = await supabase.auth.updateUser({
-      password
+    // Check if email exists and is verified
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database configuration error'
+      });
+    }
+
+    const { data: existingUser, error: checkError } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    if (checkError || !existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: 'INVALID_EMAIL'
+      });
+    }
+
+    // Update password using Supabase Auth
+    const { error } = await supabase.auth.admin.updateUserById(existingUser.id, {
+      password: password
     });
 
     if (error) {
@@ -835,6 +877,95 @@ router.post('/switch-role', authenticateToken, async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to switch role'
+    });
+  }
+});
+
+/**
+ * @route POST /api/auth/complete-recycler-registration
+ * @desc Complete recycler registration and mark as verified
+ * @access Private
+ */
+router.post('/complete-recycler-registration', async (req, res) => {
+  try {
+    const { 
+      companyName, 
+      businessLocation, 
+      areasOfOperation, 
+      availableResources,
+      passportPhotoUrl,
+      businessDocumentUrl 
+    } = req.body;
+
+    // Get user from auth token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authorization token required'
+      });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired token'
+      });
+    }
+
+    // Validate required fields
+    if (!companyName || !businessLocation || !areasOfOperation || !availableResources) {
+      return res.status(400).json({
+        success: false,
+        error: 'All required fields must be provided'
+      });
+    }
+
+    // Update user profile with complete registration data
+    if (supabaseAdmin) {
+      const { data: updatedUser, error: updateError } = await supabaseAdmin
+        .from('users')
+        .update({
+          company_name: companyName,
+          business_location: businessLocation,
+          areas_of_operation: areasOfOperation,
+          available_resources: availableResources,
+          passport_photo_url: passportPhotoUrl || null,
+          business_document_url: businessDocumentUrl || null,
+          verification_status: 'verified',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Registration completion error:', updateError);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to complete registration'
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Registration completed successfully. You are now verified and can receive pickup requests.',
+        data: updatedUser
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection not available'
+      });
+    }
+  } catch (error) {
+    console.error('Complete registration error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to complete registration'
     });
   }
 });

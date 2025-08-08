@@ -1,7 +1,7 @@
 // API Configuration for EcoWasteGo Frontend
 export const API_CONFIG = {
   // Base URL for development - using computer's IP address for mobile access
-  BASE_URL: 'http://10.36.50.88:3000',
+  BASE_URL: 'http://10.133.121.133:3000',
   
   // API endpoints
   ENDPOINTS: {
@@ -173,6 +173,13 @@ export interface UserProfile {
   onboarding_completed: boolean;
   privacy_policy_accepted: boolean;
   profile_image?: string;
+  verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
+  company_name?: string;
+  business_location?: string;
+  areas_of_operation?: string;
+  available_resources?: string;
+  passport_photo_url?: string;
+  business_document_url?: string;
   created_at: string;
   updated_at: string;
 }

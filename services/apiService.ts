@@ -98,7 +98,7 @@ class ApiService {
   }
 
   // Generic request method with retry logic
-  private async request<T>(
+  public async request<T>(
     endpoint: string,
     options: RequestInit = {},
     retryCount = 0
@@ -133,15 +133,34 @@ class ApiService {
           (error as any).code = data.code;
         }
         
+        // Don't retry for role mismatch (403) or authentication errors (401)
+        if (response.status === 403 || response.status === 401) {
+          throw error;
+        }
+        
         throw error;
       }
 
       return data;
     } catch (error) {
-      console.error(`API Request failed (attempt ${retryCount + 1}):`, error);
+      // Only log detailed error info for first attempt or non-retryable errors
+      if (retryCount === 0 || (error instanceof Error && 
+          (error.message.includes('Authentication failed') ||
+           error.message.includes('Access denied') ||
+           error.message.includes('ROLE_MISMATCH') ||
+           error.message.includes('registered as a')))) {
+        console.error(`API Request failed:`, error instanceof Error ? error.message : String(error));
+      }
       
-      // Retry logic for network errors (not auth errors)
-      if (retryCount < 2 && error instanceof Error && !error.message.includes('Authentication failed')) {
+      // Retry logic for network errors only (not auth, role mismatch, or other business logic errors)
+      const shouldRetry = retryCount < 2 && 
+        error instanceof Error && 
+        !error.message.includes('Authentication failed') &&
+        !error.message.includes('Access denied') &&
+        !error.message.includes('ROLE_MISMATCH') &&
+        !error.message.includes('registered as a');
+      
+      if (shouldRetry) {
         console.log(`Retrying request (${retryCount + 1}/3)...`);
         await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
         return this.request(endpoint, options, retryCount + 1);
@@ -177,7 +196,7 @@ class ApiService {
     return response.data!;
   }
 
-  async login(credentials: { email: string; password: string; rememberMe?: boolean }): Promise<AuthResponse> {
+  async login(credentials: { email: string; password: string; role?: 'customer' | 'recycler'; rememberMe?: boolean }): Promise<AuthResponse> {
     console.log('Attempting login for:', credentials.email);
     const response = await this.request<AuthResponse>(API_CONFIG.ENDPOINTS.AUTH.LOGIN, {
       method: 'POST',
@@ -226,23 +245,38 @@ class ApiService {
     });
   }
 
-  async resetPassword(token: string, newPassword: string): Promise<ApiResponse> {
+  async resetPassword(email: string, newPassword: string): Promise<ApiResponse> {
     return this.request(API_CONFIG.ENDPOINTS.AUTH.RESET_PASSWORD, {
       method: 'POST',
-      body: JSON.stringify({ token, newPassword }),
+      body: JSON.stringify({ email, newPassword }),
     });
   }
 
-  async verifyEmail(email: string, token: string): Promise<ApiResponse> {
+  async verifyEmail(email: string, code: string): Promise<ApiResponse> {
     return this.request(API_CONFIG.ENDPOINTS.AUTH.VERIFY_EMAIL, {
       method: 'POST',
-      body: JSON.stringify({ email, token }),
+      body: JSON.stringify({ email, code }),
     });
   }
 
   async getCurrentUser(): Promise<UserProfile> {
-    const response = await this.request<UserProfile>(API_CONFIG.ENDPOINTS.AUTH.ME);
-    return response.data!;
+    // First check if we have a token
+    const token = this.getToken();
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    try {
+      const response = await this.request<UserProfile>(API_CONFIG.ENDPOINTS.AUTH.ME);
+      return response.data!;
+    } catch (error: any) {
+      // If we get a 401, it means the token is invalid, so clear it
+      if (error.message?.includes('Authentication failed') || error.message?.includes('401')) {
+        console.log('Token is invalid, clearing it');
+        await this.clearToken();
+      }
+      throw error;
+    }
   }
 
   // User Profile Methods
@@ -541,9 +575,33 @@ class ApiService {
     return response.data;
   }
 
+  // Recycler Registration
+  async completeRecyclerRegistration(registrationData: {
+    companyName: string;
+    businessLocation: string;
+    areasOfOperation: string;
+    availableResources: string;
+    passportPhotoUrl?: string;
+    businessDocumentUrl?: string;
+  }): Promise<UserProfile> {
+    const response = await this.request<UserProfile>('/auth/complete-recycler-registration', {
+      method: 'POST',
+      body: JSON.stringify(registrationData)
+    });
+    
+    if (response.success && response.data) {
+      return response.data;
+    }
+    
+    throw new Error(response.error || 'Failed to complete registration');
+  }
+
   // Utility Methods
   isAuthenticated(): boolean {
-    return this.token !== null && !this.isTokenExpired();
+    const hasToken = this.token !== null;
+    const isExpired = this.isTokenExpired();
+    console.log('isAuthenticated check:', { hasToken, isExpired, token: this.token ? this.token.substring(0, 20) + '...' : 'null' });
+    return hasToken && !isExpired;
   }
 
   getToken(): string | null {
