@@ -1,17 +1,59 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Animated, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, Vibration, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import { COLORS } from '../../constants';
+import { WasteCollection } from '../../constants/api';
+import { apiService } from '../../services/apiService';
 import recyclerStats from '../utils/recyclerStats';
+
+interface PickupRequest {
+  id: string;
+  userName: string;
+  location: string;
+  phone: string;
+  wasteType: string;
+  distance: string;
+  status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
+  createdAt: string;
+  customer_id: string;
+  recycler_id?: string;
+  waste_type: string;
+  pickup_address: string;
+  special_instructions?: string;
+  isNew?: boolean; // Track if this is a new request
+}
+
+// Extended interface for API response
+interface WasteCollectionWithCustomer extends WasteCollection {
+  customers?: {
+    id: string;
+    username: string;
+    phone: string;
+    address?: string;
+  };
+  recyclers?: {
+    id: string;
+    username: string;
+    phone: string;
+  };
+}
 
 export default function RecyclerRequests() {
   const params = useLocalSearchParams();
-  const [notificationCount, setNotificationCount] = useState(2);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [acceptedRequests, setAcceptedRequests] = useState<Set<string>>(new Set());
   const [completedRequests, setCompletedRequests] = useState<Set<string>>(new Set());
+  const [pickupRequests, setPickupRequests] = useState<PickupRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRequestCount, setLastRequestCount] = useState(0);
+  
+  // Animation for new request indicator
+  const pulseAnimation = useRef(new Animated.Value(1)).current;
+  const [hasNewRequests, setHasNewRequests] = useState(false);
 
   // Initialize mock data on component mount (only once)
   useEffect(() => {
@@ -22,54 +64,151 @@ export default function RecyclerRequests() {
     setAcceptedRequests(new Set(['5', '6'])); // IDs 5 and 6 are active in shared stats
   }, []);
 
-  // Mock pickup requests data
-  const pickupRequests = [
-    {
-      id: '1',
-      userName: 'Michael Afia',
-      location: 'Gold hostel - Komfo Anokye',
-      phone: '0546732719',
-      wasteType: 'Plastic',
-      distance: '2.3 km',
-      status: 'pending' // pending, active, completed
-    },
-    {
-      id: '2',
-      userName: 'Sarah Johnson',
-      location: 'Kumasi Zoological Gardens',
-      phone: '0541234567',
-      wasteType: 'Paper',
-      distance: '1.8 km',
-      status: 'pending'
-    },
-    {
-      id: '3',
-      userName: 'David Wilson',
-      location: 'KNUST Campus',
-      phone: '0549876543',
-      wasteType: 'Electronic',
-      distance: '3.1 km',
-      status: 'pending'
-    },
-    {
-      id: '5',
-      userName: 'James Brown',
-      location: 'Adum Shopping Center',
-      phone: '0547778888',
-      wasteType: 'Metal',
-      distance: '1.5 km',
-      status: 'active'
-    },
-    {
-      id: '6',
-      userName: 'Lisa Anderson',
-      location: 'KNUST Hospital',
-      phone: '0549990000',
-      wasteType: 'Plastic',
-      distance: '2.7 km',
-      status: 'active'
+  // Real-time notification polling
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetchPickupRequests();
+    }, 10000); // Poll every 10 seconds
+
+    return () => clearInterval(pollInterval);
+  }, []);
+
+  // Animate new request indicator
+  useEffect(() => {
+    if (hasNewRequests) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnimation, {
+            toValue: 1.2,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnimation, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnimation.setValue(1);
     }
-  ];
+  }, [hasNewRequests, pulseAnimation]);
+
+  // Fetch pickup requests from API
+  const fetchPickupRequests = async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.getWasteCollections();
+      
+      if (response && Array.isArray(response)) {
+        // Transform the API response to match our interface
+        const transformedRequests: PickupRequest[] = response.map(collection => ({
+          id: collection.id,
+          userName: 'Unknown Customer', // Default value since customers property doesn't exist
+          location: collection.pickup_address || 'Location not specified',
+          phone: 'No phone', // Default value since customers property doesn't exist
+          wasteType: collection.waste_type || 'Mixed',
+          distance: '2.3 km', // Mock distance - would be calculated in real app
+          status: collection.status,
+          createdAt: collection.created_at,
+          customer_id: collection.customer_id,
+          recycler_id: collection.recycler_id,
+          waste_type: collection.waste_type,
+          pickup_address: collection.pickup_address || 'Location not specified',
+          special_instructions: collection.pickup_notes,
+          isNew: false
+        }));
+        
+        // Check for new requests
+        const currentPendingCount = transformedRequests.filter(req => req.status === 'pending').length;
+        if (currentPendingCount > lastRequestCount) {
+          // Mark new requests as new
+          const newRequests = transformedRequests.filter(req => 
+            req.status === 'pending' && 
+            !pickupRequests.some(existing => existing.id === req.id)
+          );
+          newRequests.forEach(req => req.isNew = true);
+          setHasNewRequests(true);
+          
+          // Add haptic feedback for new requests
+          Vibration.vibrate(500); // Vibrate for 500ms
+          
+          // Show notification alert for new requests
+          if (newRequests.length > 0) {
+            Alert.alert(
+              'New Pickup Request! 🚛',
+              `You have ${newRequests.length} new pickup request${newRequests.length > 1 ? 's' : ''} available.`,
+              [{ text: 'View Now', onPress: () => setHasNewRequests(false) }]
+            );
+          }
+        }
+        
+        setPickupRequests(transformedRequests);
+        setLastRequestCount(currentPendingCount);
+        
+        // Update notification count for pending requests
+        setNotificationCount(currentPendingCount);
+        
+        // Stop pulsing after a few seconds
+        if (hasNewRequests) {
+          setTimeout(() => setHasNewRequests(false), 5000);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching pickup requests:', error);
+      // Fallback to mock data if API fails
+      setPickupRequests([
+        {
+          id: '1',
+          userName: 'Michael Afia',
+          location: 'Gold hostel - Komfo Anokye',
+          phone: '0546732719',
+          wasteType: 'Plastic',
+          distance: '2.3 km',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          customer_id: '1',
+          waste_type: 'plastic',
+          pickup_address: 'Gold hostel - Komfo Anokye',
+          isNew: true
+        },
+        {
+          id: '2',
+          userName: 'Sarah Johnson',
+          location: 'Kumasi Zoological Gardens',
+          phone: '0541234567',
+          wasteType: 'Paper',
+          distance: '1.8 km',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          customer_id: '2',
+          waste_type: 'paper',
+          pickup_address: 'Kumasi Zoological Gardens',
+          isNew: false
+        }
+      ]);
+      
+      // Set notification count for mock data
+      const pendingCount = 2;
+      setNotificationCount(pendingCount);
+      setLastRequestCount(pendingCount);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Refresh data
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchPickupRequests();
+    setRefreshing(false);
+  };
+
+  // Fetch requests on component mount
+  useEffect(() => {
+    fetchPickupRequests();
+  }, []);
 
   // Handle completed pickup from celebration screen
   useEffect(() => {
@@ -96,42 +235,68 @@ export default function RecyclerRequests() {
         newSet.delete(pickupId);
         return newSet;
       });
-
-      // Show completion message
-      Alert.alert(
-        'Pickup Completed!',
-        `Successfully completed pickup for ${userName} at ${location}. Payment received: GHS ${totalAmount}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Switch to completed filter to show the completed pickup
-              setSelectedFilter('completed');
-            }
-          }
-        ]
+      
+      // Update pickup requests status
+      setPickupRequests(prev => 
+        prev.map(req => 
+          req.id === pickupId 
+            ? { ...req, status: 'completed' as const }
+            : req
+        )
       );
+      
+      // Update notification count
+      const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
+      setNotificationCount(pendingCount);
     }
   }, [params.completedPickup, params.pickupId, params.userName, params.location, params.totalAmount]);
 
   const handleNotificationPress = () => {
     setNotificationCount(0);
+    setHasNewRequests(false);
+    // Navigate to notifications screen
+    router.push('/recycler-screens/RecyclerNotificationScreen' as any);
   };
 
-  const handleAcceptRequest = (requestId: string) => {
-    setAcceptedRequests(prev => new Set([...prev, requestId]));
-    
-    // Update shared stats
-    recyclerStats.addActivePickup(requestId);
-    
-    Alert.alert(
-      'Request Accepted',
-      'You have accepted this pickup request. It has been added to your active pickups.',
-      [{ text: 'OK' }]
-    );
+  const handleAcceptRequest = async (requestId: string) => {
+    try {
+      // Accept the request via API
+      await apiService.updateWasteStatus(requestId, 'accepted');
+      
+      setAcceptedRequests(prev => new Set([...prev, requestId]));
+      
+      // Update shared stats
+      recyclerStats.addActivePickup(requestId);
+      
+      // Update local state
+      setPickupRequests(prev => 
+        prev.map(req => 
+          req.id === requestId 
+            ? { ...req, status: 'accepted' as const }
+            : req
+        )
+      );
+      
+      // Update notification count
+      const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
+      setNotificationCount(pendingCount);
+      
+      Alert.alert(
+        'Request Accepted',
+        'You have accepted this pickup request. It has been added to your active pickups.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error accepting request:', error);
+      Alert.alert(
+        'Error',
+        'Failed to accept request. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
-  const handleRejectRequest = (requestId: string) => {
+  const handleRejectRequest = async (requestId: string) => {
     Alert.alert(
       'Reject Request',
       'Are you sure you want to reject this pickup request?',
@@ -140,18 +305,43 @@ export default function RecyclerRequests() {
         { 
           text: 'Reject', 
           style: 'destructive',
-          onPress: () => {
-            // Remove from pending requests in shared stats
-            recyclerStats.removePendingRequest(requestId);
-            
-            // Remove from accepted requests if it was there
-            setAcceptedRequests(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(requestId);
-              return newSet;
-            });
-            
-            Alert.alert('Request Rejected', 'The user has been notified.');
+          onPress: async () => {
+            try {
+              // Reject the request via API
+              await apiService.updateWasteStatus(requestId, 'cancelled');
+              
+              // Remove from pending requests in shared stats
+              recyclerStats.removePendingRequest(requestId);
+              
+              // Remove from accepted requests if it was there
+              setAcceptedRequests(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(requestId);
+                return newSet;
+              });
+              
+              // Update local state
+              setPickupRequests(prev => 
+                prev.map(req => 
+                  req.id === requestId 
+                    ? { ...req, status: 'cancelled' as const }
+                    : req
+                )
+              );
+              
+              // Update notification count
+              const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
+              setNotificationCount(pendingCount);
+              
+              Alert.alert('Request Rejected', 'The user has been notified.');
+            } catch (error) {
+              console.error('Error rejecting request:', error);
+              Alert.alert(
+                'Error',
+                'Failed to reject request. Please try again.',
+                [{ text: 'OK' }]
+              );
+            }
           }
         }
       ]
@@ -159,29 +349,54 @@ export default function RecyclerRequests() {
   };
 
   const handleRouteRequest = (requestId: string) => {
-            router.push('/recycler-screens/RecyclerNavigation' as any);
+    router.push('/recycler-screens/RecyclerNavigation' as any);
   };
 
-  const handleCompleteRequest = (requestId: string) => {
-    setCompletedRequests(prev => new Set([...prev, requestId]));
-    setAcceptedRequests(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(requestId);
-      return newSet;
-    });
-    
-    // Add to shared stats (mock earnings for manual completion)
-    recyclerStats.addCompletedPickup(requestId, 15.50, {
-      customer: 'Manual Completion',
-      wasteType: 'Mixed Waste',
-      weight: '10kg'
-    });
-    
-    Alert.alert(
-      'Pickup Completed',
-      'This pickup has been marked as completed.',
-      [{ text: 'OK' }]
-    );
+  const handleCompleteRequest = async (requestId: string) => {
+    try {
+      // Complete the request via API
+      await apiService.updateWasteStatus(requestId, 'completed');
+      
+      setCompletedRequests(prev => new Set([...prev, requestId]));
+      setAcceptedRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(requestId);
+        return newSet;
+      });
+      
+      // Update local state
+      setPickupRequests(prev => 
+        prev.map(req => 
+          req.id === requestId 
+            ? { ...req, status: 'completed' as const }
+            : req
+        )
+      );
+      
+      // Add to shared stats (mock earnings for manual completion)
+      recyclerStats.addCompletedPickup(requestId, 15.50, {
+        customer: 'Manual Completion',
+        wasteType: 'Mixed Waste',
+        weight: '10kg'
+      });
+      
+      // Update notification count (though completed requests don't affect pending count)
+      const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
+      setNotificationCount(pendingCount);
+      
+      Alert.alert(
+        'Pickup Completed',
+        'This pickup has been marked as completed.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error completing request:', error);
+      Alert.alert(
+        'Error',
+        'Failed to complete request. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   // Filter requests based on selected filter
@@ -195,6 +410,20 @@ export default function RecyclerRequests() {
         return pickupRequests; // Show all requests
     }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <AppHeader 
+          onNotificationPress={handleNotificationPress}
+          notificationCount={notificationCount}
+        />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading pickup requests...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -217,7 +446,7 @@ export default function RecyclerRequests() {
           onPress={() => setSelectedFilter('all')}
         >
           <Text style={[styles.filterButtonText, selectedFilter === 'all' && styles.filterButtonTextActive]}>
-            All Pickups
+            All Pickups ({pickupRequests.length})
           </Text>
         </TouchableOpacity>
         
@@ -226,7 +455,7 @@ export default function RecyclerRequests() {
           onPress={() => setSelectedFilter('active')}
         >
           <Text style={[styles.filterButtonText, selectedFilter === 'active' && styles.filterButtonTextActive]}>
-            Active Pickups
+            Active Pickups ({acceptedRequests.size})
           </Text>
         </TouchableOpacity>
         
@@ -235,81 +464,142 @@ export default function RecyclerRequests() {
           onPress={() => setSelectedFilter('completed')}
         >
           <Text style={[styles.filterButtonText, selectedFilter === 'completed' && styles.filterButtonTextActive]}>
-            Completed Pickups
+            Completed Pickups ({completedRequests.size})
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Pickup Requests */}
-      <ScrollView style={styles.requestsContainer} showsVerticalScrollIndicator={false}>
-        {getFilteredRequests().map((request) => (
-          <View key={request.id} style={styles.requestCard}>
-            <View style={styles.requestContent}>
-              <View style={styles.userInfo}>
-                <MaterialIcons name="person" size={20} color={COLORS.black} />
-                <Text style={styles.userName}>{request.userName}</Text>
-              </View>
-              
-              <View style={styles.locationInfo}>
-                <MaterialIcons name="search" size={20} color={COLORS.black} />
-                <Text style={styles.locationText}>{request.location}</Text>
-              </View>
-              
-              <View style={styles.phoneInfo}>
-                <MaterialIcons name="phone" size={20} color={COLORS.black} />
-                <Text style={styles.phoneText}>{request.phone}</Text>
-              </View>
+      {/* New Requests Notification Banner */}
+      {hasNewRequests && (
+        <Animated.View 
+          style={[
+            styles.newRequestsBanner,
+            { transform: [{ scale: pulseAnimation }] }
+          ]}
+        >
+          <MaterialIcons name="notifications-active" size={20} color={COLORS.white} />
+          <Text style={styles.newRequestsBannerText}>
+            You have new pickup requests! Tap to view them.
+          </Text>
+          <TouchableOpacity 
+            style={styles.newRequestsBannerButton}
+            onPress={() => setHasNewRequests(false)}
+          >
+            <Text style={styles.newRequestsBannerButtonText}>Dismiss</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
-              <View style={styles.requestDetails}>
-                <View style={styles.detailItem}>
-                  <MaterialIcons name="category" size={16} color={COLORS.gray} />
-                  <Text style={styles.detailText}>{request.wasteType}</Text>
-                </View>
-                <View style={styles.detailItem}>
-                  <MaterialIcons name="directions-car" size={16} color={COLORS.gray} />
-                  <Text style={styles.detailText}>{request.distance}</Text>
-                </View>
-              </View>
-            </View>
-            
-            {/* Show different buttons based on request status */}
-            {completedRequests.has(request.id) ? (
-              <View style={styles.completedBadge}>
-                <Text style={styles.completedText}>Completed</Text>
-              </View>
-            ) : acceptedRequests.has(request.id) ? (
-              <View style={styles.activeButtons}>
-                <TouchableOpacity 
-                  style={styles.routeButton}
-                  onPress={() => handleRouteRequest(request.id)}
-                >
-                  <Text style={styles.routeButtonText}>Route</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.completeButton}
-                  onPress={() => handleCompleteRequest(request.id)}
-                >
-                  <Text style={styles.completeButtonText}>Complete</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.actionButtons}>
-                <TouchableOpacity 
-                  style={styles.rejectButton}
-                  onPress={() => handleRejectRequest(request.id)}
-                >
-                  <Text style={styles.rejectButtonText}>Reject</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.acceptButton}
-                  onPress={() => handleAcceptRequest(request.id)}
-                >
-                  <Text style={styles.acceptButtonText}>Accept</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+      {/* Pickup Requests */}
+      <ScrollView 
+        style={styles.requestsContainer} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {getFilteredRequests().length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>
+              {selectedFilter === 'all' 
+                ? 'No pickup requests available'
+                : selectedFilter === 'active'
+                ? 'No active pickups'
+                : 'No completed pickups'
+              }
+            </Text>
           </View>
-        ))}
+        ) : (
+          getFilteredRequests().map((request) => (
+            <Animated.View 
+              key={request.id} 
+              style={[
+                styles.requestCard,
+                request.isNew && { transform: [{ scale: pulseAnimation }] }
+              ]}
+            >
+              {/* NEW badge for new requests */}
+              {request.isNew && (
+                <View style={styles.newBadge}>
+                  <Text style={styles.newBadgeText}>NEW</Text>
+                </View>
+              )}
+              
+              <View style={styles.requestContent}>
+                <View style={styles.userInfo}>
+                  <MaterialIcons name="person" size={20} color={COLORS.black} />
+                  <Text style={styles.userName}>{request.userName}</Text>
+                </View>
+                
+                <View style={styles.locationInfo}>
+                  <MaterialIcons name="search" size={20} color={COLORS.black} />
+                  <Text style={styles.locationText}>{request.location}</Text>
+                </View>
+                
+                <View style={styles.phoneInfo}>
+                  <MaterialIcons name="phone" size={20} color={COLORS.black} />
+                  <Text style={styles.phoneText}>{request.phone}</Text>
+                </View>
+
+                <View style={styles.requestDetails}>
+                  <View style={styles.detailItem}>
+                    <MaterialIcons name="category" size={16} color={COLORS.gray} />
+                    <Text style={styles.detailText}>{request.wasteType}</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <MaterialIcons name="directions-car" size={16} color={COLORS.gray} />
+                    <Text style={styles.detailText}>{request.distance}</Text>
+                  </View>
+                </View>
+                
+                {/* Show special instructions if available */}
+                {request.special_instructions && (
+                  <View style={styles.specialInstructions}>
+                    <MaterialIcons name="info" size={16} color={COLORS.primary} />
+                    <Text style={styles.specialInstructionsText}>{request.special_instructions}</Text>
+                  </View>
+                )}
+              </View>
+              
+              {/* Show different buttons based on request status */}
+              {completedRequests.has(request.id) ? (
+                <View style={styles.completedBadge}>
+                  <Text style={styles.completedText}>Completed</Text>
+                </View>
+              ) : acceptedRequests.has(request.id) ? (
+                <View style={styles.activeButtons}>
+                  <TouchableOpacity 
+                    style={styles.routeButton}
+                    onPress={() => handleRouteRequest(request.id)}
+                  >
+                    <Text style={styles.routeButtonText}>Route</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.completeButton}
+                    onPress={() => handleCompleteRequest(request.id)}
+                  >
+                    <Text style={styles.completeButtonText}>Complete</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity 
+                    style={styles.rejectButton}
+                    onPress={() => handleRejectRequest(request.id)}
+                  >
+                    <Text style={styles.rejectButtonText}>Reject</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.acceptButton}
+                    onPress={() => handleAcceptRequest(request.id)}
+                  >
+                    <Text style={styles.acceptButtonText}>Accept</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </Animated.View>
+          ))
+        )}
       </ScrollView>
 
       {/* Bottom Navigation */}
@@ -511,6 +801,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+  specialInstructions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    backgroundColor: COLORS.lightGray,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  specialInstructionsText: {
+    fontSize: 12,
+    color: COLORS.darkGreen,
+    marginLeft: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    fontSize: 18,
+    color: COLORS.darkGreen,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    color: COLORS.gray,
+    textAlign: 'center',
+  },
   bottomNavigation: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -530,5 +855,57 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.gray,
     marginTop: 2,
+  },
+  newBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+  newBadgeText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  newRequestsBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 10,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  newRequestsBannerText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: 'bold',
+    flex: 1,
+    marginLeft: 10,
+  },
+  newRequestsBannerButton: {
+    backgroundColor: COLORS.white,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  newRequestsBannerButtonText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
