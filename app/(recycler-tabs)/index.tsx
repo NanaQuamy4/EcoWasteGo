@@ -7,6 +7,7 @@ import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
+import { apiService } from '../../services/apiService';
 import recyclerStats from '../utils/recyclerStats';
 
 export default function RecyclerHomeTab() {
@@ -70,18 +71,59 @@ export default function RecyclerHomeTab() {
     }
   }, []);
 
-  const handleOfflineToggle = () => {
+  // Load current availability status
+  useEffect(() => {
+    const loadAvailabilityStatus = async () => {
+      try {
+        // Get recycler profile to check availability status
+        const recyclerProfile = await apiService.getRecyclerDetails(user?.id || '');
+        if (recyclerProfile && recyclerProfile.is_available !== undefined) {
+          setIsOffline(!recyclerProfile.is_available);
+        }
+      } catch (error) {
+        console.error('Error loading availability status:', error);
+        // Default to online if we can't load the status
+        setIsOffline(false);
+      }
+    };
+
+    if (isVerified && user?.id) {
+      loadAvailabilityStatus();
+    }
+  }, [isVerified, user?.id]);
+
+  const handleOfflineToggle = async () => {
     const newStatus = !isOffline;
-    setIsOffline(newStatus);
     
-    Alert.alert(
-      newStatus ? 'Go Offline' : 'Go Online',
-      `You are now ${newStatus ? 'offline' : 'online'}. ${newStatus ? 'You will not receive new pickup requests.' : 'You are now available for pickup requests.'}`,
-      [
-        { text: 'Cancel', onPress: () => setIsOffline(!newStatus), style: 'cancel' },
-        { text: 'OK' }
-      ]
-    );
+    try {
+      // Call backend API to update availability
+      const response = await apiService.updateRecyclerAvailability(!newStatus);
+      
+      if (response.success) {
+        setIsOffline(newStatus);
+        
+        Alert.alert(
+          newStatus ? 'Go Offline' : 'Go Online',
+          `You are now ${newStatus ? 'offline' : 'online'}. ${newStatus ? 'You will not receive new pickup requests.' : 'You are now available for pickup requests.'}`,
+          [
+            { text: 'OK' }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          'Failed to update availability status. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error updating availability:', error);
+      Alert.alert(
+        'Error',
+        'Failed to update availability status. Please check your connection and try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const handleRequestsPress = () => {

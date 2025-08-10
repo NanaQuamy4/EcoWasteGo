@@ -1,0 +1,5 @@
+[33m870da98[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Major app improvements: Map integration, role-based auth, UI enhancements, and bug fixes
+[33m2f6dd67[m feat: Complete authentication system and delete account functionality
+[33m3d3804e[m feat: Temporary test mode for authentication
+[33mfbbaf8a[m fix: Network connectivity for mobile app
+[33m59f1767[m feat: Frontend-Backend Integration

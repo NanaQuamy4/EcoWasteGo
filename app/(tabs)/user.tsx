@@ -17,6 +17,41 @@ export default function UserScreen() {
   });
   const [isLoadingStats, setIsLoadingStats] = useState(true);
 
+  // Debug logging for user data
+  useEffect(() => {
+    if (user) {
+      console.log('UserScreen: User data:', user);
+      console.log('UserScreen: User created_at:', user.created_at);
+      console.log('UserScreen: User object keys:', Object.keys(user));
+    }
+  }, [user]);
+
+  // Helper function to safely format creation date
+  const formatCreationDate = (createdAt: string | undefined) => {
+    if (!createdAt) {
+      console.log('UserScreen: No created_at field found');
+      return 'N/A';
+    }
+    
+    try {
+      const date = new Date(createdAt);
+      if (isNaN(date.getTime())) {
+        console.log('UserScreen: Invalid date format:', createdAt);
+        return 'N/A';
+      }
+      
+      const formatted = date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        year: 'numeric' 
+      });
+      console.log('UserScreen: Formatted date:', formatted);
+      return formatted;
+    } catch (error) {
+      console.log('UserScreen: Error formatting date:', error);
+      return 'N/A';
+    }
+  };
+
   const [currentStatus, setCurrentStatus] = useState(user?.role === 'recycler' ? 'recycler' : 'user');
   const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
@@ -219,6 +254,14 @@ export default function UserScreen() {
             <Text style={styles.userEmail}>{user?.email || 'No email'}</Text>
             <Text style={styles.userPhone}>{user?.phone || 'No phone'}</Text>
             
+            {/* Account Creation Date */}
+            <View style={styles.creationDateContainer}>
+              <MaterialIcons name="event" size={16} color="rgba(255, 255, 255, 0.8)" />
+              <Text style={styles.creationDateText}>
+                Member since {formatCreationDate(user?.created_at)}
+              </Text>
+            </View>
+            
             <View style={styles.statusContainer}>
               <MaterialIcons name={getStatusIcon(currentStatus)} size={16} color={COLORS.white} />
               <Text style={styles.statusText}>{currentStatus}</Text>
@@ -254,7 +297,9 @@ export default function UserScreen() {
             <View style={styles.statIconContainer}>
               <MaterialIcons name="event" size={28} color={COLORS.white} />
             </View>
-            <Text style={styles.statNumber}>{userStats.memberSince}</Text>
+            <Text style={styles.statNumber}>
+              {formatCreationDate(user?.created_at)}
+            </Text>
             <Text style={styles.statLabel}>Member Since</Text>
             <View style={styles.statProgress}>
               <View style={[styles.progressBar, { width: '100%' }]} />
@@ -459,8 +504,25 @@ const styles = StyleSheet.create({
   userPhone: {
     fontSize: 16,
     color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 16,
+    marginBottom: 8,
     textAlign: 'center',
+  },
+  creationDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  creationDateText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginLeft: 6,
+    fontWeight: '500',
   },
   statusContainer: {
     flexDirection: 'row',

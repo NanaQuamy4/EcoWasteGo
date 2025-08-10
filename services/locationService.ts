@@ -22,26 +22,62 @@ export interface RecyclerLocation {
 
 class LocationService {
   /**
-   * Request location permissions
+   * Request location permissions with user-friendly messaging
    */
-  async requestLocationPermission(): Promise<boolean> {
+  async requestLocationPermission(): Promise<{ granted: boolean; message?: string }> {
     try {
+      // Check if permission is already granted
+      const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+      
+      if (existingStatus === 'granted') {
+        return { granted: true };
+      }
+
+      // Request permission
       const { status } = await Location.requestForegroundPermissionsAsync();
-      return status === 'granted';
+      
+      if (status === 'granted') {
+        return { granted: true };
+      } else if (status === 'denied') {
+        return { 
+          granted: false, 
+          message: 'Location permission was denied. Please enable location access in your device settings to use this feature.' 
+        };
+      } else if (status === 'restricted') {
+        return { 
+          granted: false, 
+          message: 'Location access is restricted. This might be due to parental controls or device policies.' 
+        };
+      } else {
+        return { 
+          granted: false, 
+          message: 'Location permission was not determined. Please try again.' 
+        };
+      }
     } catch (error) {
       console.error('Error requesting location permission:', error);
-      return false;
+      return { 
+        granted: false, 
+        message: 'Failed to request location permission. Please check your device settings.' 
+      };
     }
   }
 
   /**
-   * Get current location
+   * Get current location with enhanced error handling
    */
   async getCurrentLocation(): Promise<LocationData | null> {
     try {
-      const hasPermission = await this.requestLocationPermission();
-      if (!hasPermission) {
-        throw new Error('Location permission not granted');
+      const permissionResult = await this.requestLocationPermission();
+      
+      if (!permissionResult.granted) {
+        throw new Error(permissionResult.message || 'Location permission not granted');
+      }
+
+      // Check if location services are enabled
+      const isLocationEnabled = await Location.hasServicesEnabledAsync();
+      if (!isLocationEnabled) {
+        throw new Error('Location services are disabled. Please enable GPS in your device settings.');
       }
 
       const location = await Location.getCurrentPositionAsync({
@@ -54,7 +90,7 @@ class LocationService {
       };
     } catch (error) {
       console.error('Error getting current location:', error);
-      return null;
+      throw error; // Re-throw to let caller handle the error
     }
   }
 
@@ -162,9 +198,9 @@ class LocationService {
     interval: number = 5000
   ): Promise<() => void> {
     try {
-      const hasPermission = await this.requestLocationPermission();
-      if (!hasPermission) {
-        throw new Error('Location permission not granted');
+      const permissionResult = await this.requestLocationPermission();
+      if (!permissionResult.granted) {
+        throw new Error(permissionResult.message || 'Location permission not granted');
       }
 
       const locationSubscription = await Location.watchPositionAsync(

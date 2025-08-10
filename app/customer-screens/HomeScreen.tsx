@@ -8,15 +8,12 @@ import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
-import { apiService } from '../../services/apiService';
 import { locationSearchService, LocationSuggestion } from '../../services/locationSearchService';
 
 const SUGGESTIONS = [
   'Gold Hostel, komfo anokye',
   'Atonsu unity oil',
 ];
-
-
 
 export default function HomeScreen() {
   const [search, setSearch] = useState('');
@@ -27,7 +24,6 @@ export default function HomeScreen() {
   const [selectedLocation, setSelectedLocation] = useState<LocationSuggestion | null>(null);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
 
@@ -85,75 +81,24 @@ export default function HomeScreen() {
     },
   ];
 
-  // Load available recyclers from backend
-  const loadAvailableRecyclers = async () => {
-    try {
-      const recyclers = await apiService.getRecyclers();
-      // Filter only available recyclers
-      const availableRecyclers = recyclers.filter(recycler => recycler.is_available);
-      
-      // Transform to match the expected format
-      const transformedRecyclers = availableRecyclers.map((recycler, index) => ({
-        id: recycler.id,
-        name: recycler.business_name || `Recycler ${index + 1}`,
-        coordinate: { 
-          latitude: 6.6734 + (Math.random() - 0.5) * 0.01, // Mock coordinates for now
-          longitude: -1.5714 + (Math.random() - 0.5) * 0.01 
-        },
-        rating: recycler.rating || 4.0,
-        distance: `${(Math.random() * 2 + 0.3).toFixed(1)} km`,
-        type: 'recycler' as const,
-        status: 'Available',
-        truckType: recycler.vehicle_type || 'Recycling Truck',
-      }));
-      
-      setNearbyRecyclers(transformedRecyclers);
-    } catch (error) {
-      console.error('Error loading recyclers:', error);
-      // Fallback to mock data if API fails
-      setNearbyRecyclers(mockRecyclers);
-    }
-  };
-
   useEffect(() => {
-    // Try to load real recycler data first, fallback to mock data
-    loadAvailableRecyclers();
-    console.log('HomeScreen: Setting up recyclers');
+    setNearbyRecyclers(mockRecyclers);
+    console.log('HomeScreen: Setting up recyclers', mockRecyclers);
+    console.log('HomeScreen: Recyclers count:', mockRecyclers.length);
     getCurrentLocation();
   }, []);
 
   const getCurrentLocation = async () => {
     try {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      setUserLocation(location);
-      return location; // Return location for use in search
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        setUserLocation(location);
+      }
     } catch (error) {
       console.error('Error getting current location:', error);
-      
-      // Provide user-friendly error messages
-      let errorMessage = 'Unable to get your current location.';
-      
-      if (error instanceof Error) {
-        if (error.message.includes('permission')) {
-          errorMessage = 'Location permission denied. Please enable location access in your device settings.';
-        } else if (error.message.includes('timeout')) {
-          errorMessage = 'Location request timed out. Please try again.';
-        } else if (error.message.includes('location services')) {
-          errorMessage = 'Location services are disabled. Please enable GPS in your device settings.';
-        }
-      }
-      
-      Alert.alert('Location Error', errorMessage, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => {
-          // This would ideally open device settings, but we'll just show an alert
-          Alert.alert('Settings', 'Please go to your device Settings > Privacy & Security > Location Services and enable location access for this app.');
-        }}
-      ]);
-      
-      return null;
     }
   };
 
@@ -182,7 +127,6 @@ export default function HomeScreen() {
       setLocationSuggestions([]);
     }
   };
-
 
   const filteredSuggestions = SUGGESTIONS.filter(s =>
     s.toLowerCase().includes(search.toLowerCase())
@@ -236,127 +180,19 @@ export default function HomeScreen() {
           { text: 'Cancel', style: 'cancel' },
           { text: 'Request Pickup', onPress: () => {
             router.push({
-              pathname: '/customer-screens/CallRecyclerScreen' as any,
+              pathname: '/customer-screens/CallRecyclerScreen',
               params: { recyclerName: recycler.name }
-            });
+            } as any);
           }},
           { text: 'Track Truck', onPress: () => {
             // Navigate to tracking screen
             router.push({
-              pathname: '/customer-screens/TrackingScreen' as any,
+              pathname: '/customer-screens/TrackingScreen',
               params: { recyclerId: recycler.id }
-            });
+            } as any);
           }}
         ]
       );
-    }
-  };
-
-  // Handle location detection with accuracy feedback
-  const handleLocationDetection = async () => {
-    setIsDetectingLocation(true);
-    try {
-      const location = await getCurrentLocation();
-      if (location) {
-        // Get address from coordinates
-        const address = await locationSearchService.reverseGeocode({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-        
-        if (address) {
-          setSearch(address);
-          setSelectedLocation({
-            id: 'current-location',
-            name: address,
-            address: address,
-            coordinate: {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            },
-            type: 'geocode',
-          });
-          
-          // Show accuracy information
-          const accuracy = location.coords.accuracy;
-          let accuracyMessage = '';
-          if (accuracy && accuracy <= 10) {
-            accuracyMessage = 'High accuracy (within 10 meters)';
-          } else if (accuracy && accuracy <= 50) {
-            accuracyMessage = 'Good accuracy (within 50 meters)';
-          } else if (accuracy && accuracy <= 100) {
-            accuracyMessage = 'Fair accuracy (within 100 meters)';
-          } else {
-            accuracyMessage = 'Low accuracy (over 100 meters)';
-          }
-          
-          Alert.alert(
-            'Location Detected!',
-            `Your current location: ${address}\n\nAccuracy: ${accuracyMessage}\n\nThis will be set as your pickup point.`,
-            [
-              { text: 'Change Location', style: 'cancel' },
-              { text: 'Use This Location', onPress: () => {
-                // Automatically navigate to SelectTruck with the detected location and coordinates
-                router.push({ 
-                  pathname: '/customer-screens/SelectTruck', 
-                  params: { 
-                    pickup: address,
-                    latitude: location.coords.latitude.toString(),
-                    longitude: location.coords.longitude.toString()
-                  } 
-                } as any);
-              }}
-            ]
-          );
-        } else {
-          // If we can't get address, use coordinates
-          const coordText = `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`;
-          setSearch(coordText);
-          setSelectedLocation({
-            id: 'current-location',
-            name: coordText,
-            address: coordText,
-            coordinate: {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            },
-            type: 'geocode',
-          });
-          
-          Alert.alert(
-            'Location Detected!',
-            `Your current coordinates: ${coordText}\n\nNote: Could not determine exact address. You may want to verify this location on the map.`,
-            [
-              { text: 'Change Location', style: 'cancel' },
-              { text: 'Use This Location', onPress: () => {
-                router.push({ 
-                  pathname: '/customer-screens/SelectTruck', 
-                  params: { 
-                    pickup: coordText,
-                    latitude: location.coords.latitude.toString(),
-                    longitude: location.coords.longitude.toString()
-                  } 
-                } as any);
-              }}
-            ]
-          );
-        }
-      } else {
-        Alert.alert(
-          'Location Error',
-          'Unable to get your current location. Please check your GPS settings or enter your pickup point manually.',
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      console.error('Error getting current location:', error);
-      Alert.alert(
-        'Location Error',
-        'Failed to get your current location. Please enter your pickup point manually.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setIsDetectingLocation(false);
     }
   };
 
@@ -377,25 +213,6 @@ export default function HomeScreen() {
       
       {/* Search Section */}
       <View style={styles.searchSection}>
-        {/* Use My Location Button */}
-        <TouchableOpacity
-          style={[
-            styles.useMyLocationButton,
-            isDetectingLocation && { opacity: 0.7 }
-          ]}
-          disabled={isDetectingLocation}
-          onPress={handleLocationDetection}
-          >
-            <MaterialIcons 
-              name={isDetectingLocation ? "hourglass-empty" : "my-location"} 
-              size={20} 
-              color={COLORS.white} 
-            />
-            <Text style={styles.useMyLocationText}>
-              {isDetectingLocation ? 'Detecting Location...' : 'Use My Location'}
-            </Text>
-          </TouchableOpacity>
-
         <ImageBackground
           source={require('../../assets/images/blend.jpg')}
           style={styles.searchBarBg}
@@ -509,7 +326,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </View>
-      {/* BottomNav removed, default tab bar will show */}
     </View>
   );
 }
@@ -519,94 +335,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  hamburger: {
-    position: 'absolute',
-    top: 36,
-    left: 18,
-    zIndex: 100,
-    backgroundColor: 'transparent',
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 24,
-  },
-  drawerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    zIndex: 99,
-  },
-  drawer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    backgroundColor: '#C7CCC1',
-    zIndex: 101,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 8,
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingLeft: 2,
-    marginBottom: 2,
-  },
-  menuItemText: {
-    color: '#22330B',
-    fontWeight: 'bold',
-    fontSize: 18,
-    marginLeft: 18,
-  },
-  contactCard: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 10,
-    marginLeft: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-    width: 230,
-  },
-  appName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#263A13',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  tagline: {
-    fontSize: 13,
-    color: '#263A13',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
   searchSection: {
     margin: 16,
     marginTop: 20,
     marginBottom: 8,
-  },
-  searchOverlayContainer: {
-    position: 'absolute',
-    top: 32,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 10,
-    alignSelf: 'center',
   },
   searchBarBg: {
     backgroundColor: '#D9DED8',
@@ -680,53 +412,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#f5f5f5',
   },
-  mapPlaceholder: {
-    flex: 1,
-    backgroundColor: '#F2FFE5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mapHeader: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    right: 20,
-    zIndex: 1,
-  },
-  mapTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.darkGreen,
-    textAlign: 'center',
-  },
-  mapSubtitle: {
-    fontSize: 14,
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  mapContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  blankMapArea: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  blankMapText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.darkGreen,
-    textAlign: 'center',
-  },
-  blankMapSubtext: {
-    fontSize: 16,
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginTop: 8,
-  },
   mapLegend: {
     position: 'absolute',
     top: 20,
@@ -770,26 +455,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray,
     marginTop: 2,
-  },
-  useMyLocationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.darkGreen,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  useMyLocationText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
   },
 });

@@ -35,10 +35,29 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction) =
 
 // Content Security Policy middleware
 export const cspMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:;"
-  );
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (isProduction) {
+    // Strict CSP for production
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https:; font-src 'self'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+    );
+  } else {
+    // More permissive for development
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:;"
+    );
+  }
+  
+  // Additional security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  
   next();
 };
 
@@ -74,16 +93,41 @@ export const validateApiKey = (req: Request, res: Response, next: NextFunction) 
 // Rate limiting for specific endpoints
 export const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 3 : 5, // Stricter in production
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful logins
+  keyGenerator: (req) => {
+    // Use IP + user agent for better rate limiting
+    return req.ip + ':' + (req.headers['user-agent'] || 'unknown');
+  }
 });
 
 export const searchRateLimit = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 30, // limit each IP to 30 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 20 : 30, // Stricter in production
   message: 'Too many search requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => req.ip
+});
+
+// Additional rate limits for production
+export const apiRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 50 : 100, // Stricter in production
+  message: 'Too many API requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/health' // Skip health checks
+});
+
+export const paymentRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Very strict for payment operations
+  message: 'Too many payment requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.ip // Rate limit by user if authenticated
 }); 

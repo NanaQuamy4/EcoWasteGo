@@ -361,6 +361,7 @@ export class DatabaseService {
         `)
         .eq('role', 'recycler')
         .eq('email_verified', true)
+        .eq('recycler_profiles.is_available', true) // Only show available recyclers
         .range(offset, offset + limit - 1)
         .order('created_at', { ascending: false }),
       cacheKey,

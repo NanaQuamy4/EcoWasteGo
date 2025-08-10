@@ -298,6 +298,27 @@ class ApiService {
     return response.data!;
   }
 
+  async searchRecyclersByLocation(location: string, wasteType?: string): Promise<RecyclerProfile[]> {
+    try {
+      const params = new URLSearchParams({
+        location,
+        ...(wasteType && { waste_type: wasteType }),
+        limit: '20' // Get more results for better selection
+      });
+
+      const response = await this.request<{ data: RecyclerProfile[] }>(
+        `/api/recyclers/search?${params}`,
+        { method: 'GET' }
+      );
+
+      return response.data?.data || [];
+    } catch (error) {
+      console.error('Error searching recyclers by location:', error);
+      // Fallback to getting all recyclers if search fails
+      return this.getRecyclers();
+    }
+  }
+
   async getRecyclerDetails(recyclerId: string): Promise<RecyclerProfile> {
     const response = await this.request<RecyclerProfile>(`${API_CONFIG.ENDPOINTS.USERS.RECYCLER_DETAILS}/${recyclerId}`);
     return response.data!;
@@ -584,9 +605,9 @@ class ApiService {
     passportPhotoUrl?: string;
     businessDocumentUrl?: string;
   }): Promise<UserProfile> {
-    const response = await this.request<UserProfile>('/auth/complete-recycler-registration', {
+    const response = await this.request<UserProfile>('/api/recycler-registration/complete', {
       method: 'POST',
-      body: JSON.stringify(registrationData)
+      body: JSON.stringify(registrationData),
     });
     
     if (response.success && response.data) {
@@ -594,6 +615,28 @@ class ApiService {
     }
     
     throw new Error(response.error || 'Failed to complete registration');
+  }
+
+  /**
+   * Update recycler availability status
+   */
+  async updateRecyclerAvailability(isAvailable: boolean): Promise<ApiResponse> {
+    return this.request<ApiResponse>('/api/recyclers/availability', {
+      method: 'PUT',
+      body: JSON.stringify({
+        is_available: isAvailable,
+        availability_schedule: {
+          // Default availability schedule - can be enhanced later
+          monday: isAvailable,
+          tuesday: isAvailable,
+          wednesday: isAvailable,
+          thursday: isAvailable,
+          friday: isAvailable,
+          saturday: isAvailable,
+          sunday: isAvailable
+        }
+      }),
+    });
   }
 
   // Utility Methods

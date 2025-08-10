@@ -1,7 +1,6 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
-import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
@@ -53,55 +52,81 @@ import trackingRoutes from './src/routes/tracking';
 import usersRoutes from './src/routes/users';
 import wasteRoutes from './src/routes/waste';
 
+// Import security middleware
+import { apiRateLimit, authRateLimit, cspMiddleware, paymentRateLimit, requestSizeLimiter, sanitizeInput } from './src/middleware/security';
+import { getSecurityStats, securityMonitoring } from './src/middleware/securityMonitoring';
+
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:8081',
-    'http://localhost:19006',
-    'http://10.36.50.88:3000',
-    'http://10.36.50.88:8081',
-    'http://10.36.50.88:19006',
-    'http://10.132.144.9:3000',
-    'http://10.132.144.9:8081',
-    'http://10.133.121.133:3000',
-    'http://10.133.121.133:8081',
-    'exp://localhost:8081',
-    'exp://localhost:19006',
-    'exp://10.36.50.88:8081',
-    'exp://10.36.50.88:19006',
-    'exp://10.132.144.9:8081',
-    'exp://10.133.121.133:8081',
-    'http://localhost:19000',
-    'http://localhost:19001',
-    'http://localhost:19002',
-    // Add current IP for mobile access
-    'http://10.36.50.88:19006',
-    'exp://10.36.50.88:19006'
-  ],
-  credentials: true
-}));
+
+// Production-ready CORS configuration
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps or Postman)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = process.env.NODE_ENV === 'production' 
+      ? [
+          process.env.FRONTEND_URL || 'https://ecowastego.com',
+          process.env.MOBILE_APP_URL || 'https://ecowastego.com'
+        ]
+      : [
+          'http://localhost:3000',
+          'http://localhost:8081', 
+          'http://localhost:19006',
+          'exp://localhost:8081',
+          'exp://localhost:19006'
+        ];
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-CSRF-Token', 'X-Session-Id']
+};
+
+app.use(cors(corsOptions));
+
+// Security middleware (order matters!)
+app.use(securityMonitoring); // Monitor all requests
+app.use(cspMiddleware); // Content Security Policy
+app.use(sanitizeInput); // Input sanitization
+app.use(requestSizeLimiter); // Request size limits
+
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
-});
-app.use('/api/', limiter);
+// Enhanced rate limiting with security
+app.use('/api/auth', authRateLimit); // Stricter auth rate limiting
+app.use('/api/payments', paymentRateLimit); // Payment rate limiting
+app.use('/api/', apiRateLimit); // General API rate limiting
 
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     message: 'EcoWasteGo Backend is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Security monitoring endpoint (admin only)
+app.get('/security/stats', (req, res) => {
+  // In production, verify admin role here
+  const stats = getSecurityStats();
+  res.status(200).json({
+    success: true,
+    data: stats,
     timestamp: new Date().toISOString()
   });
 });

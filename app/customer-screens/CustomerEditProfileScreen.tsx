@@ -1,6 +1,5 @@
 import { Feather, MaterialIcons } from '@expo/vector-icons';
-import { Link } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FlatList, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import PhoneNumberInput from '../../components/PhoneNumberInput';
@@ -11,6 +10,15 @@ export default function CustomerEditProfileScreen() {
   const [name, setName] = useState(user?.username || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone || '');
+
+  // Debug logging for user data
+  useEffect(() => {
+    if (user) {
+      console.log('CustomerEditProfileScreen: User data:', user);
+      console.log('CustomerEditProfileScreen: User created_at:', user.created_at);
+      console.log('CustomerEditProfileScreen: User object keys:', Object.keys(user));
+    }
+  }, [user]);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -21,6 +29,33 @@ export default function CustomerEditProfileScreen() {
   const [countryFlag, setCountryFlag] = useState('🇬🇭');
   const [countryModalVisible, setCountryModalVisible] = useState(false);
   const [search, setSearch] = useState('');
+
+  // Format account creation date
+  const formatCreationDate = (createdAt: string | undefined) => {
+    if (!createdAt) {
+      console.log('CustomerEditProfileScreen: No created_at field found');
+      return 'N/A';
+    }
+    
+    try {
+      const date = new Date(createdAt);
+      if (isNaN(date.getTime())) {
+        console.log('CustomerEditProfileScreen: Invalid date format:', createdAt);
+        return 'N/A';
+      }
+      
+      const formatted = date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      console.log('CustomerEditProfileScreen: Formatted date:', formatted);
+      return formatted;
+    } catch (error) {
+      console.log('CustomerEditProfileScreen: Error formatting date:', error);
+      return 'N/A';
+    }
+  };
 
   // Full country/calling code list (shortened for brevity, but will include all countries)
   const countryCodes = [
@@ -291,11 +326,9 @@ export default function CustomerEditProfileScreen() {
                   <Text style={styles.myAccountTextSmall}>My Account</Text>
                 </View>
                 <View style={{ flex: 1 }} />
-                <Link href="/EditProfileScreen" asChild>
-                  <TouchableOpacity style={styles.editButton}>
-                    <Text style={styles.editButtonText}>Edit</Text>
-                  </TouchableOpacity>
-                </Link>
+                <TouchableOpacity style={styles.editButton}>
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -304,6 +337,17 @@ export default function CustomerEditProfileScreen() {
       {/* Green container for fields and actions, starts immediately after banner */}
       <View style={styles.greenContentContainerNoOverlap}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Account Creation Date Display */}
+          <View style={styles.creationDateContainer}>
+            <MaterialIcons name="event" size={20} color="#263A13" style={styles.inputIcon} />
+            <View style={styles.creationDateContent}>
+              <Text style={styles.creationDateLabel}>Account Created</Text>
+              <Text style={styles.creationDateValue}>
+                {formatCreationDate(user?.created_at || '')}
+              </Text>
+            </View>
+          </View>
+          
           {/* Name Field */}
           <View style={styles.inputRow}>
             <MaterialIcons name="person" size={20} color="#263A13" style={styles.inputIcon} />
@@ -639,6 +683,31 @@ const styles = StyleSheet.create({
   countryCodeTextModal: {
     fontSize: 16,
     color: '#263A13',
+    fontWeight: 'bold',
+  },
+  creationDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#B6CDBD',
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    maxWidth: 340,
+    alignSelf: 'center',
+  },
+  creationDateContent: {
+    marginLeft: 8,
+  },
+  creationDateLabel: {
+    color: '#263A13',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  creationDateValue: {
+    color: '#263A13',
+    fontSize: 16,
     fontWeight: 'bold',
   },
 }); 

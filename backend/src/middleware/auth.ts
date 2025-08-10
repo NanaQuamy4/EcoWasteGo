@@ -32,19 +32,12 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // Handle test tokens for development
+    // Test tokens are not allowed in production
     if (token.startsWith('test-token-')) {
-      console.log('Authenticating test token:', token);
-      
-      // Create a test user for development
-      req.user = {
-        id: 'test-user-' + Date.now(),
-        email: 'testuser@gmail.com',
-        role: 'customer',
-        username: 'testuser'
-      };
-      
-      next();
+      res.status(401).json({
+        success: false,
+        error: 'Test tokens are not allowed in production'
+      });
       return;
     }
 

@@ -124,6 +124,7 @@ export class OptimizedUsersController {
             `)
             .eq('role', 'recycler')
             .eq('email_verified', true)
+            .eq('recycler_profiles.is_available', true) // Only show available recyclers
             .ilike('username', `%${search}%`)
             .range((page - 1) * limit, page * limit - 1)
             .order('created_at', { ascending: false }),
@@ -179,6 +180,7 @@ export class OptimizedUsersController {
           .eq('id', id)
           .eq('role', 'recycler')
           .eq('email_verified', true)
+          .eq('recycler_profiles.is_available', true) // Only show available recyclers
           .single(),
         cacheKey,
         600 // 10 minutes cache for recycler details

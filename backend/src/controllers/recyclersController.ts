@@ -313,7 +313,8 @@ export class RecyclersController {
           *,
           recyclers:recycler_id(id, username, phone, address, city, state, profile_image)
         `)
-        .eq('recyclers.email_verified', true);
+        .eq('recyclers.email_verified', true)
+        .eq('is_available', true); // Only show available recyclers
 
       // Filter by location
       if (location) {
@@ -330,7 +331,7 @@ export class RecyclersController {
         query = query.gte('average_rating', parseFloat(rating as string));
       }
 
-      // Filter by availability
+      // Filter by availability schedule (day of week)
       if (availability) {
         query = query.contains('availability_schedule', { [availability as string]: true });
       }

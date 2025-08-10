@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
@@ -10,6 +10,41 @@ import { useAuth } from '../../contexts/AuthContext';
 export default function RecyclerUserTab() {
   const { user } = useAuth();
   const isVerified = user?.verification_status === 'verified';
+
+  // Debug logging for user data
+  useEffect(() => {
+    if (user) {
+      console.log('RecyclerUserTab: User data:', user);
+      console.log('RecyclerUserTab: User created_at:', user.created_at);
+      console.log('RecyclerUserTab: User object keys:', Object.keys(user));
+    }
+  }, [user]);
+
+  // Helper function to safely format creation date
+  const formatCreationDate = (createdAt: string | undefined) => {
+    if (!createdAt) {
+      console.log('RecyclerUserTab: No created_at field found');
+      return 'N/A';
+    }
+    
+    try {
+      const date = new Date(createdAt);
+      if (isNaN(date.getTime())) {
+        console.log('RecyclerUserTab: Invalid date format:', createdAt);
+        return 'N/A';
+      }
+      
+      const formatted = date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        year: 'numeric' 
+      });
+      console.log('RecyclerUserTab: Formatted date:', formatted);
+      return formatted;
+    } catch (error) {
+      console.log('RecyclerUserTab: Error formatting date:', error);
+      return 'N/A';
+    }
+  };
   const recycler = {
     name: user?.username || 'Recycler',
     email: user?.email || '',
@@ -96,6 +131,14 @@ export default function RecyclerUserTab() {
           <Text style={styles.userEmail}>{recycler.email}</Text>
           <Text style={styles.userPhone}>{recycler.phone}</Text>
           
+          {/* Account Creation Date */}
+          <View style={styles.creationDateContainer}>
+            <MaterialIcons name="event" size={16} color="rgba(0, 0, 0, 0.6)" />
+            <Text style={styles.creationDateText}>
+              Member since {formatCreationDate(user?.created_at)}
+            </Text>
+          </View>
+          
           <View style={styles.statusContainer}>
             <MaterialIcons name={getStatusIcon(currentStatus)} size={16} color={getStatusColor(currentStatus)} />
             <Text style={[styles.statusText, { color: getStatusColor(currentStatus) }]}>{currentStatus}</Text>
@@ -138,7 +181,9 @@ export default function RecyclerUserTab() {
           </View>
           <View style={styles.statCard}>
             <MaterialIcons name="event" size={24} color={COLORS.darkGreen} />
-            <Text style={styles.statNumber}>{recycler.memberSince}</Text>
+            <Text style={styles.statNumber}>
+              {formatCreationDate(user?.created_at)}
+            </Text>
             <Text style={styles.statLabel}>Member Since</Text>
           </View>
         </View>
@@ -279,7 +324,24 @@ const styles = StyleSheet.create({
   userPhone: {
     fontSize: 16,
     color: COLORS.gray,
+    marginBottom: 6,
+  },
+  creationDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  creationDateText: {
+    fontSize: 14,
+    color: COLORS.darkGreen,
+    marginLeft: 6,
+    fontWeight: '500',
   },
   statusContainer: {
     flexDirection: 'row',
