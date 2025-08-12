@@ -536,4 +536,94 @@ export class WasteController {
       });
     }
   }
+
+  /**
+   * Get waste collection requests for recyclers with customer information
+   */
+  static async getRecyclerRequests(req: Request, res: Response): Promise<void> {
+    try {
+      const recyclerId = req.user?.id;
+      const { status, page = 1, limit = 20 } = req.query;
+
+      if (!recyclerId) {
+        res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+        return;
+      }
+
+      let query = supabase
+        .from('waste_collections')
+        .select(`
+          id,
+          waste_type,
+          weight,
+          pickup_address,
+          pickup_notes,
+          status,
+          created_at,
+          customer_id,
+          recycler_id,
+          customers:customer_id(
+            id,
+            username,
+            phone,
+            address
+          )
+        `)
+        .or(`status.eq.pending,status.eq.accepted,status.eq.in_progress`)
+        .order('created_at', { ascending: false });
+
+      // Filter by status if provided
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      // Pagination
+      const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
+      query = query.range(offset, offset + parseInt(limit as string) - 1);
+
+      const { data: collections, error } = await query;
+
+      if (error) {
+        console.error('Error fetching recycler requests:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch recycler requests'
+        });
+        return;
+      }
+
+      // Format the data for the frontend
+      const formattedCollections = collections?.map(collection => ({
+        id: collection.id,
+        waste_type: collection.waste_type,
+        weight: collection.weight,
+        pickup_address: collection.pickup_address,
+        pickup_notes: collection.pickup_notes,
+        status: collection.status,
+        created_at: collection.created_at,
+        customer_id: collection.customer_id,
+        recycler_id: collection.recycler_id,
+        customer: {
+          username: collection.customers?.[0]?.username || 'Unknown Customer',
+          phone: collection.customers?.[0]?.phone || 'No phone',
+          address: collection.customers?.[0]?.address || 'No address'
+        }
+      })) || [];
+
+      res.json({
+        success: true,
+        data: formattedCollections,
+        message: 'Recycler requests fetched successfully'
+      });
+    } catch (error) {
+      console.error('Error in getRecyclerRequests:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  }
 } 

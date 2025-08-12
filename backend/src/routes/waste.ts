@@ -74,4 +74,11 @@ router.get('/available', authenticateRecycler, WasteController.getAvailableColle
  */
 router.get('/recyclers/available', authenticateCustomer, WasteController.getAvailableRecyclersExcludingRejected);
 
+/**
+ * @route GET /api/waste/recycler/requests
+ * @desc Get waste collection requests for recyclers with customer information
+ * @access Private (Recycler only)
+ */
+router.get('/recycler/requests', authenticateRecycler, WasteController.getRecyclerRequests);
+
 export default router; 

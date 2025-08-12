@@ -438,6 +438,29 @@ class ApiService {
     return response.data!;
   }
 
+  async getWasteCollectionsForRecycler(): Promise<ApiResponse<any[]>> {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      // Fetch waste collections with customer information
+      const response = await this.request<any[]>('/api/waste/recycler/requests', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Error fetching waste collections for recycler:', error);
+      throw error;
+    }
+  }
+
   async getWasteCollection(id: string): Promise<WasteCollection> {
     const response = await this.request<WasteCollection>(`${API_CONFIG.ENDPOINTS.WASTE.GET_BY_ID}/${id}`);
     return response.data!;

@@ -6,7 +6,18 @@ import AppHeader from '../../components/AppHeader';
 import { COLORS } from '../../constants';
 import { WasteCollection } from '../../constants/api';
 import { apiService } from '../../services/apiService';
-import recyclerStats from '../utils/recyclerStats';
+
+// Simple distance calculation utility (placeholder - in real app would use actual GPS coordinates)
+const calculateDistance = (location: string): string => {
+  // This is a placeholder - in a real app, you would:
+  // 1. Get the recycler's current GPS coordinates
+  // 2. Get the customer's GPS coordinates from their address
+  // 3. Use Haversine formula to calculate actual distance
+  
+  // For now, return a random distance between 0.5 and 5 km
+  const distance = (Math.random() * 4.5 + 0.5).toFixed(1);
+  return `${distance} km`;
+};
 
 interface PickupRequest {
   id: string;
@@ -55,13 +66,10 @@ export default function RecyclerRequests() {
   const pulseAnimation = useRef(new Animated.Value(1)).current;
   const [hasNewRequests, setHasNewRequests] = useState(false);
 
-  // Initialize mock data on component mount (only once)
+  // Initialize component state
   useEffect(() => {
-    // Always initialize mock data to ensure it's available
-    recyclerStats.initializeMockData();
-    
-    // Sync accepted requests with shared stats
-    setAcceptedRequests(new Set(['5', '6'])); // IDs 5 and 6 are active in shared stats
+    // Fetch initial data
+    fetchPickupRequests();
   }, []);
 
   // Real-time notification polling
@@ -99,17 +107,17 @@ export default function RecyclerRequests() {
   const fetchPickupRequests = async () => {
     try {
       setLoading(true);
-      const response = await apiService.getWasteCollections();
+      const response = await apiService.getWasteCollectionsForRecycler();
       
-      if (response && Array.isArray(response)) {
+      if (response.success && response.data && Array.isArray(response.data)) {
         // Transform the API response to match our interface
-        const transformedRequests: PickupRequest[] = response.map(collection => ({
+        const transformedRequests: PickupRequest[] = response.data.map(collection => ({
           id: collection.id,
-          userName: 'Unknown Customer', // Default value since customers property doesn't exist
+          userName: collection.customer?.username || 'Unknown Customer',
           location: collection.pickup_address || 'Location not specified',
-          phone: 'No phone', // Default value since customers property doesn't exist
+          phone: collection.customer?.phone || 'Contact customer',
           wasteType: collection.waste_type || 'Mixed',
-          distance: '2.3 km', // Mock distance - would be calculated in real app
+          distance: calculateDistance(collection.pickup_address || ''),
           status: collection.status,
           createdAt: collection.created_at,
           customer_id: collection.customer_id,
@@ -154,45 +162,24 @@ export default function RecyclerRequests() {
         if (hasNewRequests) {
           setTimeout(() => setHasNewRequests(false), 5000);
         }
+      } else {
+        // Handle empty response
+        setPickupRequests([]);
+        setNotificationCount(0);
+        setLastRequestCount(0);
       }
     } catch (error) {
       console.error('Error fetching pickup requests:', error);
-      // Fallback to mock data if API fails
-      setPickupRequests([
-        {
-          id: '1',
-          userName: 'Michael Afia',
-          location: 'Gold hostel - Komfo Anokye',
-          phone: '0546732719',
-          wasteType: 'Plastic',
-          distance: '2.3 km',
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          customer_id: '1',
-          waste_type: 'plastic',
-          pickup_address: 'Gold hostel - Komfo Anokye',
-          isNew: true
-        },
-        {
-          id: '2',
-          userName: 'Sarah Johnson',
-          location: 'Kumasi Zoological Gardens',
-          phone: '0541234567',
-          wasteType: 'Paper',
-          distance: '1.8 km',
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          customer_id: '2',
-          waste_type: 'paper',
-          pickup_address: 'Kumasi Zoological Gardens',
-          isNew: false
-        }
-      ]);
+      // Show error state instead of mock data
+      setPickupRequests([]);
+      setNotificationCount(0);
+      setLastRequestCount(0);
       
-      // Set notification count for mock data
-      const pendingCount = 2;
-      setNotificationCount(pendingCount);
-      setLastRequestCount(pendingCount);
+      Alert.alert(
+        'Connection Error',
+        'Failed to fetch pickup requests. Please check your internet connection and try again.',
+        [{ text: 'Retry', onPress: () => fetchPickupRequests() }]
+      );
     } finally {
       setLoading(false);
     }
@@ -221,13 +208,7 @@ export default function RecyclerRequests() {
       // Add to completed requests
       setCompletedRequests(prev => new Set([...prev, pickupId]));
       
-      // Add to shared stats
-      const earnings = parseFloat(totalAmount) || 0;
-      recyclerStats.addCompletedPickup(pickupId, earnings, {
-        customer: userName,
-        wasteType: 'Mixed Waste', // Default since we don't have this data
-        weight: '10kg' // Default since we don't have this data
-      });
+              // Update local state only
       
       // Remove from accepted requests if it was there
       setAcceptedRequests(prev => {
@@ -266,8 +247,7 @@ export default function RecyclerRequests() {
       if (response) {
         setAcceptedRequests(prev => new Set([...prev, requestId]));
         
-        // Update shared stats
-        recyclerStats.addActivePickup(requestId);
+        // Update local state only
         
         // Update local state
         setPickupRequests(prev => 
@@ -324,8 +304,7 @@ export default function RecyclerRequests() {
               const response = await apiService.updateWasteStatus(requestId, 'cancelled', reason);
               
               if (response) {
-                // Remove from pending requests in shared stats
-                recyclerStats.removePendingRequest(requestId);
+                        // Update local state only
                 
                 // Remove from accepted requests if it was there
                 setAcceptedRequests(prev => {
@@ -415,12 +394,7 @@ export default function RecyclerRequests() {
           )
         );
         
-        // Add to shared stats (mock earnings for manual completion)
-        recyclerStats.addCompletedPickup(requestId, 15.50, {
-          customer: 'Manual Completion',
-          wasteType: 'Mixed Waste',
-          weight: '10kg'
-        });
+        // Update local state only
         
         // Update notification count (though completed requests don't affect pending count)
         const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
@@ -465,6 +439,7 @@ export default function RecyclerRequests() {
         />
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading pickup requests...</Text>
+          <Text style={styles.loadingSubtext}>Fetching from server...</Text>
         </View>
       </View>
     );
@@ -547,12 +522,17 @@ export default function RecyclerRequests() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>
               {selectedFilter === 'all' 
-                ? 'No pickup requests available'
+                ? 'No pickup requests available at the moment'
                 : selectedFilter === 'active'
                 ? 'No active pickups'
                 : 'No completed pickups'
               }
             </Text>
+            {selectedFilter === 'all' && (
+              <Text style={styles.emptyStateSubtext}>
+                New requests will appear here automatically
+              </Text>
+            )}
           </View>
         ) : (
           getFilteredRequests().map((request) => (
@@ -878,6 +858,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.darkGreen,
   },
+  loadingSubtext: {
+    fontSize: 14,
+    color: COLORS.gray,
+    marginTop: 8,
+  },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -888,6 +873,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.gray,
     textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginTop: 8,
+    opacity: 0.7,
   },
   bottomNavigation: {
     flexDirection: 'row',
