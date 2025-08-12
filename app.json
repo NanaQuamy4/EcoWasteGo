@@ -15,6 +15,7 @@
       }
     },
     "android": {
+      "package": "com.ecowastego.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#ffffff"

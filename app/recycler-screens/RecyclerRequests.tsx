@@ -261,31 +261,44 @@ export default function RecyclerRequests() {
   const handleAcceptRequest = async (requestId: string) => {
     try {
       // Accept the request via API
-      await apiService.updateWasteStatus(requestId, 'accepted');
+      const response = await apiService.updateWasteStatus(requestId, 'accepted');
       
-      setAcceptedRequests(prev => new Set([...prev, requestId]));
-      
-      // Update shared stats
-      recyclerStats.addActivePickup(requestId);
-      
-      // Update local state
-      setPickupRequests(prev => 
-        prev.map(req => 
-          req.id === requestId 
-            ? { ...req, status: 'accepted' as const }
-            : req
-        )
-      );
-      
-      // Update notification count
-      const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
-      setNotificationCount(pendingCount);
-      
-      Alert.alert(
-        'Request Accepted',
-        'You have accepted this pickup request. It has been added to your active pickups.',
-        [{ text: 'OK' }]
-      );
+      if (response) {
+        setAcceptedRequests(prev => new Set([...prev, requestId]));
+        
+        // Update shared stats
+        recyclerStats.addActivePickup(requestId);
+        
+        // Update local state
+        setPickupRequests(prev => 
+          prev.map(req => 
+            req.id === requestId 
+              ? { ...req, status: 'accepted' as const }
+              : req
+          )
+        );
+        
+        // Update notification count
+        const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
+        setNotificationCount(pendingCount);
+        
+        // Remove NEW badge
+        setPickupRequests(prev => 
+          prev.map(req => 
+            req.id === requestId 
+              ? { ...req, isNew: false }
+              : req
+          )
+        );
+        
+        Alert.alert(
+          'Request Accepted! 🎉',
+          'You have successfully accepted this pickup request. It has been added to your active pickups.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        throw new Error('Failed to accept request');
+      }
     } catch (error) {
       console.error('Error accepting request:', error);
       Alert.alert(
@@ -297,43 +310,51 @@ export default function RecyclerRequests() {
   };
 
   const handleRejectRequest = async (requestId: string) => {
-    Alert.alert(
+    Alert.prompt(
       'Reject Request',
-      'Are you sure you want to reject this pickup request?',
+      'Please provide a reason for rejection:',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Reject', 
           style: 'destructive',
-          onPress: async () => {
+          onPress: async (reason) => {
             try {
-              // Reject the request via API
-              await apiService.updateWasteStatus(requestId, 'cancelled');
+              // Reject the request via API with rejection reason
+              const response = await apiService.updateWasteStatus(requestId, 'cancelled', reason);
               
-              // Remove from pending requests in shared stats
-              recyclerStats.removePendingRequest(requestId);
-              
-              // Remove from accepted requests if it was there
-              setAcceptedRequests(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(requestId);
-                return newSet;
-              });
-              
-              // Update local state
-              setPickupRequests(prev => 
-                prev.map(req => 
-                  req.id === requestId 
-                    ? { ...req, status: 'cancelled' as const }
-                    : req
-                )
-              );
-              
-              // Update notification count
-              const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
-              setNotificationCount(pendingCount);
-              
-              Alert.alert('Request Rejected', 'The user has been notified.');
+              if (response) {
+                // Remove from pending requests in shared stats
+                recyclerStats.removePendingRequest(requestId);
+                
+                // Remove from accepted requests if it was there
+                setAcceptedRequests(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(requestId);
+                  return newSet;
+                });
+                
+                // Update local state
+                setPickupRequests(prev => 
+                  prev.map(req => 
+                    req.id === requestId 
+                      ? { ...req, status: 'cancelled' as const, isNew: false }
+                      : req
+                  )
+                );
+                
+                // Update notification count
+                const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
+                setNotificationCount(pendingCount);
+                
+                Alert.alert(
+                  'Request Rejected', 
+                  `The request has been rejected${reason ? ` with reason: "${reason}"` : ''}. The customer has been notified.`,
+                  [{ text: 'OK' }]
+                );
+              } else {
+                throw new Error('Failed to reject request');
+              }
             } catch (error) {
               console.error('Error rejecting request:', error);
               Alert.alert(
@@ -344,51 +365,75 @@ export default function RecyclerRequests() {
             }
           }
         }
-      ]
+      ],
+      'plain-text',
+      'Distance too far, unavailable resources, etc.'
     );
   };
 
   const handleRouteRequest = (requestId: string) => {
-    router.push('/recycler-screens/RecyclerNavigation' as any);
+    // Update status to in_progress when starting route
+    apiService.updateWasteStatus(requestId, 'in_progress').then(() => {
+      // Update local state
+      setPickupRequests(prev => 
+        prev.map(req => 
+          req.id === requestId 
+            ? { ...req, status: 'in_progress' as const }
+            : req
+        )
+      );
+    }).catch(error => {
+      console.error('Error updating status to in_progress:', error);
+    });
+    
+    // Navigate to navigation screen with requestId
+    router.push({
+      pathname: '/recycler-screens/RecyclerNavigation' as any,
+      params: { requestId: requestId }
+    });
   };
 
   const handleCompleteRequest = async (requestId: string) => {
     try {
       // Complete the request via API
-      await apiService.updateWasteStatus(requestId, 'completed');
+      const response = await apiService.updateWasteStatus(requestId, 'completed');
       
-      setCompletedRequests(prev => new Set([...prev, requestId]));
-      setAcceptedRequests(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(requestId);
-        return newSet;
-      });
-      
-      // Update local state
-      setPickupRequests(prev => 
-        prev.map(req => 
-          req.id === requestId 
-            ? { ...req, status: 'completed' as const }
-            : req
-        )
-      );
-      
-      // Add to shared stats (mock earnings for manual completion)
-      recyclerStats.addCompletedPickup(requestId, 15.50, {
-        customer: 'Manual Completion',
-        wasteType: 'Mixed Waste',
-        weight: '10kg'
-      });
-      
-      // Update notification count (though completed requests don't affect pending count)
-      const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
-      setNotificationCount(pendingCount);
-      
-      Alert.alert(
-        'Pickup Completed',
-        'This pickup has been marked as completed.',
-        [{ text: 'OK' }]
-      );
+      if (response) {
+        setCompletedRequests(prev => new Set([...prev, requestId]));
+        setAcceptedRequests(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(requestId);
+          return newSet;
+        });
+        
+        // Update local state
+        setPickupRequests(prev => 
+          prev.map(req => 
+            req.id === requestId 
+              ? { ...req, status: 'completed' as const }
+              : req
+          )
+        );
+        
+        // Add to shared stats (mock earnings for manual completion)
+        recyclerStats.addCompletedPickup(requestId, 15.50, {
+          customer: 'Manual Completion',
+          wasteType: 'Mixed Waste',
+          weight: '10kg'
+        });
+        
+        // Update notification count (though completed requests don't affect pending count)
+        const pendingCount = pickupRequests.filter(req => req.status === 'pending').length;
+        setNotificationCount(pendingCount);
+        
+        Alert.alert(
+          'Pickup Completed! 🎉',
+          'This pickup has been marked as completed successfully.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        throw new Error('Failed to complete request');
+      }
     } catch (error) {
       console.error('Error completing request:', error);
       Alert.alert(
@@ -564,7 +609,11 @@ export default function RecyclerRequests() {
               {/* Show different buttons based on request status */}
               {completedRequests.has(request.id) ? (
                 <View style={styles.completedBadge}>
-                  <Text style={styles.completedText}>Completed</Text>
+                  <Text style={styles.completedText}>✅ Completed</Text>
+                </View>
+              ) : request.status === 'in_progress' ? (
+                <View style={styles.inProgressBadge}>
+                  <Text style={styles.inProgressText}>🚚 In Progress</Text>
                 </View>
               ) : acceptedRequests.has(request.id) ? (
                 <View style={styles.activeButtons}>
@@ -572,14 +621,18 @@ export default function RecyclerRequests() {
                     style={styles.routeButton}
                     onPress={() => handleRouteRequest(request.id)}
                   >
-                    <Text style={styles.routeButtonText}>Route</Text>
+                    <Text style={styles.routeButtonText}>🗺️ Route</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={styles.completeButton}
                     onPress={() => handleCompleteRequest(request.id)}
                   >
-                    <Text style={styles.completeButtonText}>Complete</Text>
+                    <Text style={styles.completeButtonText}>✅ Complete</Text>
                   </TouchableOpacity>
+                </View>
+              ) : request.status === 'cancelled' ? (
+                <View style={styles.cancelledBadge}>
+                  <Text style={styles.cancelledText}>❌ Cancelled</Text>
                 </View>
               ) : (
                 <View style={styles.actionButtons}>
@@ -587,13 +640,13 @@ export default function RecyclerRequests() {
                     style={styles.rejectButton}
                     onPress={() => handleRejectRequest(request.id)}
                   >
-                    <Text style={styles.rejectButtonText}>Reject</Text>
+                    <Text style={styles.rejectButtonText}>❌ Reject</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={styles.acceptButton}
                     onPress={() => handleAcceptRequest(request.id)}
                   >
-                    <Text style={styles.acceptButtonText}>Accept</Text>
+                    <Text style={styles.acceptButtonText}>✅ Accept</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -906,6 +959,28 @@ const styles = StyleSheet.create({
   newRequestsBannerButtonText: {
     color: COLORS.primary,
     fontSize: 14,
+    fontWeight: 'bold',
+  },
+  inProgressBadge: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  inProgressText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  cancelledBadge: {
+    backgroundColor: COLORS.red,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  cancelledText: {
+    color: COLORS.white,
+    fontSize: 12,
     fontWeight: 'bold',
   },
 });

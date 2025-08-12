@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
+import { apiService } from '../../services/apiService';
 import CommonHeader from '../components/CommonHeader';
 
 interface PaymentData {
@@ -15,10 +16,75 @@ interface PaymentData {
 
 export default function PaymentSummary() {
   const params = useLocalSearchParams();
+  const requestId = params.requestId as string;
+  const recyclerId = params.recyclerId as string;
   const recyclerName = params.recyclerName as string;
   const pickup = params.pickup as string;
+  const paymentSummaryId = params.paymentSummaryId as string;
+  const weight = params.weight as string;
+  const wasteType = params.wasteType as string;
+  const rate = params.rate as string;
+  const subtotal = params.subtotal as string;
+  const environmentalTax = params.environmentalTax as string;
+  const totalAmount = params.totalAmount as string;
 
-  // Payment data - this should come from the recycler's actual calculation
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [showRejectionInput, setShowRejectionInput] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedReasonType, setSelectedReasonType] = useState<string>('');
+
+  // Common rejection reasons
+  const commonRejectionReasons = [
+    {
+      id: 'weight_incorrect',
+      label: 'Weight seems incorrect',
+      description: 'The weight amount doesn\'t match what I provided'
+    },
+    {
+      id: 'rate_error',
+      label: 'Rate calculation error',
+      description: 'The rate per kg seems too high or incorrect'
+    },
+    {
+      id: 'waste_type_mismatch',
+      label: 'Waste type mismatch',
+      description: 'The waste type doesn\'t match what I gave you'
+    },
+    {
+      id: 'total_mismatch',
+      label: 'Total amount doesn\'t match',
+      description: 'The final total seems wrong or doesn\'t add up'
+    },
+    {
+      id: 'tax_calculation',
+      label: 'Environmental tax calculation error',
+      description: 'The 5% tax calculation seems incorrect'
+    },
+    {
+      id: 'subtotal_error',
+      label: 'Subtotal calculation error',
+      description: 'The base amount before tax seems wrong'
+    },
+    {
+      id: 'other',
+      label: 'Other reason',
+      description: 'None of the above - I\'ll specify my reason'
+    }
+  ];
+
+  // Handle reason selection
+  const handleReasonSelection = (reasonId: string) => {
+    setSelectedReasonType(reasonId);
+    
+    if (reasonId === 'other') {
+      setRejectionReason('');
+    } else {
+      const selectedReason = commonRejectionReasons.find(r => r.id === reasonId);
+      setRejectionReason(selectedReason?.label || '');
+    }
+  };
+
+  // Payment data - now comes from the recycler's actual calculation
   const paymentData: PaymentData = {
     recycler: recyclerName || 'John Doe',
     pickupDate: new Date().toLocaleDateString('en-US', { 
@@ -26,63 +92,137 @@ export default function PaymentSummary() {
       month: 'long', 
       day: 'numeric' 
     }),
-    weight: '8.5 kg',
-    rate: 'GHS 1.50/kg',
-    environmentalTax: 'GHS 0.64',
-    totalDue: 'GHS 13.39',
+    weight: weight || '8.5 kg',
+    rate: rate || 'GHS 1.50/kg',
+    environmentalTax: environmentalTax || 'GHS 0.64',
+    totalDue: totalAmount || 'GHS 13.39',
   };
 
-  const handleAccept = () => {
-    Alert.alert(
-      'Payment Accepted',
-      'Your payment has been processed successfully. Thank you for supporting environmental protection!',
-      [
-        {
-          text: 'OK',
-          onPress: () => {
-            // Navigate to PaymentMade screen
-            router.push({
-              pathname: '/customer-screens/PaymentMade' as any,
-              params: { recyclerName: recyclerName, pickup: pickup }
-            });
-          }
-        }
-      ]
-    );
+  const handleAccept = async () => {
+    try {
+      setIsProcessing(true);
+      
+      const response = await apiService.acceptPaymentSummary(paymentSummaryId);
+      
+      if (response) {
+        Alert.alert(
+          'Payment Accepted',
+          'Your payment has been processed successfully. Thank you for supporting environmental protection!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Navigate to PaymentMade screen
+                router.push({
+                  pathname: '/customer-screens/PaymentMade' as any,
+                  params: { 
+                    recyclerId: recyclerId,
+                    recyclerName: recyclerName, 
+                    pickup: pickup,
+                    requestId: requestId,
+                    weight: weight,
+                    wasteType: wasteType,
+                    amount: subtotal,
+                    environmentalTax: environmentalTax,
+                    totalAmount: totalAmount
+                  }
+                });
+              }
+            }
+          ]
+        );
+      } else {
+        throw new Error('Failed to accept payment');
+      }
+    } catch (error) {
+      console.error('Error accepting payment:', error);
+      Alert.alert(
+        'Error',
+        'Failed to accept payment. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleReject = () => {
+    if (!selectedReasonType) {
+      Alert.alert('Reason Required', 'Please select a reason for rejecting this payment summary.');
+      return;
+    }
+
+    if (!rejectionReason.trim()) {
+      Alert.alert('Reason Details Required', 'Please provide details for your rejection reason.');
+      return;
+    }
+
+    if (rejectionReason.trim().length < 10) {
+      Alert.alert(
+        'Detailed Reason Required', 
+        'Please provide a more detailed reason (at least 10 characters) so the recycler can understand and fix the issue properly.'
+      );
+      return;
+    }
+
     Alert.alert(
       'Payment Rejected',
-      'Are you sure you want to reject this payment? A notification will be sent to the recycler to review their payment inputs (e.g., weight calculations) for potential errors.',
+      'Are you sure you want to reject this payment summary? A detailed notification with your reason will be sent to the recycler to review and fix the issue.',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reject',
           style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Notification Sent',
-              'A notification has been sent to the recycler to review the payment details. They will check for any input errors (like weight calculations) and send you a corrected payment summary.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    // Navigate back to tracking screen to wait for corrected payment
-                    router.back();
-                  }
-                }
-              ]
-            );
+          onPress: async () => {
+            try {
+              setIsProcessing(true);
+              
+              const response = await apiService.rejectPaymentSummary(paymentSummaryId, rejectionReason);
+              
+              if (response) {
+                Alert.alert(
+                  'Notification Sent',
+                  `Your rejection has been sent to the recycler with the reason: "${rejectionReason.substring(0, 50)}${rejectionReason.length > 50 ? '...' : ''}"\n\nThey will review your feedback and send you a corrected payment summary.`,
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        // Navigate back to tracking screen to wait for corrected payment
+                        router.back();
+                      }
+                    }
+                  ]
+                );
+              } else {
+                throw new Error('Failed to reject payment');
+              }
+            } catch (error) {
+              console.error('Error rejecting payment:', error);
+              Alert.alert(
+                'Error',
+                'Failed to reject payment. Please try again.',
+                [{ text: 'OK' }]
+              );
+            } finally {
+              setIsProcessing(false);
+            }
           }
         }
       ]
     );
   };
 
+  const toggleRejectionInput = () => {
+    if (showRejectionInput) {
+      // Reset when closing
+      setShowRejectionInput(false);
+      setSelectedReasonType('');
+      setRejectionReason('');
+    } else {
+      // Open rejection input
+      setShowRejectionInput(true);
+    }
+  };
 
 
   return (
@@ -123,9 +263,23 @@ export default function PaymentSummary() {
             </View>
 
             <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Waste Type</Text>
+              <View style={styles.detailValue}>
+                <Text style={styles.valueText}>{wasteType || 'Mixed Waste'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Rate</Text>
               <View style={styles.detailValue}>
                 <Text style={styles.valueText}>{paymentData.rate}</Text>
+              </View>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Subtotal</Text>
+              <View style={styles.detailValue}>
+                <Text style={styles.valueText}>{subtotal || 'GHS 0.00'}</Text>
               </View>
             </View>
 
@@ -157,13 +311,116 @@ export default function PaymentSummary() {
 
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
-        <TouchableOpacity style={styles.rejectButton} onPress={handleReject}>
-          <Text style={styles.rejectButtonText}>REJECT</Text>
+        <TouchableOpacity 
+          style={styles.rejectButton} 
+          onPress={toggleRejectionInput}
+          disabled={isProcessing}
+        >
+          <Text style={styles.rejectButtonText}>
+            {isProcessing ? 'Processing...' : 'REJECT'}
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.acceptButton} onPress={handleAccept}>
-          <Text style={styles.acceptButtonText}>ACCEPT</Text>
+        <TouchableOpacity 
+          style={styles.acceptButton} 
+          onPress={handleAccept}
+          disabled={isProcessing}
+        >
+          <Text style={styles.acceptButtonText}>
+            {isProcessing ? 'Processing...' : 'ACCEPT'}
+          </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Rejection Reason Input */}
+      {showRejectionInput && (
+        <View style={styles.rejectionContainer}>
+          <Text style={styles.rejectionTitle}>Why are you rejecting this payment?</Text>
+          <Text style={styles.rejectionSubtitle}>
+            Please provide a detailed reason so the recycler can understand and fix the issue.
+          </Text>
+          
+          <View style={styles.rejectionExamples}>
+            <Text style={styles.rejectionExamplesTitle}>Select a reason:</Text>
+            {commonRejectionReasons.map((reason) => (
+              <TouchableOpacity 
+                key={reason.id}
+                style={[
+                  styles.rejectionExampleButton, 
+                  selectedReasonType === reason.id && styles.selectedReasonButton
+                ]} 
+                onPress={() => handleReasonSelection(reason.id)}
+              >
+                <View style={styles.reasonContent}>
+                  <View style={styles.reasonHeader}>
+                    <Text style={[
+                      styles.rejectionExample,
+                      selectedReasonType === reason.id && styles.selectedReasonText
+                    ]}>
+                      • {reason.label}
+                    </Text>
+                    {selectedReasonType === reason.id && (
+                      <Text style={styles.selectedIndicator}>✓</Text>
+                    )}
+                  </View>
+                  {selectedReasonType === reason.id && reason.id !== 'other' && (
+                    <Text style={styles.rejectionDescription}>{reason.description}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+          
+          {/* Show selected reason or custom input */}
+          {selectedReasonType && (
+            <View style={styles.selectedReasonContainer}>
+              <Text style={styles.selectedReasonLabel}>
+                {selectedReasonType === 'other' ? 'Custom Reason:' : 'Selected Reason:'}
+              </Text>
+              <TextInput
+                style={styles.rejectionInput}
+                value={rejectionReason}
+                onChangeText={setRejectionReason}
+                placeholder={
+                  selectedReasonType === 'other' 
+                    ? "Enter your detailed reason for rejection..." 
+                    : "You can modify this reason if needed..."
+                }
+                multiline
+                numberOfLines={4}
+                placeholderTextColor="#999"
+                maxLength={500}
+              />
+              
+              <View style={styles.rejectionCharCount}>
+                <Text style={styles.rejectionCharCountText}>
+                  {rejectionReason.length}/500 characters
+                </Text>
+              </View>
+            </View>
+          )}
+          
+          <View style={styles.rejectionActions}>
+            <TouchableOpacity 
+              style={styles.cancelRejectionButton} 
+              onPress={toggleRejectionInput}
+            >
+              <Text style={styles.cancelRejectionButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.confirmRejectionButton, 
+                (!selectedReasonType || !rejectionReason.trim() || rejectionReason.trim().length < 10) && styles.disabledButton
+              ]} 
+              onPress={handleReject}
+              disabled={!selectedReasonType || !rejectionReason.trim() || rejectionReason.trim().length < 10 || isProcessing}
+            >
+              <Text style={styles.confirmRejectionButtonText}>
+                {isProcessing ? 'Processing...' : 'Confirm Rejection'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -318,5 +575,149 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  rejectionContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  rejectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    marginBottom: 12,
+  },
+  rejectionSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  rejectionExamples: {
+    marginBottom: 12,
+  },
+  rejectionExamplesTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    marginBottom: 8,
+  },
+  rejectionExampleButton: {
+    paddingVertical: 8,
+  },
+  reasonContent: {
+    paddingVertical: 8,
+  },
+  reasonHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  rejectionExample: {
+    fontSize: 12,
+    color: '#192E01',
+    marginBottom: 4,
+  },
+  rejectionDescription: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: 4,
+  },
+  selectedReasonButton: {
+    backgroundColor: '#E0E0E0',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  selectedReasonText: {
+    fontWeight: 'bold',
+    color: '#1C3301',
+  },
+  selectedReasonContainer: {
+    marginTop: 12,
+  },
+  selectedReasonLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    marginBottom: 8,
+  },
+  rejectionInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    color: '#333',
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  rejectionCharCount: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+  },
+  rejectionCharCountText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  rejectionActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 16,
+  },
+  cancelRejectionButton: {
+    backgroundColor: '#FF4444',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    flex: 1,
+    marginRight: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cancelRejectionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  confirmRejectionButton: {
+    backgroundColor: '#1C3301',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    flex: 1,
+    marginLeft: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  confirmRejectionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  disabledButton: {
+    opacity: 0.7,
+  },
+  selectedIndicator: {
+    fontSize: 16,
+    color: '#1C3301',
+    marginLeft: 8,
   },
 }); 

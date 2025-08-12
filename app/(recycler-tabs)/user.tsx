@@ -121,7 +121,12 @@ export default function RecyclerUserTab() {
       />
       <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={recycler} />
       
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+      >
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.profileImageContainer}>
@@ -298,6 +303,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 16,
+  },
+  scrollContent: {
+    paddingBottom: 32,
+    flexGrow: 1,
   },
   profileHeader: {
     alignItems: 'center',

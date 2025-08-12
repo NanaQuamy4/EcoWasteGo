@@ -28,6 +28,9 @@ export default function RootLayout() {
           <Stack.Screen name="VerificationScreen" options={{ headerShown: false }} />
           <Stack.Screen name="ResetPasswordScreen" options={{ headerShown: false }} />
           <Stack.Screen name="EmailVerificationScreen" options={{ headerShown: false }} />
+          
+          {/* Debug and Development Screens */}
+          <Stack.Screen name="debug" options={{ headerShown: false }} />
         </Stack>
       </RoleBasedNavigator>
     </AuthProvider>

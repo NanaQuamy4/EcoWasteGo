@@ -36,4 +36,11 @@ router.get('/environmental-impact', authenticateRecycler, AnalyticsController.ge
  */
 router.get('/summary', authenticateRecycler, AnalyticsController.getAnalyticsSummary);
 
+/**
+ * @route GET /api/analytics/user-stats
+ * @desc Get earnings statistics and user stats for authenticated recycler
+ * @access Private (Recycler only)
+ */
+router.get('/user-stats', authenticateRecycler, AnalyticsController.getUserStats);
+
 export default router; 

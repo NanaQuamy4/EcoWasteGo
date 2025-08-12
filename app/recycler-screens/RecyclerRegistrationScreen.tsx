@@ -3,15 +3,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    Image,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
@@ -44,7 +44,7 @@ export default function RecyclerRegistrationScreen() {
     console.log('RecyclerRegistrationScreen: User data:', user);
     console.log('RecyclerRegistrationScreen: Company name:', user?.company_name);
     if (user?.company_name) {
-      setFormData(prev => ({ ...prev, companyName: user.company_name }));
+      setFormData(prev => ({ ...prev, companyName: user.company_name || '' }));
     }
   }, [user]);
 

@@ -110,8 +110,37 @@ class ApiService {
     };
 
     try {
-      const response = await fetch(url, config);
-      const data = await response.json();
+      // Create an AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+
+      const response = await fetch(url, {
+        ...config,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        // If JSON parsing fails, try to get the text response to debug
+        const textResponse = await response.text();
+        console.error('Failed to parse JSON response. Response starts with:', textResponse.substring(0, 100));
+        
+        // Check if it's an HTML error page
+        if (textResponse.includes('<html') || textResponse.includes('<!DOCTYPE')) {
+          throw new Error('Server returned HTML instead of JSON. The backend may not be running or there may be a routing issue.');
+        }
+        
+        // Check if it's a plain text error
+        if (textResponse.startsWith('This page cannot be displayed') || textResponse.startsWith('The page cannot be displayed')) {
+          throw new Error('Cannot connect to the server. Please check if the backend is running and accessible.');
+        }
+        
+        throw new Error(`Invalid server response: ${textResponse.substring(0, 50)}...`);
+      }
 
       // Handle authentication errors
       if (response.status === 401) {
@@ -143,6 +172,30 @@ class ApiService {
 
       return data;
     } catch (error) {
+      // Handle timeout/abort errors
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error('Request timed out after', API_CONFIG.TIMEOUT, 'ms');
+        throw new Error(`Request timed out. Please check your internet connection and try again.`);
+      }
+
+      // Handle network errors
+      if (error instanceof Error && error.message.includes('Network request failed')) {
+        console.error('Network request failed - backend may not be accessible');
+        throw new Error('Unable to connect to the server. Please check your internet connection and ensure the backend is running.');
+      }
+
+      // Handle JSON parse errors specifically
+      if (error instanceof Error && error.message.includes('JSON Parse error')) {
+        console.error('JSON parse error - server may not be responding with valid JSON');
+        throw new Error('Server returned invalid data. Please check if the backend is running and accessible.');
+      }
+
+      // Handle HTML response errors
+      if (error instanceof Error && error.message.includes('HTML instead of JSON')) {
+        console.error('Server returned HTML - backend may not be running or there may be a routing issue');
+        throw new Error('Cannot connect to the server. The backend may not be running or there may be a network issue.');
+      }
+
       // Only log detailed error info for first attempt or non-retryable errors
       if (retryCount === 0 || (error instanceof Error && 
           (error.message.includes('Authentication failed') ||
@@ -158,7 +211,9 @@ class ApiService {
         !error.message.includes('Authentication failed') &&
         !error.message.includes('Access denied') &&
         !error.message.includes('ROLE_MISMATCH') &&
-        !error.message.includes('registered as a');
+        !error.message.includes('registered as a') &&
+        !error.message.includes('Request timed out') &&
+        !error.message.includes('Unable to connect to the server');
       
       if (shouldRetry) {
         console.log(`Retrying request (${retryCount + 1}/3)...`);
@@ -198,6 +253,30 @@ class ApiService {
 
   async login(credentials: { email: string; password: string; role?: 'customer' | 'recycler'; rememberMe?: boolean }): Promise<AuthResponse> {
     console.log('Attempting login for:', credentials.email);
+    
+    // Test backend connectivity first
+    try {
+      await this.ensureBackendAccess();
+    } catch (error) {
+      console.error('Backend connectivity test failed:', error);
+      throw error;
+    }
+
+    // Additional connectivity check - try to reach the login endpoint specifically
+    try {
+      const testResponse = await fetch(`${this.baseURL}${API_CONFIG.ENDPOINTS.AUTH.LOGIN}`, {
+        method: 'OPTIONS', // Use OPTIONS to test connectivity without sending data
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      if (!testResponse.ok) {
+        console.warn('Login endpoint connectivity test failed:', testResponse.status, testResponse.statusText);
+      }
+    } catch (testError) {
+      console.warn('Login endpoint connectivity test failed:', testError);
+      // Don't throw here, let the actual login attempt proceed
+    }
+    
     const response = await this.request<AuthResponse>(API_CONFIG.ENDPOINTS.AUTH.LOGIN, {
       method: 'POST',
       body: JSON.stringify(credentials),
@@ -295,7 +374,16 @@ class ApiService {
 
   async getRecyclers(): Promise<RecyclerProfile[]> {
     const response = await this.request<RecyclerProfile[]>(API_CONFIG.ENDPOINTS.USERS.RECYCLERS);
-    return response.data!;
+    return response.data || [];
+  }
+
+  async getAvailableRecyclersExcludingRejected(location?: string): Promise<RecyclerProfile[]> {
+    const endpoint = location 
+      ? `${API_CONFIG.ENDPOINTS.WASTE.GET_AVAILABLE_RECYCLERS}?location=${encodeURIComponent(location)}`
+      : API_CONFIG.ENDPOINTS.WASTE.GET_AVAILABLE_RECYCLERS;
+    
+    const response = await this.request<RecyclerProfile[]>(endpoint);
+    return response.data || [];
   }
 
   async searchRecyclersByLocation(location: string, wasteType?: string): Promise<RecyclerProfile[]> {
@@ -369,10 +457,15 @@ class ApiService {
     });
   }
 
-  async updateWasteStatus(id: string, status: WasteCollection['status']): Promise<WasteCollection> {
+  async updateWasteStatus(id: string, status: WasteCollection['status'], rejection_reason?: string): Promise<WasteCollection> {
+    const body: any = { status };
+    if (rejection_reason) {
+      body.rejection_reason = rejection_reason;
+    }
+    
     const response = await this.request<WasteCollection>(`${API_CONFIG.ENDPOINTS.WASTE.UPDATE_STATUS}/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(body),
     });
     return response.data!;
   }
@@ -399,9 +492,31 @@ class ApiService {
     return response.data!;
   }
 
-  async getPayments(): Promise<Payment[]> {
-    const response = await this.request<Payment[]>(API_CONFIG.ENDPOINTS.PAYMENTS.GET_ALL);
-    return response.data!;
+  async getPayments(status?: string, page: number = 1, limit: number = 20): Promise<ApiResponse<any[]>> {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      const params = new URLSearchParams();
+      if (status) params.append('status', status);
+      params.append('page', page.toString());
+      params.append('limit', limit.toString());
+
+      const response = await this.request<any[]>(`/api/payments/recycler?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Error fetching payments:', error);
+      throw error;
+    }
   }
 
   async getPayment(id: string): Promise<Payment> {
@@ -426,9 +541,26 @@ class ApiService {
   }
 
   // Analytics Methods
-  async getUserStats(): Promise<any> {
-    const response = await this.request(API_CONFIG.ENDPOINTS.ANALYTICS.USER_STATS);
-    return response.data;
+  async getUserStats(): Promise<ApiResponse<any>> {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      const response = await this.request<any>('/api/analytics/user-stats', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+      throw error;
+    }
   }
 
   async getWasteStats(): Promise<any> {
@@ -621,22 +753,73 @@ class ApiService {
    * Update recycler availability status
    */
   async updateRecyclerAvailability(isAvailable: boolean): Promise<ApiResponse> {
-    return this.request<ApiResponse>('/api/recyclers/availability', {
-      method: 'PUT',
-      body: JSON.stringify({
-        is_available: isAvailable,
-        availability_schedule: {
-          // Default availability schedule - can be enhanced later
-          monday: isAvailable,
-          tuesday: isAvailable,
-          wednesday: isAvailable,
-          thursday: isAvailable,
-          friday: isAvailable,
-          saturday: isAvailable,
-          sunday: isAvailable
+    try {
+      console.log('Updating recycler availability:', isAvailable);
+      
+      const response = await this.request<ApiResponse>('/api/recyclers/availability', {
+        method: 'PUT',
+        body: JSON.stringify({
+          is_available: isAvailable,
+          availability_schedule: {
+            // Default availability schedule - can be enhanced later
+            monday: isAvailable,
+            tuesday: isAvailable,
+            wednesday: isAvailable,
+            thursday: isAvailable,
+            friday: isAvailable,
+            saturday: isAvailable,
+            sunday: isAvailable
+          }
+        }),
+      });
+
+      console.log('Availability update response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error updating recycler availability:', error);
+      
+      // If the error indicates the profile doesn't exist, try to create it first
+      if (error instanceof Error && error.message.includes('Profile not found')) {
+        console.log('Profile not found, attempting to create basic profile first...');
+        
+        try {
+          // Create a basic recycler profile first
+          await this.request('/api/recyclers/profile', {
+            method: 'POST',
+            body: JSON.stringify({
+              business_name: 'Recycler',
+              service_areas: ['General'],
+              waste_types: ['mixed'],
+              experience_years: 1,
+              hourly_rate: 10.0
+            }),
+          });
+
+          // Now try to update availability again
+          console.log('Profile created, retrying availability update...');
+          return await this.request<ApiResponse>('/api/recyclers/availability', {
+            method: 'PUT',
+            body: JSON.stringify({
+              is_available: isAvailable,
+              availability_schedule: {
+                monday: isAvailable,
+                tuesday: isAvailable,
+                wednesday: isAvailable,
+                thursday: isAvailable,
+                friday: isAvailable,
+                saturday: isAvailable,
+                sunday: isAvailable
+              }
+            }),
+          });
+        } catch (createError) {
+          console.error('Failed to create profile:', createError);
+          throw new Error(`Failed to create recycler profile: ${createError instanceof Error ? createError.message : String(createError)}`);
         }
-      }),
-    });
+      }
+      
+      throw error;
+    }
   }
 
   // Utility Methods
@@ -674,6 +857,304 @@ class ApiService {
     await this.clearToken();
     // In a real app, you'd navigate to login screen here
     console.log('User needs to re-authenticate');
+  }
+
+  // Text Messaging Methods
+  async getChatMessages(pickupId: string): Promise<any[]> {
+    const response = await this.request<any[]>(`${API_CONFIG.ENDPOINTS.RECYCLER.TEXT}/${pickupId}`);
+    return response.data || [];
+  }
+
+  async sendChatMessage(pickupId: string, message: string): Promise<any> {
+    const response = await this.request(`${API_CONFIG.ENDPOINTS.RECYCLER.TEXT}/${pickupId}/send`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+    return response.data;
+  }
+
+  async getMessageSuggestions(): Promise<string[]> {
+    const response = await this.request<string[]>(`${API_CONFIG.ENDPOINTS.RECYCLER.TEXT}/suggestions`);
+    return response.data || [];
+  }
+
+  async createPaymentSummary(paymentData: {
+    requestId: string;
+    weight: number;
+    wasteType: string;
+    rate: number;
+    subtotal: number;
+    environmentalTax: number;
+    totalAmount: number;
+  }): Promise<any> {
+    const response = await this.request(`${API_CONFIG.ENDPOINTS.PAYMENT_SUMMARY}`, {
+      method: 'POST',
+      body: JSON.stringify(paymentData),
+    });
+    return response.data;
+  }
+
+  async addRecyclerReview(reviewData: {
+    recycler_id: string;
+    collection_id: string;
+    rating: number;
+    comment?: string;
+  }): Promise<any> {
+    const response = await this.request('/api/recyclers/reviews', {
+      method: 'POST',
+      body: JSON.stringify(reviewData),
+    });
+    return response.data;
+  }
+
+  async getPaymentSummary(requestId: string): Promise<any> {
+    const response = await this.request<any>(`${API_CONFIG.ENDPOINTS.PAYMENT_SUMMARY}/${requestId}`);
+    return response.data;
+  }
+
+  async rejectPaymentSummary(paymentSummaryId: string, rejectionReason: string): Promise<any> {
+    const response = await this.request(`${API_CONFIG.ENDPOINTS.PAYMENT_SUMMARY}/${paymentSummaryId}/reject`, {
+      method: 'PUT',
+      body: JSON.stringify({ rejectionReason }),
+    });
+    return response.data;
+  }
+
+  async acceptPaymentSummary(paymentSummaryId: string): Promise<any> {
+    const response = await this.request(`${API_CONFIG.ENDPOINTS.PAYMENT_SUMMARY}/${paymentSummaryId}/accept`, {
+      method: 'PUT',
+    });
+    return response.data;
+  }
+
+  async updatePaymentSummary(paymentSummaryId: string, paymentData: {
+    weight: number;
+    wasteType: string;
+    rate: number;
+    subtotal: number;
+    environmentalTax: number;
+    totalAmount: number;
+  }): Promise<any> {
+    const response = await this.request(`${API_CONFIG.ENDPOINTS.PAYMENT_SUMMARY}/${paymentSummaryId}`, {
+      method: 'PUT',
+      body: JSON.stringify(paymentData),
+    });
+    return response.data;
+  }
+
+  // Test backend connectivity
+  async testConnection(): Promise<boolean> {
+    try {
+      console.log('Testing connection to:', this.baseURL);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for connection test
+      
+      const response = await fetch(`${this.baseURL}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        console.log('✅ Backend connection successful');
+        return true;
+      } else {
+        console.log('❌ Backend responded with status:', response.status);
+        return false;
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error('❌ Connection test timed out after 10 seconds');
+      } else if (error instanceof Error && error.message.includes('Network request failed')) {
+        console.error('❌ Network request failed - backend may not be accessible');
+      } else {
+        console.error('❌ Connection test failed:', error);
+      }
+      return false;
+    }
+  }
+
+  // Try alternative IP addresses if primary fails
+  private async tryAlternativeIPs(): Promise<string | null> {
+    const alternativeIPs = [
+      'http://10.132.144.9:3000',  // Current configured IP
+      'http://10.133.121.133:3000', // Alternative IP from previous config
+      'http://localhost:3000',      // Local development
+      'http://127.0.0.1:3000'      // Local development alternative
+    ];
+
+    for (const ip of alternativeIPs) {
+      try {
+        console.log(`Trying alternative IP: ${ip}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout for each IP
+        
+        const response = await fetch(`${ip}/health`, {
+          method: 'GET',
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          console.log(`✅ Found working IP: ${ip}`);
+          return ip;
+        }
+      } catch (error) {
+        console.log(`❌ IP ${ip} failed:`, error instanceof Error ? error.message : String(error));
+        continue;
+      }
+    }
+    
+    console.log('❌ No alternative IPs worked');
+    return null;
+  }
+
+  // Check if backend is accessible before making requests
+  private async ensureBackendAccess(): Promise<void> {
+    let isConnected = await this.testConnection();
+    
+    if (!isConnected) {
+      console.log('Primary IP failed, trying alternatives...');
+      const workingIP = await this.tryAlternativeIPs();
+      
+      if (workingIP) {
+        console.log(`Switching to working IP: ${workingIP}`);
+        this.baseURL = workingIP;
+        isConnected = true;
+      } else {
+        throw new Error('Backend server is not accessible on any known IP address. Please check your internet connection and ensure the server is running on port 3000.');
+      }
+    }
+  }
+
+  // Public method to test connection and get detailed status
+  async getConnectionStatus(): Promise<{
+    isConnected: boolean;
+    currentIP: string;
+    workingIPs: string[];
+    failedIPs: string[];
+    error?: string;
+  }> {
+    const workingIPs: string[] = [];
+    const failedIPs: string[] = [];
+    let error: string | undefined;
+
+    try {
+      // Test current IP
+      const currentIPWorking = await this.testConnection();
+      if (currentIPWorking) {
+        workingIPs.push(this.baseURL);
+      } else {
+        failedIPs.push(this.baseURL);
+      }
+
+      // Test all alternative IPs
+      const alternativeIPs = [
+        'http://10.132.144.9:3000',
+        'http://10.133.121.133:3000',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000'
+      ];
+
+      for (const ip of alternativeIPs) {
+        if (ip === this.baseURL) continue; // Skip current IP as it's already tested
+        
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          
+          const response = await fetch(`${ip}/health`, {
+            method: 'GET',
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (response.ok) {
+            workingIPs.push(ip);
+          } else {
+            failedIPs.push(ip);
+          }
+        } catch (err) {
+          failedIPs.push(ip);
+        }
+      }
+
+      return {
+        isConnected: workingIPs.length > 0,
+        currentIP: this.baseURL,
+        workingIPs,
+        failedIPs,
+        error
+      };
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+      return {
+        isConnected: false,
+        currentIP: this.baseURL,
+        workingIPs,
+        failedIPs,
+        error
+      };
+    }
+  }
+
+  // New method to diagnose connection issues
+  async diagnoseConnection(): Promise<{
+    baseURL: string;
+    canReachServer: boolean;
+    responseType: 'json' | 'html' | 'text' | 'error';
+    responsePreview: string;
+    statusCode?: number;
+    error?: string;
+  }> {
+    try {
+      console.log('Diagnosing connection to:', this.baseURL);
+      
+      const response = await fetch(`${this.baseURL}/api/health`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      let responseType: 'json' | 'html' | 'text' | 'error' = 'error';
+      let responsePreview = '';
+      
+      try {
+        const text = await response.text();
+        responsePreview = text.substring(0, 100);
+        
+        if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+          responseType = 'html';
+        } else if (text.startsWith('{') || text.includes('{')) {
+          responseType = 'json';
+        } else {
+          responseType = 'text';
+        }
+      } catch (parseError) {
+        responseType = 'error';
+        responsePreview = 'Failed to read response';
+      }
+      
+      return {
+        baseURL: this.baseURL,
+        canReachServer: response.ok,
+        responseType,
+        responsePreview,
+        statusCode: response.status,
+        error: response.ok ? undefined : `HTTP ${response.status}: ${response.statusText}`
+      };
+    } catch (error) {
+      return {
+        baseURL: this.baseURL,
+        canReachServer: false,
+        responseType: 'error',
+        responsePreview: '',
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
   }
 }
 

@@ -110,7 +110,7 @@ export const searchRateLimit = rateLimit({
   message: 'Too many search requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip
+  keyGenerator: (req) => req.ip || 'unknown'
 });
 
 // Additional rate limits for production
@@ -129,5 +129,5 @@ export const paymentRateLimit = rateLimit({
   message: 'Too many payment requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip // Rate limit by user if authenticated
+  keyGenerator: (req) => req.user?.id || req.ip || 'unknown' // Rate limit by user if authenticated
 }); 

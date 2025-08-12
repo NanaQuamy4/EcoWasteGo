@@ -1,11 +1,12 @@
-import { Feather, FontAwesome5, FontAwesome6, MaterialIcons } from '@expo/vector-icons';
+import { Feather, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react'; // Ensures JSX namespace is available
-import { Alert, Animated, Easing, Image, Linking, Modal as RNModal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Easing, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ConfettiCannon from 'react-native-confetti-cannon'; // Uncomment when implementing confetti
 import Modal from 'react-native-modal';
-import { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useSharedValue, withTiming } from 'react-native-reanimated';
+import customerStats from '../utils/customerStats';
 
 export const config = {
   headerShown: false,
@@ -24,40 +25,15 @@ type Badge = {
   required?: number; // required to unlock
 };
 
-const BADGES: Badge[] = [
-  { key: 'star', icon: <Feather name="star" size={28} color="#FFD700" />, title: 'Star Collector', desc: 'Earned for collecting 10 stars.', earned: true, earnedDate: '2024-06-01', points: 100 },
-  { key: 'leaf', icon: <FontAwesome5 name="leaf" size={28} color="#4CAF50" />, title: 'Eco Hero', desc: 'Awarded for 5 eco-friendly actions.', earned: true, earnedDate: '2024-06-02', points: 50 },
-  { key: 'eco', icon: <MaterialIcons name="eco" size={28} color="#2196F3" />, title: 'Eco Master', desc: 'Unlocked for 20 green actions.', earned: false, lockedDesc: 'Complete 20 green actions to unlock.', points: 200, current: 8, required: 20 },
-  { key: 'award', icon: <Feather name="award" size={28} color="#9C27B0" />, title: 'Award Winner', desc: 'Received for winning a challenge.', earned: true, earnedDate: '2024-06-03', points: 150 },
-  { key: 'medal', icon: <FontAwesome5 name="medal" size={28} color="#FF9800" />, title: 'Medalist', desc: 'Earned for 1000 points.', earned: false, lockedDesc: 'Earn 1000 points to unlock.', points: 100, current: 700, required: 1000 },
-  { key: 'trophy', icon: <MaterialIcons name="emoji-events" size={28} color="#00BCD4" />, title: 'Trophy Holder', desc: 'Awarded for 3 trophies.', earned: true, earnedDate: '2024-06-04', points: 300 },
-  { key: 'activity', icon: <Feather name="activity" size={28} color="#8BC34A" />, title: 'Active User', desc: 'Given for daily activity.', earned: false, lockedDesc: 'Be active daily to unlock.', points: 75, current: 3, required: 7 },
-];
-
-// Helper to try opening app or fallback
-const tryOpenApp = async (url: string, fallbackUrl?: string) => {
-  try {
-    const supported = await Linking.canOpenURL(url);
-    if (supported) {
-      await Linking.openURL(url);
-    } else if (fallbackUrl) {
-      await Linking.openURL(fallbackUrl);
-    } else {
-      Alert.alert('App not installed', 'The app is not installed on your device.');
-    }
-  } catch {
-    Alert.alert('Error', 'Unable to open the app.');
-  }
-};
-
 export default function RewardsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [lockedModal, setLockedModal] = useState<{visible: boolean, badge: Badge | null}>({visible: false, badge: null});
   const [pressedBadgeKey, setPressedBadgeKey] = useState<string | null>(null);
   const scale = useSharedValue(1);
   const progress = useSharedValue(0);
   const progressPercent = 0.7; // 70% progress
-    const userName = 'Williams'; // Replace with dynamic user name if available
+  const userName = 'Williams'; // Replace with dynamic user name if available
 
   const [badgeModalVisible, setBadgeModalVisible] = useState(false);
   const [modalBadge, setModalBadge] = useState<Badge | null>(null);
@@ -66,6 +42,104 @@ export default function RewardsScreen() {
   const sparkleAnim = React.useRef(new Animated.Value(0)).current;
   // Add state for share sheet visibility
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
+  const [badges, setBadges] = useState<Badge[]>([]);
+  const [showNewAchievementConfetti, setShowNewAchievementConfetti] = useState(false);
+
+  // Initialize badges from customerStats
+  useEffect(() => {
+    customerStats.initializeMockData();
+    
+    // Get achievements from customerStats
+    const achievements = customerStats.getAchievements();
+    const stats = customerStats.getStats();
+    
+    // Map achievements to badges
+    const badgesFromStats: Badge[] = [
+      { 
+        key: 'first_pickup', 
+        icon: <Feather name="star" size={28} color="#FFD700" />, 
+        title: 'First Pickup', 
+        desc: 'Earned for your first waste pickup.', 
+        earned: achievements.get('first_pickup')?.earned || false, 
+        earnedDate: achievements.get('first_pickup')?.date || '', 
+        points: achievements.get('first_pickup')?.points || 50 
+      },
+      { 
+        key: 'eco_warrior', 
+        icon: <FontAwesome5 name="leaf" size={28} color="#4CAF50" />, 
+        title: 'Eco Warrior', 
+        desc: 'Awarded for 5 eco-friendly pickups.', 
+        earned: achievements.get('eco_warrior')?.earned || false, 
+        earnedDate: achievements.get('eco_warrior')?.date || '', 
+        points: achievements.get('eco_warrior')?.points || 100,
+        current: stats.totalPickups,
+        required: 5
+      },
+      { 
+        key: 'waste_reducer', 
+        icon: <MaterialIcons name="eco" size={28} color="#2196F3" />, 
+        title: 'Waste Reducer', 
+        desc: 'Unlocked for recycling 20kg of waste.', 
+        earned: achievements.get('waste_reducer')?.earned || false, 
+        lockedDesc: 'Recycle 20kg of waste to unlock.', 
+        points: achievements.get('waste_reducer')?.points || 75,
+        current: Math.round(stats.totalWasteRecycled),
+        required: 20
+      },
+      { 
+        key: 'environmental_champion', 
+        icon: <Feather name="award" size={28} color="#9C27B0" />, 
+        title: 'Environmental Champion', 
+        desc: 'Earned for recycling 50kg of waste.', 
+        earned: achievements.get('environmental_champion')?.earned || false, 
+        lockedDesc: 'Recycle 50kg of waste to unlock.', 
+        points: achievements.get('environmental_champion')?.points || 150,
+        current: Math.round(stats.totalWasteRecycled),
+        required: 50
+      },
+      { 
+        key: 'recycling_master', 
+        icon: <FontAwesome5 name="medal" size={28} color="#FF9800" />, 
+        title: 'Recycling Master', 
+        desc: 'Awarded for recycling 100kg of waste.', 
+        earned: achievements.get('recycling_master')?.earned || false, 
+        lockedDesc: 'Recycle 100kg of waste to unlock.', 
+        points: achievements.get('recycling_master')?.points || 200,
+        current: Math.round(stats.totalWasteRecycled),
+        required: 100
+      },
+      { 
+        key: 'planet_protector', 
+        icon: <MaterialIcons name="emoji-events" size={28} color="#00BCD4" />, 
+        title: 'Planet Protector', 
+        desc: 'Awarded for recycling 200kg of waste.', 
+        earned: achievements.get('planet_protector')?.earned || false, 
+        lockedDesc: 'Recycle 200kg of waste to unlock.', 
+        points: achievements.get('planet_protector')?.points || 300,
+        current: Math.round(stats.totalWasteRecycled),
+        required: 200
+      },
+    ];
+    
+    setBadges(badgesFromStats);
+  }, []);
+
+  // Handle new achievements from EcoImpactCelebration
+  useEffect(() => {
+    if (params.newAchievements === 'true' && params.achievementsEarned) {
+      const newAchievements = params.achievementsEarned.split(',');
+      
+      // Show confetti for new achievements
+      setShowNewAchievementConfetti(true);
+      setTimeout(() => setShowNewAchievementConfetti(false), 3000);
+      
+      // Update badges to show new achievements
+      setBadges(prev => prev.map(badge => ({
+        ...badge,
+        earned: newAchievements.includes(badge.key) ? true : badge.earned
+      })));
+    }
+  }, [params.newAchievements, params.achievementsEarned]);
 
   // Glittering animation for earned badges
   React.useEffect(() => {
@@ -97,29 +171,6 @@ export default function RewardsScreen() {
     }
   }, [badgeModalVisible, modalBadge, sparkleAnim]);
 
-
-
-  // Mock leaderboard data
-  const leaderboard = [
-    { name: 'Williams', points: 2500 },
-    { name: 'Ama', points: 2200 },
-    { name: 'Kwame', points: 2100 },
-  ];
-  // Mock daily challenge
-  const dailyChallenge = {
-    title: 'Recycle 3 plastic bottles today!',
-    reward: '+50 points',
-    completed: false,
-  };
-
-  useEffect(() => {
-    progress.value = withTiming(progressPercent, { duration: 1200 });
-  }, [progress, progressPercent]);
-
-  const animatedProgressStyle = useAnimatedStyle(() => ({
-    width: `${Math.round(progress.value * 100)}%`,
-  }));
-
   const handleBadgePress = (badge: Badge) => {
     setModalBadge(badge);
     setBadgeModalVisible(true);
@@ -127,797 +178,590 @@ export default function RewardsScreen() {
 
   const handleBadgePressIn = (key: string) => {
     setPressedBadgeKey(key);
-    scale.value = withTiming(1.15, { duration: 100 });
+    scale.value = withTiming(0.95, { duration: 100 });
   };
+
   const handleBadgePressOut = () => {
-    scale.value = withTiming(1, { duration: 100 });
     setPressedBadgeKey(null);
+    scale.value = withTiming(1, { duration: 100 });
   };
 
-  const animatedBadgeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pressedBadgeKey ? scale.value : 1 }],
-    borderWidth: pressedBadgeKey ? 2 : 0,
-    borderColor: '#4CAF50',
-  }));
+  const handleCloseModal = () => {
+    setBadgeModalVisible(false);
+    setModalBadge(null);
+  };
 
-  // Share handler
   const handleShare = () => {
     setShareSheetVisible(true);
   };
 
-  // In the handleShare function, add a handler for each share type
   const handleShareOption = async (type: string) => {
-    if (!modalBadge) return;
-    const shareText = `I just earned the "${modalBadge.title}" badge in EcoWasteGo! 🏅\n${modalBadge.desc}\nJoin me and start earning rewards!`;
-    switch (type) {
-      case 'copy':
-        await Clipboard.setStringAsync(shareText);
-        break;
-      case 'whatsapp':
-        tryOpenApp(`whatsapp://send?text=${encodeURIComponent(shareText)}`, `https://wa.me/?text=${encodeURIComponent(shareText)}`);
-        break;
-      case 'facebook':
-        tryOpenApp('fb://facewebmodal/f?href=https://www.facebook.com/sharer/sharer.php?u=https://ecowastego.com', `https://www.facebook.com/sharer/sharer.php?u=https://ecowastego.com&quote=${encodeURIComponent(shareText)}`);
-        break;
-      case 'x':
-        tryOpenApp('twitter://post?message=' + encodeURIComponent(shareText), `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`);
-        break;
-      case 'snapchat':
-        tryOpenApp('snapchat://', 'https://www.snapchat.com/scan?attachmentUrl=https://ecowastego.com');
-        break;
-      case 'tiktok':
-        tryOpenApp('snssdk1128://', 'https://www.tiktok.com/upload?text=' + encodeURIComponent(shareText));
-        break;
-      case 'email':
-        tryOpenApp(`mailto:?subject=I earned a badge in EcoWasteGo!&body=${encodeURIComponent(shareText)}`);
-        break;
-      case 'message':
-        tryOpenApp(`sms:&body=${encodeURIComponent(shareText)}`);
-        break;
-      default:
-        break;
+    setShareSheetVisible(false);
+    
+    const stats = customerStats.getStats();
+    const shareText = `I've earned ${stats.totalPoints} points on EcoWasteGo by recycling ${stats.totalWasteRecycled}kg of waste! 🌱♻️`;
+    
+    if (type === 'copy') {
+      await Clipboard.setStringAsync(shareText);
+      Alert.alert('Copied!', 'Achievement shared to clipboard');
+    } else if (type === 'whatsapp') {
+      const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(shareText)}`;
+      try {
+        await Linking.openURL(whatsappUrl);
+      } catch {
+        Alert.alert('Error', 'Could not open WhatsApp');
+      }
     }
   };
 
+  // Get current stats
+  const stats = customerStats.getStats();
+  const environmentalImpact = customerStats.getEnvironmentalImpact();
+
   return (
-    <>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Personalized Message */}
-        <Text style={styles.personalMessage}>Great job, {userName}! You’re close to your next badge!</Text>
-        {/* Header Banner Image with Title Overlay */}
-        <View style={styles.headerImageWrapper}>
-                      <Image source={require('../../assets/images/blend.jpg')} style={styles.headerImage} />
-          <View style={styles.headerImageOverlay}>
-            <View style={styles.headerPill}>
-              <Text style={styles.headerPillText}>Your Achievements</Text>
-            </View>
-          </View>
-        </View>
-        {/* Points Section */}
-        <View style={styles.cardRow}>
-          <View style={styles.card}>
-            <FontAwesome5 name="medal" size={36} color="#4CAF50" />
-            <Text style={styles.cardValue}>2,500</Text>
-            <Text style={styles.cardLabel}>Points</Text>
-          </View>
-          <View style={styles.card}>
-            <Feather name="award" size={36} color="#2196F3" />
-            <Text style={styles.cardValue}>7</Text>
-            <Text style={styles.cardLabel}>Badges</Text>
-          </View>
-          <View style={styles.card}>
-            <MaterialIcons name="emoji-events" size={36} color="#9C27B0" />
-            <Text style={styles.cardValue}>3</Text>
-            <Text style={styles.cardLabel}>Trophies</Text>
-          </View>
-        </View>
-        {/* Animated Progress Bar Section */}
-        <View style={styles.progressSection}>
-          <Text style={styles.progressTitle}>Level Progress</Text>
-          <View style={styles.progressBarBg}>
-            <Animated.View style={[styles.progressBarFill, animatedProgressStyle]} />
-          </View>
-          <Text style={styles.progressText}>Level 4 ({Math.round(progressPercent * 100)}% to next level)</Text>
-        </View>
-        {/* Badges Section */}
-        <Text style={styles.sectionTitle}>Your Badges</Text>
-        <View style={styles.badgesRow}>
-          {BADGES.map(badge => {
-            const isSelected = badge.earned; // Only show selected for earned badges
-            const isLocked = !badge.earned;
-            return (
-              <TouchableOpacity
-                key={badge.key}
-                style={[styles.badgeCircle, isSelected && styles.selectedBadge, isLocked && styles.lockedBadge]}
-                onPress={() => handleBadgePress(badge)}
-                onPressIn={() => handleBadgePressIn(badge.key)}
-                onPressOut={handleBadgePressOut}
-                activeOpacity={0.8}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel={badge.title + (isLocked ? ' (locked)' : '')}
-                accessibilityHint={isLocked ? badge.lockedDesc : badge.desc}
-              >
-                <Animated.View style={isSelected || pressedBadgeKey === badge.key ? animatedBadgeStyle : {}}>
-                  {React.isValidElement(badge.icon)
-                    ? React.cloneElement(badge.icon as React.ReactElement<any>, { color: isLocked ? '#BDBDBD' : (badge.icon as React.ReactElement<any>).props.color })
-                    : badge.icon}
-                </Animated.View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        {/* Daily Challenge Section */}
-        <View style={styles.challengeSection}>
-          <Text style={styles.challengeTitle}>Daily Challenge</Text>
-          <Text style={styles.challengeDesc}>{dailyChallenge.title}</Text>
-          <Text style={styles.challengeReward}>{dailyChallenge.reward}</Text>
-          <TouchableOpacity
-            style={[styles.challengeButton, dailyChallenge.completed && { backgroundColor: '#B6CDBD' }]}
-            disabled={dailyChallenge.completed}
-            onPress={() => {
-              // Mark as completed
-              // ...update challenge state in real app
-            }}
-          >
-            <Text style={styles.challengeButtonText}>{dailyChallenge.completed ? 'Completed' : 'Complete Now'}</Text>
-          </TouchableOpacity>
-        </View>
+    <View style={styles.container}>
+      {/* Confetti for new achievements */}
+      {showNewAchievementConfetti && (
+        <ConfettiCannon
+          count={50}
+          origin={{ x: 200, y: 0 }}
+          fadeOut={true}
+          explosionSpeed={400}
+          fallSpeed={3000}
+          autoStart={true}
+          onAnimationEnd={() => setShowNewAchievementConfetti(false)}
+        />
+      )}
 
-        {/* Leaderboard Preview */}
-        <View style={styles.leaderboardSection}>
-          <Text style={styles.leaderboardTitle}>Leaderboard</Text>
-          {leaderboard.map((entry, idx) => (
-            <View key={entry.name} style={styles.leaderboardRow}>
-              <Text style={styles.leaderboardRank}>{idx + 1}.</Text>
-              <Text style={styles.leaderboardName}>{entry.name}</Text>
-              <Text style={styles.leaderboardPoints}>{entry.points} pts</Text>
-            </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Rewards & Achievements</Text>
+        <Text style={styles.headerSubtitle}>Track your eco-friendly progress</Text>
+      </View>
+
+      {/* Stats Summary */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>{stats.totalPoints}</Text>
+          <Text style={styles.statLabel}>Total Points</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>{stats.totalPickups}</Text>
+          <Text style={styles.statLabel}>Pickups</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>{stats.totalWasteRecycled}kg</Text>
+          <Text style={styles.statLabel}>Waste Recycled</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>{environmentalImpact.co2Saved.toFixed(1)}kg</Text>
+          <Text style={styles.statLabel}>CO₂ Saved</Text>
+        </View>
+      </View>
+
+      {/* Environmental Impact Summary */}
+      <View style={styles.impactSummary}>
+        <Text style={styles.impactTitle}>🌍 Your Environmental Impact</Text>
+        <View style={styles.impactGrid}>
+          <View style={styles.impactItem}>
+            <Text style={styles.impactIcon}>🌳</Text>
+            <Text style={styles.impactValue}>{environmentalImpact.treesEquivalent}</Text>
+            <Text style={styles.impactLabel}>Trees Equivalent</Text>
+          </View>
+          <View style={styles.impactItem}>
+            <Text style={styles.impactIcon}>⚡</Text>
+            <Text style={styles.impactValue}>{environmentalImpact.energySaved}</Text>
+            <Text style={styles.impactLabel}>kWh Saved</Text>
+          </View>
+          <View style={styles.impactItem}>
+            <Text style={styles.impactIcon}>🗑️</Text>
+            <Text style={styles.impactValue}>{environmentalImpact.landfillSpaceSaved}m³</Text>
+            <Text style={styles.impactLabel}>Landfill Saved</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Badges Grid */}
+      <View style={styles.badgesSection}>
+        <Text style={styles.badgesTitle}>Achievement Badges</Text>
+        <View style={styles.badgesGrid}>
+          {badges.map((badge) => (
+            <TouchableOpacity
+              key={badge.key}
+              style={[
+                styles.badgeItem,
+                badge.earned && styles.badgeEarned,
+                pressedBadgeKey === badge.key && styles.badgePressed
+              ]}
+              onPress={() => handleBadgePress(badge)}
+              onPressIn={() => handleBadgePressIn(badge.key)}
+              onPressOut={handleBadgePressOut}
+            >
+              <View style={styles.badgeIcon}>
+                {badge.icon}
+              </View>
+              <Text style={[styles.badgeTitle, badge.earned && styles.badgeTitleEarned]}>
+                {badge.title}
+              </Text>
+              <Text style={[styles.badgeDesc, badge.earned && styles.badgeDescEarned]}>
+                {badge.earned ? badge.desc : (badge.lockedDesc || badge.desc)}
+              </Text>
+              {badge.earned && (
+                <View style={styles.earnedBadge}>
+                  <Text style={styles.earnedText}>✓ Earned</Text>
+                  <Text style={styles.earnedDate}>{badge.earnedDate}</Text>
+                </View>
+              )}
+              {!badge.earned && badge.current !== undefined && badge.required && (
+                <View style={styles.progressContainer}>
+                  <View style={styles.progressBar}>
+                    <View 
+                      style={[
+                        styles.progressFill, 
+                        { width: `${Math.min((badge.current / badge.required) * 100, 100)}%` }
+                      ]} 
+                    />
+                  </View>
+                  <Text style={styles.progressText}>
+                    {badge.current}/{badge.required}
+                  </Text>
+                </View>
+              )}
+              <Text style={[styles.badgePoints, badge.earned && styles.badgePointsEarned]}>
+                {badge.points} pts
+              </Text>
+            </TouchableOpacity>
           ))}
-          <TouchableOpacity style={styles.leaderboardButton}>
-            <Text style={styles.leaderboardButtonText}>View Full Leaderboard</Text>
-          </TouchableOpacity>
         </View>
+      </View>
 
-        {/* ConfettiCannon will be triggered here on challenge complete or level up */}
-        {/* {showConfetti && <ConfettiCannon count={100} origin={{x: -10, y: 0}} fadeOut={true} onAnimationEnd={() => setShowConfetti(false)} />} */}
-        {/* Call to Action */}
-        <View style={styles.ctaSection}>
-          <Text style={styles.ctaTitle}>Ready to Earn More?</Text>
-          <Text style={styles.ctaText}>Complete more recycling actions and challenges to unlock new rewards and climb the leaderboard!</Text>
-          <TouchableOpacity style={styles.ctaButton} onPress={() => router.push('/(tabs)') }>
-            <Text style={styles.ctaButtonText}>Start a Challenge</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-      {/* Modals rendered outside ScrollView for proper overlay */}
-      <RNModal
-        visible={badgeModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setBadgeModalVisible(false)}
+      {/* Share Button */}
+      <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
+        <Text style={styles.shareButtonText}>Share Your Achievements</Text>
+      </TouchableOpacity>
+
+      {/* Badge Detail Modal */}
+      <Modal
+        isVisible={badgeModalVisible}
+        onBackdropPress={handleCloseModal}
+        onBackButtonPress={handleCloseModal}
+        style={styles.modal}
       >
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(10,20,30,0.92)',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}>
-          {/* Confetti for earned badge */}
-          {modalBadge?.earned && (
-            <ConfettiCannon
-              count={80}
-              origin={{ x: 160, y: 0 }}
-              fadeOut={true}
-              explosionSpeed={350}
-              fallSpeed={2500}
-              autoStart={true}
-              onAnimationEnd={() => {}}
-            />
-          )}
+        <View style={styles.modalContent}>
           {modalBadge && (
-            <View style={{ backgroundColor: '#fff', borderRadius: 32, padding: 32, alignItems: 'center', width: 320, maxWidth: '90%', position: 'relative' }}>
-              {/* Close X icon */}
-              <TouchableOpacity
-                onPress={() => setBadgeModalVisible(false)}
-                style={{ position: 'absolute', top: 18, right: 18, zIndex: 10 }}
-                accessibilityLabel="Close"
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Feather name="x" size={28} color="#888" />
-              </TouchableOpacity>
-              <Animated.View
-                style={modalBadge.earned ? {
-                  marginBottom: 18,
-                  marginTop: 6,
-                  transform: [
-                    { scale: glitterAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) },
-                    { rotate: glitterAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '10deg'] }) },
-                  ],
-                  shadowColor: '#FFD700',
-                  shadowOpacity: 0.7,
-                  shadowRadius: 16,
-                  shadowOffset: { width: 0, height: 0 },
-                } : { marginBottom: 18, marginTop: 6 }}
-              >
-                {React.cloneElement(modalBadge.icon as React.ReactElement<any>, { size: 64, color: '#FFD700' })}
-              </Animated.View>
-              {/* Sparkle effect for earned badge */}
-              {modalBadge.earned && (
-                <Animated.View
-                  style={{
-                    position: 'absolute',
-                    top: 12,
-                    right: 32,
-                    opacity: sparkleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] }),
-                    transform: [
-                      { scale: sparkleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.3] }) },
-                      { rotate: sparkleAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) },
-                    ],
-                  }}
-                >
-                  <Feather name="star" size={32} color="#FFD700" />
-                </Animated.View>
-              )}
-              <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#22330B', marginBottom: 8, textAlign: 'center' }}>{modalBadge.title}</Text>
-              {modalBadge.earned ? (
-                <Text style={{ fontSize: 15, color: '#444', marginBottom: 8, textAlign: 'center' }}>
-                  You earned this badge on {modalBadge.earnedDate} for: {modalBadge.desc}
-                </Text>
-              ) : (
-                <Text style={{ fontSize: 15, color: '#444', marginBottom: 8, textAlign: 'center' }}>
-                  {modalBadge.lockedDesc}
-                </Text>
-              )}
-              <TouchableOpacity style={{ backgroundColor: '#2196F3', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 32, marginTop: 12 }} onPress={handleShare}>
-                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Share</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </RNModal>
-      <Modal isVisible={lockedModal.visible} onBackdropPress={() => { setLockedModal({visible: false, badge: null}); }} backdropOpacity={0.7}>
-        <View style={styles.modalContentBetter}>
-          {lockedModal.badge && (
             <>
-              <View style={styles.modalIconBetter}>{lockedModal.badge.icon}</View>
-              <Text style={styles.modalTitleBetter}>{lockedModal.badge.title}</Text>
-              <Text style={styles.modalDescBetter}>{lockedModal.badge.lockedDesc}</Text>
-              <Text style={styles.modalMotivation}>Complete the requirements to unlock this badge!</Text>
-              <TouchableOpacity style={styles.modalCloseBtnBetter} onPress={() => { setLockedModal({visible: false, badge: null}); }}>
-                <Text style={styles.modalCloseTextBetter}>Close</Text>
+              <View style={styles.modalHeader}>
+                <View style={[styles.modalIcon, modalBadge.earned && styles.modalIconEarned]}>
+                  {modalBadge.icon}
+                </View>
+                <Text style={styles.modalTitle}>{modalBadge.title}</Text>
+                <Text style={styles.modalPoints}>{modalBadge.points} points</Text>
+              </View>
+              
+              <Text style={styles.modalDescription}>
+                {modalBadge.earned ? modalBadge.desc : (modalBadge.lockedDesc || modalBadge.desc)}
+              </Text>
+              
+              {modalBadge.earned && (
+                <View style={styles.modalEarnedInfo}>
+                  <Text style={styles.modalEarnedText}>🎉 Achievement Unlocked!</Text>
+                  <Text style={styles.modalEarnedDate}>Earned on {modalBadge.earnedDate}</Text>
+                </View>
+              )}
+              
+              {!modalBadge.earned && modalBadge.current !== undefined && modalBadge.required && (
+                <View style={styles.modalProgress}>
+                  <Text style={styles.modalProgressText}>Progress: {modalBadge.current}/{modalBadge.required}</Text>
+                  <View style={styles.modalProgressBar}>
+                    <View 
+                      style={[
+                        styles.modalProgressFill, 
+                        { width: `${Math.min((modalBadge.current / modalBadge.required) * 100, 100)}%` }
+                      ]} 
+                    />
+                  </View>
+                </View>
+              )}
+              
+              <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseModal}>
+                <Text style={styles.modalCloseButtonText}>Close</Text>
               </TouchableOpacity>
             </>
           )}
         </View>
       </Modal>
-      {/* Add the bottom sheet share modal at the end of the component */}
+
+      {/* Share Options Modal */}
       <Modal
         isVisible={shareSheetVisible}
         onBackdropPress={() => setShareSheetVisible(false)}
-        style={{ justifyContent: 'flex-end', margin: 0 }}
-        backdropOpacity={0.7}
+        style={styles.shareModal}
       >
-        <View style={{
-          backgroundColor: '#222',
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          paddingTop: 16,
-          paddingBottom: 32,
-          paddingHorizontal: 24,
-          alignItems: 'center',
-        }}>
-          <View style={{ width: 40, height: 4, backgroundColor: '#888', borderRadius: 2, marginBottom: 12 }} />
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18, marginBottom: 18 }}>Share</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 24 }}>
-            <TouchableOpacity onPress={() => { handleShareOption('copy'); setShareSheetVisible(false); }} style={{ alignItems: 'center', margin: 8 }}>
-              <Feather name="copy" size={32} color="#fff" />
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>Copy Link</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { handleShareOption('whatsapp'); setShareSheetVisible(false); }} style={{ alignItems: 'center', margin: 8 }}>
-              <FontAwesome5 name="whatsapp" size={32} color="#25D366" />
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>WhatsApp</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { handleShareOption('instagram'); setShareSheetVisible(false); }} style={{ alignItems: 'center', margin: 8 }}>
-              <FontAwesome5 name="instagram" size={32} color="#E1306C" />
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>Instagram</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { handleShareOption('facebook'); setShareSheetVisible(false); }} style={{ alignItems: 'center', margin: 8 }}>
-              <FontAwesome5 name="facebook" size={32} color="#1877F3" />
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>Facebook</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { handleShareOption('x'); setShareSheetVisible(false); }} style={{ alignItems: 'center', margin: 8 }}>
-              <FontAwesome5 name="twitter" size={32} color="#1DA1F2" />
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>X (Twitter)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { handleShareOption('snapchat'); setShareSheetVisible(false); }} style={{ alignItems: 'center', margin: 8 }}>
-              <FontAwesome5 name="snapchat-ghost" size={32} color="#FFFC00" />
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>Snapchat</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { handleShareOption('tiktok'); setShareSheetVisible(false); }} style={{ alignItems: 'center', margin: 8 }}>
-              <FontAwesome6 name="tiktok" size={32} color="#000" />
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>TikTok</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { handleShareOption('email'); setShareSheetVisible(false); }} style={{ alignItems: 'center', margin: 8 }}>
-              <Feather name="mail" size={32} color="#fff" />
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>Email</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { handleShareOption('message'); setShareSheetVisible(false); }} style={{ alignItems: 'center', margin: 8 }}>
-              <Feather name="message-square" size={32} color="#fff" />
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>Messenger</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity onPress={() => setShareSheetVisible(false)} style={{ marginTop: 18 }}>
-            <Text style={{ color: '#fff', fontSize: 16 }}>Cancel</Text>
+        <View style={styles.shareModalContent}>
+          <Text style={styles.shareModalTitle}>Share Your Achievements</Text>
+          <TouchableOpacity 
+            style={styles.shareOption} 
+            onPress={() => handleShareOption('copy')}
+          >
+            <Text style={styles.shareOptionText}>📋 Copy to Clipboard</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.shareOption} 
+            onPress={() => handleShareOption('whatsapp')}
+          >
+            <Text style={styles.shareOptionText}>📱 Share on WhatsApp</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.shareModalClose} 
+            onPress={() => setShareSheetVisible(false)}
+          >
+            <Text style={styles.shareModalCloseText}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </Modal>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4FFF7',
+    backgroundColor: '#F8FFF0',
   },
-  content: {
+  header: {
     alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 12,
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: '#FFFFFF',
   },
-  personalMessage: {
-    fontSize: 17,
-    color: '#22330B',
+  headerTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
+    color: '#1C3301',
     marginBottom: 8,
-    alignSelf: 'flex-start',
-    marginLeft: 8,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#22330B',
-    marginBottom: 24,
+  headerSubtitle: {
+    fontSize: 16,
+    color: '#666',
     textAlign: 'center',
   },
-  cardRow: {
+  statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 32,
-    marginTop: 0, // ensure no extra gap at the top
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 18,
-    alignItems: 'center',
+  statCard: {
     flex: 1,
-    marginHorizontal: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 4,
   },
-  cardValue: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#22330B',
-    marginTop: 8,
-  },
-  cardLabel: {
-    fontSize: 15,
-    color: '#22330B',
-    marginTop: 2,
-  },
-  progressSection: {
-    width: '100%',
-    marginBottom: 32,
-    alignItems: 'center',
-  },
-  progressTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#22330B',
-    marginBottom: 8,
-  },
-  progressBarBg: {
-    width: '90%',
-    height: 18,
-    backgroundColor: '#E3F0D5',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 6,
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#192E01', // match Start a Challenge button
-    borderRadius: 12,
-  },
-  progressText: {
-    fontSize: 14,
-    color: '#22330B',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#22330B',
-    marginBottom: 12,
-    alignSelf: 'flex-start',
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap', // allow wrapping to multiple lines
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-    width: '100%',
-    rowGap: 12, // add vertical gap between rows
-  },
-  badgeIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    marginHorizontal: 8,
-    marginVertical: 6, // add vertical margin for spacing
-    borderWidth: 2,
-    borderColor: '#B6CDBD',
-  },
-  badgeCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#B6CDBD',
-    marginHorizontal: 8,
-    marginVertical: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  selectedBadge: {
-    borderWidth: 2,
-    borderColor: '#4CAF50',
-  },
-  lockedBadge: {
-    opacity: 0.5,
-  },
-  ctaSection: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 24,
-    alignItems: 'center',
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    marginBottom: 32,
-  },
-  ctaTitle: {
+  statNumber: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#22330B',
-    marginBottom: 8,
+    color: '#1C3301',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
     textAlign: 'center',
   },
-  ctaText: {
-    fontSize: 15,
-    color: '#22330B',
+  impactSummary: {
+    backgroundColor: '#FFFFFF',
+    margin: 20,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  impactTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  impactGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  impactItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  impactIcon: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  impactValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    marginBottom: 4,
+  },
+  impactLabel: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  badgesSection: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  badgesTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1C3301',
     marginBottom: 16,
     textAlign: 'center',
   },
-  ctaButton: {
-    backgroundColor: '#192E01', // updated color
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
+  badgesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 16,
   },
-  ctaButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
+  badgeItem: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
   },
-  headerImage: {
-    width: '100%',
-    height: 90,
-    borderRadius: 20,
+  badgeEarned: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#F1F8E9',
+  },
+  badgePressed: {
+    transform: [{ scale: 0.95 }],
+  },
+  badgeIcon: {
     marginBottom: 12,
-    marginTop: 4,
-    resizeMode: 'cover',
-    opacity: 0.3, // further reduced opacity
   },
-  headerPill: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    paddingVertical: 7, // reduced from 14
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: 0,
-    minWidth: 220,
-    maxWidth: '90%',
-  },
-  headerPillText: {
-    color: '#22330B',
+  badgeTitle: {
+    fontSize: 14,
     fontWeight: 'bold',
-    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
   },
-  headerImageWrapper: {
-    width: '100%',
-    height: 90,
-    borderRadius: 20,
-    marginBottom: 12, // restored spacing below image rectangle
-    marginTop: 4,
-    overflow: 'hidden',
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#D0D4CC',
+  badgeTitleEarned: {
+    color: '#1C3301',
   },
-  headerImageOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center', // vertical center
-    alignItems: 'center',     // horizontal center
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    display: 'flex',
+  badgeDesc: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 16,
   },
-  headerImagePill: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    paddingVertical: 8,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 120,
-    maxWidth: '100%',
+  badgeDescEarned: {
+    color: '#4A6B2A',
   },
-  headerImageTitle: {
-    color: '#22330B',
+  earnedBadge: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 8,
+  },
+  earnedText: {
+    color: '#FFFFFF',
+    fontSize: 10,
     fontWeight: 'bold',
-    fontSize: 22,
     textAlign: 'center',
   },
-  rewardPill: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-    minWidth: 120,
-    maxWidth: '80%',
+  earnedDate: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    textAlign: 'center',
+    marginTop: 2,
   },
-  rewardPillText: {
-    color: '#22330B',
+  progressContainer: {
+    width: '100%',
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 3,
+    marginBottom: 4,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 10,
+    color: '#666',
+    textAlign: 'center',
+  },
+  badgePoints: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '600',
+  },
+  badgePointsEarned: {
+    color: '#4CAF50',
+  },
+  shareButton: {
+    backgroundColor: '#1C3301',
+    margin: 20,
+    paddingVertical: 16,
+    borderRadius: 25,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  shareButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: 'bold',
-    fontSize: 17,
+  },
+  modal: {
+    margin: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 28,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
   },
   modalIcon: {
-    marginBottom: 12,
+    marginBottom: 16,
+    opacity: 0.5,
+  },
+  modalIconEarned: {
+    opacity: 1,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#22330B',
-    marginBottom: 6,
-  },
-  modalDesc: {
-    fontSize: 15,
-    color: '#444',
-    marginBottom: 18,
+    color: '#1C3301',
     textAlign: 'center',
-  },
-  modalCloseBtn: {
-    backgroundColor: '#192E01',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 24,
-  },
-  modalCloseText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  modalContentBetter: {
-    backgroundColor: '#fff',
-    borderRadius: 28,
-    padding: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  modalIconBetter: {
-    marginBottom: 18,
-    marginTop: 6,
-    transform: [{ scale: 1.5 }],
-  },
-  modalTitleBetter: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#22330B',
     marginBottom: 8,
-    textAlign: 'center',
-  },
-  modalDescBetter: {
-    fontSize: 17,
-    color: '#444',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  modalMotivation: {
-    fontSize: 16,
-    color: '#4CAF50',
-    fontWeight: 'bold',
-    marginBottom: 18,
-    textAlign: 'center',
-  },
-  modalCloseBtnBetter: {
-    backgroundColor: '#192E01',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 36,
-    marginTop: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  modalCloseTextBetter: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 17,
-    letterSpacing: 1,
-  },
-  challengeSection: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 20,
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  challengeTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#22330B',
-    marginBottom: 6,
-  },
-  challengeDesc: {
-    fontSize: 15,
-    color: '#444',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  challengeReward: {
-    fontSize: 14,
-    color: '#4CAF50',
-    marginBottom: 10,
-  },
-  challengeButton: {
-    backgroundColor: '#192E01',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 24,
-  },
-  challengeButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  leaderboardSection: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 20,
-    width: '100%',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  leaderboardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#22330B',
-    marginBottom: 8,
-  },
-  leaderboardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  leaderboardRank: {
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    width: 22,
-    fontSize: 15,
-  },
-  leaderboardName: {
-    flex: 1,
-    fontSize: 15,
-    color: '#22330B',
-  },
-  leaderboardPoints: {
-    fontSize: 15,
-    color: '#2196F3',
-    fontWeight: 'bold',
-  },
-  leaderboardButton: {
-    marginTop: 8,
-    backgroundColor: '#192E01',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 24,
-    alignSelf: 'center',
-  },
-  leaderboardButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  shareButton: {
-    backgroundColor: '#2196F3',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    marginTop: 12,
-    marginBottom: 8,
-    alignSelf: 'center',
-  },
-  shareButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  modalDate: {
-    fontSize: 14,
-    color: '#888',
-    marginTop: 4,
-    marginBottom: 2,
-    textAlign: 'center',
   },
   modalPoints: {
-    fontSize: 15,
+    fontSize: 16,
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  modalDescription: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  modalEarnedInfo: {
+    backgroundColor: '#F1F8E9',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  modalEarnedText: {
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#4CAF50',
     marginBottom: 4,
+  },
+  modalEarnedDate: {
+    fontSize: 14,
+    color: '#4A6B2A',
+  },
+  modalProgress: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  modalProgressText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalProgressBar: {
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+  },
+  modalProgressFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
+  },
+  modalCloseButton: {
+    backgroundColor: '#1C3301',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  modalCloseButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  shareModal: {
+    margin: 20,
+  },
+  shareModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+  },
+  shareModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  shareOption: {
+    backgroundColor: '#F8FFF0',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  shareOptionText: {
+    fontSize: 16,
+    color: '#1C3301',
+    textAlign: 'center',
+  },
+  shareModalClose: {
+    backgroundColor: '#FF4444',
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  shareModalCloseText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
     textAlign: 'center',
   },
 }); 

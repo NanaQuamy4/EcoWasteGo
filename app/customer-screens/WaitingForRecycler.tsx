@@ -1,21 +1,43 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, DIMENSIONS } from '../../constants';
 import { formatSecondsToTime } from '../../constants/helpers';
+import { apiService } from '../../services/apiService';
 import CommonHeader from '../components/CommonHeader';
+
+interface RequestStatus {
+  id: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'in_progress' | 'completed' | 'cancelled';
+  recycler_id?: string;
+  recycler_name?: string;
+  recycler_phone?: string;
+  pickup_address: string;
+  waste_type: string;
+  weight: number;
+  created_at: string;
+  accepted_at?: string;
+  rejection_reason?: string;
+}
 
 export default function WaitingForRecyclerScreen() {
   const params = useLocalSearchParams();
-  const recyclerName = params.recyclerName as string;
-  const pickup = params.pickup as string;
+  const requestId = params.requestId as string;
   const [timeElapsed, setTimeElapsed] = useState(0);
-  const [isConfirmed, setIsConfirmed] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<RequestStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Animation for the loading indicator
   const spinValue = useMemo(() => new Animated.Value(0), []);
   
   useEffect(() => {
+    if (!requestId) {
+      setError('No request ID provided');
+      setIsLoading(false);
+      return;
+    }
+
     // Start spinning animation
     const spinAnimation = Animated.loop(
       Animated.timing(spinValue, {
@@ -31,127 +53,393 @@ export default function WaitingForRecyclerScreen() {
       setTimeElapsed(prev => prev + 1);
     }, 1000);
 
-    // Simulate recycler confirmation after 5 seconds (for demo)
-    const confirmationTimer = setTimeout(() => {
-      setIsConfirmed(true);
-      spinAnimation.stop();
-    }, 5000);
+    // Fetch initial request status
+    fetchRequestStatus();
+
+    // Poll for status updates every 10 seconds
+    const statusPolling = setInterval(() => {
+      fetchRequestStatus();
+    }, 10000);
 
     return () => {
       clearInterval(timer);
-      clearTimeout(confirmationTimer);
+      clearInterval(statusPolling);
       spinAnimation.stop();
     };
-  }, [spinValue]);
+  }, [requestId, spinValue]);
+
+  const fetchRequestStatus = async () => {
+    try {
+      const response = await apiService.getWasteCollection(requestId);
+      
+      if (response) {
+        const status: RequestStatus = {
+          id: response.id,
+          status: response.status,
+          recycler_id: response.recycler_id,
+          recycler_name: response.recycler_id ? 'Recycler' : undefined, // Placeholder since we don't have recycler details
+          recycler_phone: undefined, // We don't have this in the current interface
+          pickup_address: response.pickup_address || '',
+          waste_type: response.waste_type,
+          weight: response.weight || 0,
+          created_at: response.created_at,
+          accepted_at: undefined, // Not in current interface
+          rejection_reason: undefined // Not in current interface
+        };
+
+        setRequestStatus(status);
+        setIsLoading(false);
+
+        // Stop animation if request is no longer pending
+        if (status.status !== 'pending') {
+          spinValue.stopAnimation();
+        }
+      }
+    } catch (err) {
+      console.error('Error in fetchRequestStatus:', err);
+      setError('Network error occurred');
+    }
+  };
+
+  const handleCancel = async () => {
+    Alert.alert(
+      'Cancel Request',
+      'Are you sure you want to cancel this pickup request?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await apiService.updateWasteStatus(requestId, 'cancelled');
+              
+              if (response) {
+                Alert.alert('Request Cancelled', 'Your pickup request has been cancelled successfully.');
+                router.back();
+              } else {
+                Alert.alert('Error', 'Failed to cancel request');
+              }
+            } catch (err) {
+              Alert.alert('Error', 'Failed to cancel request');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleConfirmed = () => {
+    if (!requestStatus) return;
+    
+    // Navigate to tracking screen
+    router.push({
+      pathname: '/customer-screens/TrackingScreen' as any,
+      params: { 
+        requestId: requestId,
+        recyclerName: requestStatus.recycler_name || 'Recycler',
+        pickup: requestStatus.pickup_address
+      }
+    });
+  };
+
+  const handleRejected = () => {
+    router.back();
+  };
+
+  const handleSelectNewRecycler = () => {
+    router.push({
+      pathname: '/customer-screens/SelectTruckScreen' as any,
+      params: { requestId: requestId }
+    });
+  };
 
   const spin = spinValue.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
-  const handleCancel = () => {
-    router.back();
-  };
-
-  const handleConfirmed = () => {
-    // Navigate to tracking screen
-    router.push({
-      pathname: '/customer-screens/TrackingScreen' as any,
-      params: { 
-        recyclerName: recyclerName,
-        pickup: pickup
-      }
-    });
-  };
-
-  if (isConfirmed) {
+  if (isLoading) {
     return (
       <View style={styles.container}>
-        <CommonHeader title="Pickup Confirmed!" />
-
-        {/* Header Banner */}
-        <View style={styles.bannerBg}>
-          <Image
-            source={require('../../assets/images/blend.jpg')}
-            style={styles.bannerImage}
-            resizeMode="cover"
-          />
-          <View style={styles.headerCard}>
-            <Text style={styles.header}>Pickup Confirmed!</Text>
-          </View>
-        </View>
-
+        <CommonHeader title="Loading..." />
         <View style={styles.content}>
-          <View style={styles.successIcon}>
-            <Text style={styles.successText}>✅</Text>
-          </View>
-          <Text style={styles.subtitle}>
-            {recyclerName} has confirmed your pickup request
-          </Text>
-          <Text style={styles.locationText}>
-            Pickup at: <Text style={styles.boldText}>{pickup}</Text>
-          </Text>
-          <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmed}>
-            <Text style={styles.confirmButtonText}>CONTINUE</Text>
+          <Text style={styles.subtitle}>Loading request details...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <CommonHeader title="Error" />
+        <View style={styles.content}>
+          <Text style={styles.errorText}>❌</Text>
+          <Text style={styles.subtitle}>Something went wrong</Text>
+          <Text style={styles.errorMessage}>{error}</Text>
+          <TouchableOpacity style={styles.confirmButton} onPress={() => router.back()}>
+            <Text style={styles.confirmButtonText}>GO BACK</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   }
 
-  return (
-    <View style={styles.container}>
-      <CommonHeader title="Waiting for Recycler" />
-
-      {/* Header Banner */}
-      <View style={styles.bannerBg}>
-        <Image
-                      source={require('../../assets/images/blend.jpg')}
-          style={styles.bannerImage}
-          resizeMode="cover"
-        />
-        <View style={styles.headerCard}>
-          <Text style={styles.header}>Waiting for Recycler</Text>
+  if (!requestStatus) {
+    return (
+      <View style={styles.container}>
+        <CommonHeader title="Request Not Found" />
+        <View style={styles.content}>
+          <Text style={styles.errorText}>❌</Text>
+          <Text style={styles.subtitle}>Request not found</Text>
+          <TouchableOpacity style={styles.confirmButton} onPress={() => router.back()}>
+            <Text style={styles.confirmButtonText}>GO BACK</Text>
+          </TouchableOpacity>
         </View>
       </View>
+    );
+  }
 
-      <View style={styles.content}>
-        {/* Loading Animation */}
-        <Animated.View style={[styles.loadingContainer, { transform: [{ rotate: spin }] }]}>
-          <Image 
-            source={require('../../assets/images/truck.png')} 
-            style={styles.loadingTruck}
-          />
-        </Animated.View>
+  // Show different UI based on status
+  switch (requestStatus.status) {
+    case 'accepted':
+      return (
+        <View style={styles.container}>
+          <CommonHeader title="Pickup Confirmed!" />
 
-        {/* Status Text */}
-        <Text style={styles.subtitle}>
-          Sending pickup request to {recyclerName}...
-        </Text>
-        
-        {/* Time Elapsed */}
-        <View style={styles.timeContainer}>
-          <Text style={styles.timeLabel}>Time elapsed:</Text>
-          <Text style={styles.timeText}>{formatSecondsToTime(timeElapsed)}</Text>
+          <View style={styles.bannerBg}>
+            <Image
+              source={require('../../assets/images/blend.jpg')}
+              style={styles.bannerImage}
+              resizeMode="cover"
+            />
+            <View style={styles.headerCard}>
+              <Text style={styles.header}>Pickup Confirmed!</Text>
+            </View>
+          </View>
+
+          <View style={styles.content}>
+            <View style={styles.successIcon}>
+              <Text style={styles.successText}>✅</Text>
+            </View>
+            <Text style={styles.subtitle}>
+              {requestStatus.recycler_name || 'A recycler'} has confirmed your pickup request
+            </Text>
+            
+            {requestStatus.recycler_phone && (
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactLabel}>Recycler Contact:</Text>
+                <Text style={styles.contactValue}>{requestStatus.recycler_phone}</Text>
+              </View>
+            )}
+            
+            <Text style={styles.locationText}>
+              Pickup at: <Text style={styles.boldText}>{requestStatus.pickup_address}</Text>
+            </Text>
+            
+            <Text style={styles.wasteInfo}>
+              {requestStatus.waste_type} • {requestStatus.weight}kg
+            </Text>
+            
+            <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmed}>
+              <Text style={styles.confirmButtonText}>TRACK PICKUP</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+      );
 
-        {/* Location Info */}
-        <Text style={styles.locationText}>
-          Pickup at: <Text style={styles.boldText}>{pickup}</Text>
-        </Text>
+    case 'rejected':
+      return (
+        <View style={styles.container}>
+          <CommonHeader title="Request Rejected" />
 
-        {/* Cancel Button */}
-        <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-          <Text style={styles.cancelButtonText}>CANCEL REQUEST</Text>
-        </TouchableOpacity>
+          <View style={styles.bannerBg}>
+            <Image
+              source={require('../../assets/images/blend.jpg')}
+              style={styles.bannerImage}
+              resizeMode="cover"
+            />
+            <View style={styles.headerCard}>
+              <Text style={styles.header}>Request Rejected</Text>
+            </View>
+          </View>
 
-        {/* Status Message */}
-        <Text style={styles.statusMessage}>
-          Please wait while the recycler reviews your request...
-        </Text>
-      </View>
-    </View>
-  );
+          <View style={styles.content}>
+            <View style={styles.errorIcon}>
+              <Text style={styles.errorText}>❌</Text>
+            </View>
+            <Text style={styles.subtitle}>
+              Your pickup request was not accepted by the recycler
+            </Text>
+            
+            {requestStatus.rejection_reason && (
+              <View style={styles.rejectionContainer}>
+                <Text style={styles.rejectionLabel}>Reason:</Text>
+                <Text style={styles.rejectionReason}>{requestStatus.rejection_reason}</Text>
+              </View>
+            )}
+            
+            <Text style={styles.locationText}>
+              Location: <Text style={styles.boldText}>{requestStatus.pickup_address}</Text>
+            </Text>
+            
+            <Text style={styles.wasteInfo}>
+              {requestStatus.waste_type} • {requestStatus.weight}kg
+            </Text>
+            
+            <View style={styles.rejectionActions}>
+              <TouchableOpacity style={styles.selectNewRecyclerButton} onPress={handleSelectNewRecycler}>
+                <Text style={styles.selectNewRecyclerButtonText}>SELECT NEW RECYCLER</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.tryAgainButton} onPress={handleRejected}>
+                <Text style={styles.tryAgainButtonText}>TRY AGAIN</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      );
+
+    case 'in_progress':
+      return (
+        <View style={styles.container}>
+          <CommonHeader title="Pickup In Progress" />
+
+          <View style={styles.bannerBg}>
+            <Image
+              source={require('../../assets/images/blend.jpg')}
+              style={styles.bannerImage}
+              resizeMode="cover"
+            />
+            <View style={styles.headerCard}>
+              <Text style={styles.header}>Pickup In Progress</Text>
+            </View>
+          </View>
+
+          <View style={styles.content}>
+            <View style={styles.successIcon}>
+              <Text style={styles.successText}>🚚</Text>
+            </View>
+            <Text style={styles.subtitle}>
+              {requestStatus.recycler_name || 'The recycler'} is on their way
+            </Text>
+            
+            <Text style={styles.locationText}>
+              Pickup at: <Text style={styles.boldText}>{requestStatus.pickup_address}</Text>
+            </Text>
+            
+            <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmed}>
+              <Text style={styles.confirmButtonText}>TRACK PICKUP</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+
+    case 'completed':
+      return (
+        <View style={styles.container}>
+          <CommonHeader title="Pickup Completed" />
+
+          <View style={styles.bannerBg}>
+            <Image
+              source={require('../../assets/images/blend.jpg')}
+              style={styles.bannerImage}
+              resizeMode="cover"
+            />
+            <View style={styles.headerCard}>
+              <Text style={styles.header}>Pickup Completed!</Text>
+            </View>
+          </View>
+
+          <View style={styles.content}>
+            <View style={styles.successIcon}>
+              <Text style={styles.successText}>🎉</Text>
+            </View>
+            <Text style={styles.subtitle}>
+              Your waste pickup has been completed successfully!
+            </Text>
+            
+            <Text style={styles.locationText}>
+              Location: <Text style={styles.boldText}>{requestStatus.pickup_address}</Text>
+            </Text>
+            
+            <Text style={styles.wasteInfo}>
+              {requestStatus.waste_type} • {requestStatus.weight}kg
+            </Text>
+            
+            <TouchableOpacity style={styles.confirmButton} onPress={() => router.back()}>
+              <Text style={styles.confirmButtonText}>VIEW HISTORY</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+
+    default: // pending status
+      return (
+        <View style={styles.container}>
+          <CommonHeader title="Waiting for Recycler" />
+
+          <View style={styles.bannerBg}>
+            <Image
+              source={require('../../assets/images/blend.jpg')}
+              style={styles.bannerImage}
+              resizeMode="cover"
+            />
+            <View style={styles.headerCard}>
+              <Text style={styles.header}>Waiting for Recycler</Text>
+            </View>
+          </View>
+
+          <View style={styles.content}>
+            {/* Loading Animation */}
+            <Animated.View style={[styles.loadingContainer, { transform: [{ rotate: spin }] }]}>
+              <Image 
+                source={require('../../assets/images/truck.png')} 
+                style={styles.loadingTruck}
+              />
+            </Animated.View>
+
+            {/* Status Text */}
+            <Text style={styles.subtitle}>
+              Sending pickup request to recyclers...
+            </Text>
+            
+            {/* Time Elapsed */}
+            <View style={styles.timeContainer}>
+              <Text style={styles.timeLabel}>Time elapsed:</Text>
+              <Text style={styles.timeText}>{formatSecondsToTime(timeElapsed)}</Text>
+            </View>
+
+            {/* Request Details */}
+            <View style={styles.requestDetails}>
+              <Text style={styles.detailLabel}>Waste Type:</Text>
+              <Text style={styles.detailValue}>{requestStatus.waste_type}</Text>
+            </View>
+            
+            <View style={styles.requestDetails}>
+              <Text style={styles.detailLabel}>Weight:</Text>
+              <Text style={styles.detailValue}>{requestStatus.weight}kg</Text>
+            </View>
+
+            {/* Location Info */}
+            <Text style={styles.locationText}>
+              Pickup at: <Text style={styles.boldText}>{requestStatus.pickup_address}</Text>
+            </Text>
+
+            {/* Cancel Button */}
+            <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+              <Text style={styles.cancelButtonText}>CANCEL REQUEST</Text>
+            </TouchableOpacity>
+
+            {/* Status Message */}
+            <Text style={styles.statusMessage}>
+              Please wait while recyclers review your request...
+            </Text>
+          </View>
+        </View>
+      );
+  }
 }
 
 const styles = StyleSheet.create({
@@ -311,5 +599,114 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 25, // Increased spacing
     lineHeight: 18, // Added line height
+  },
+  errorText: {
+    fontSize: 80,
+    marginBottom: 10,
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  contactInfo: {
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  contactLabel: {
+    fontSize: 16,
+    color: COLORS.darkGreen,
+    fontWeight: '500',
+  },
+  contactValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.secondary,
+  },
+  errorIcon: {
+    marginBottom: 10,
+  },
+  rejectionContainer: {
+    marginTop: 10,
+    marginBottom: 20,
+    backgroundColor: COLORS.lightRed,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: DIMENSIONS.borderRadius,
+    borderWidth: 1,
+    borderColor: COLORS.red,
+  },
+  rejectionLabel: {
+    fontSize: 16,
+    color: COLORS.red,
+    fontWeight: '500',
+    marginBottom: 5,
+  },
+  rejectionReason: {
+    fontSize: 14,
+    color: COLORS.red, // Using red instead of darkRed
+    fontStyle: 'italic',
+  },
+  wasteInfo: {
+    fontSize: 16,
+    color: COLORS.darkGreen,
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  requestDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 15,
+    paddingHorizontal: 10,
+  },
+  detailLabel: {
+    fontSize: 16,
+    color: COLORS.darkGreen,
+    fontWeight: '500',
+  },
+  detailValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.secondary,
+  },
+  rejectionActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginTop: 20,
+  },
+  selectNewRecyclerButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: DIMENSIONS.borderRadius,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  selectNewRecyclerButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  tryAgainButton: {
+    backgroundColor: COLORS.red,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: DIMENSIONS.borderRadius,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tryAgainButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
 }); 

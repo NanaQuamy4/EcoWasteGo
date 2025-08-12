@@ -1,7 +1,7 @@
 // API Configuration for EcoWasteGo Frontend
 export const API_CONFIG = {
   // Base URL for development - using computer's IP address for mobile access
-  BASE_URL: 'http://10.133.121.133:3000',
+  BASE_URL: 'http://10.132.144.9:3000',
   
   // API endpoints
   ENDPOINTS: {
@@ -35,6 +35,7 @@ export const API_CONFIG = {
       DELETE: '/api/waste',
       UPDATE_STATUS: '/api/waste/status',
       ASSIGN_RECYCLER: '/api/waste/assign',
+      GET_AVAILABLE_RECYCLERS: '/api/waste/recyclers/available',
     },
     
     // Payments
@@ -118,6 +119,9 @@ export const API_CONFIG = {
       WEIGHT_ENTRY: '/api/recycler-weight-entry',
       TEXT: '/api/text-recycler',
     },
+
+    // Payment Summary
+    PAYMENT_SUMMARY: '/api/payment-summary',
   },
   
   // Request headers

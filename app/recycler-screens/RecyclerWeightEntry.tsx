@@ -6,11 +6,14 @@ import CommonHeader from '../components/CommonHeader';
 
 export default function RecyclerWeightEntry() {
   const params = useLocalSearchParams();
+  const requestId = params.requestId as string;
   const userName = params.userName as string;
   const pickup = params.pickup as string;
+  const currentWeight = params.currentWeight as string;
+  const currentWasteType = params.currentWasteType as string;
   
-  const [weight, setWeight] = useState('');
-  const [wasteType, setWasteType] = useState('Plastic');
+  const [weight, setWeight] = useState(currentWeight || '');
+  const [wasteType, setWasteType] = useState(currentWasteType || 'Plastic');
   const [rate] = useState('1.20');
 
   const calculateBill = () => {
@@ -25,10 +28,11 @@ export default function RecyclerWeightEntry() {
     const environmentalTax = subtotal * 0.05; // 5% tax
     const totalAmount = subtotal + environmentalTax;
 
-    // Navigate to payment summary with calculated values
+    // Navigate to payment summary with calculated values and requestId
     router.push({
       pathname: '/recycler-screens/RecyclerPaymentSummary' as any,
       params: {
+        requestId: requestId,
         userName: userName,
         pickup: pickup,
         weight: weight,
@@ -49,6 +53,7 @@ export default function RecyclerWeightEntry() {
       <View style={styles.headerSection}>
         <Text style={styles.headerTitle}>Waste Collection</Text>
         <Text style={styles.headerSubtitle}>Enter waste details for {userName}</Text>
+        <Text style={styles.locationText}>📍 {pickup}</Text>
       </View>
 
       {/* Form Section */}
@@ -117,7 +122,7 @@ export default function RecyclerWeightEntry() {
           <Text style={styles.instructionsText}>• Weigh the collected waste accurately</Text>
           <Text style={styles.instructionsText}>• Select the appropriate waste type</Text>
           <Text style={styles.instructionsText}>• Review the calculated bill before sending</Text>
-          <Text style={styles.instructionsText}>• The user will receive a payment summary</Text>
+          <Text style={styles.instructionsText}>• The customer will receive a payment summary</Text>
         </View>
       </View>
     </SafeAreaView>
@@ -144,6 +149,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+  },
+  locationText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
   },
   formContainer: {
     paddingHorizontal: 20,

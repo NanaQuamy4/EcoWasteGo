@@ -38,7 +38,7 @@ export default function CustomerPrivacyScreen() {
         <Text style={styles.sectionTitle}>Last Updated: <Text style={styles.sectionBold}>[29/08/2025]</Text></Text>
         <Text style={styles.sectionBold}>EcoWasteGo - Customer Privacy Policy</Text>
         <Text style={styles.sectionText}>
-          This privacy policy specifically addresses how we handle your personal information as a customer using EcoWasteGo's waste disposal services.
+          This privacy policy specifically addresses how we handle your personal information as a customer using EcoWasteGo&apos;s waste disposal services.
         </Text>
         
         <Text style={styles.sectionHeader}>1. Customer-Specific Information We Collect</Text>

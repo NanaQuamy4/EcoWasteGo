@@ -2,11 +2,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
+import { apiService } from '../../services/apiService';
 import CommonHeader from '../components/CommonHeader';
 import recyclerStats from '../utils/recyclerStats';
 
 export default function RecyclerPaymentSummary() {
   const params = useLocalSearchParams();
+  const requestId = params.requestId as string;
   const userName = params.userName as string;
   const pickup = params.pickup as string;
   const weight = params.weight as string;
@@ -19,43 +21,74 @@ export default function RecyclerPaymentSummary() {
   // State to track payment status
   const [paymentSent, setPaymentSent] = useState(false);
   const [paymentAccepted, setPaymentAccepted] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
-  const handleSendToUser = () => {
-    Alert.alert(
-      'Send Payment Summary',
-      'Are you sure you want to send this payment summary to the user?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send',
-          onPress: () => {
-            setPaymentSent(true);
-            Alert.alert(
-              'Payment Summary Sent',
-              'The payment summary has been sent to the user. They will receive a notification to review and accept/reject the payment.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    // Simulate user response after 3 seconds
-                    setTimeout(() => {
-                      simulateUserResponse();
-                    }, 3000);
-                  }
-                }
-              ]
-            );
-          }
-        }
-      ]
-    );
+  const handleSendToUser = async () => {
+    try {
+      setIsSending(true);
+      
+      // Send payment summary to backend
+      const response = await apiService.createPaymentSummary({
+        requestId,
+        weight: parseFloat(weight),
+        wasteType,
+        rate: parseFloat(rate),
+        subtotal: parseFloat(subtotal),
+        environmentalTax: parseFloat(environmentalTax),
+        totalAmount: parseFloat(totalAmount)
+      });
+
+      if (response) {
+        setPaymentSent(true);
+        Alert.alert(
+          'Payment Summary Sent',
+          'The payment summary has been sent to the customer. They will receive a notification to review and accept/reject the payment.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Simulate user response after 3 seconds
+                setTimeout(() => {
+                  simulateUserResponse();
+                }, 3000);
+              }
+            }
+          ]
+        );
+      } else {
+        throw new Error('Failed to send payment summary');
+      }
+    } catch (error) {
+      console.error('Error sending payment summary:', error);
+      Alert.alert(
+        'Error',
+        'Failed to send payment summary. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleEdit = () => {
+    // Navigate back to weight entry screen with current values
+    router.push({
+      pathname: '/recycler-screens/RecyclerWeightEntry' as any,
+      params: {
+        requestId: requestId,
+        userName: userName,
+        pickup: pickup,
+        currentWeight: weight,
+        currentWasteType: wasteType
+      }
+    });
   };
 
   const simulateUserResponse = () => {
     // Simulate user accepting the payment (in real app, this would come from backend)
     Alert.alert(
-      'User Response',
-      'The user has accepted your payment summary! You can now mark payment as received.',
+      'Customer Response',
+      'The customer has accepted your payment summary! You can now mark payment as received.',
       [
         {
           text: 'OK',
@@ -71,7 +104,7 @@ export default function RecyclerPaymentSummary() {
     if (!paymentSent) {
       Alert.alert(
         'Payment Not Sent',
-        'Please send the payment summary to the user first.',
+        'Please send the payment summary to the customer first.',
         [{ text: 'OK' }]
       );
       return;
@@ -80,7 +113,7 @@ export default function RecyclerPaymentSummary() {
     if (!paymentAccepted) {
       Alert.alert(
         'Payment Not Accepted',
-        'The user has not accepted the payment summary yet. Please wait for their response.',
+        'The customer has not accepted the payment summary yet. Please wait for their response.',
         [{ text: 'OK' }]
       );
       return;
@@ -88,7 +121,7 @@ export default function RecyclerPaymentSummary() {
 
     Alert.alert(
       'Payment Received',
-      'Confirm that you have received the payment from the user?',
+      'Confirm that you have received the payment from the customer?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -98,51 +131,26 @@ export default function RecyclerPaymentSummary() {
             const earnings = parseFloat(totalAmount.replace('GHS ', '').replace(',', ''));
             
             // Add completed pickup to recyclerStats with payment data
-            recyclerStats.addCompletedPickup('1', earnings, {
+            recyclerStats.addCompletedPickup(requestId, earnings, {
               customer: userName,
               wasteType: wasteType,
               weight: weight
             });
-            
-            // Mark request as completed and navigate to requests
-            Alert.alert(
-              'Request Completed',
-              'Payment received! This request has been marked as completed.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    // Navigate to celebration screen with pickup information
-                    router.push({
-                      pathname: '/recycler-screens/RecyclerCelebration' as any,
-                      params: {
-                        pickupId: '1', // This would be the actual pickup ID
-                        userName: userName,
-                        pickup: pickup,
-                        wasteType: wasteType,
-                        totalAmount: totalAmount,
-                        weight: weight,
-                        rate: rate,
-                        subtotal: subtotal,
-                        environmentalTax: environmentalTax
-                      }
-                    });
-                  }
-                }
-              ]
-            );
+
+            // Navigate to celebration screen
+            router.push({
+              pathname: '/recycler-screens/RecyclerCelebration' as any,
+              params: {
+                pickupId: requestId,
+                userName: userName,
+                location: pickup,
+                totalAmount: totalAmount
+              }
+            });
           }
         }
       ]
     );
-  };
-
-  const handleEdit = () => {
-    // Reset payment status when editing
-    setPaymentSent(false);
-    setPaymentAccepted(false);
-    // Go back to weight entry to edit
-    router.back();
   };
 
   return (
@@ -256,7 +264,7 @@ export default function RecyclerPaymentSummary() {
           <TouchableOpacity 
             style={[styles.sendButton, paymentSent && styles.disabledButton]} 
             onPress={handleSendToUser}
-            disabled={paymentSent}
+            disabled={paymentSent || isSending}
           >
             <Text style={styles.sendButtonText}>
               {paymentSent ? 'SENT TO USER' : 'SEND TO USER'}

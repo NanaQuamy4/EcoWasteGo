@@ -342,12 +342,12 @@ export class WasteController {
   }
 
   /**
-   * Cancel collection (customer)
+   * Cancel collection
    */
   static async cancelCollection(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const customerId = req.user?.id;
+      const userId = req.user?.id;
 
       const { data: collection, error } = await supabase
         .from('waste_collections')
@@ -356,8 +356,8 @@ export class WasteController {
           cancelled_at: new Date().toISOString()
         })
         .eq('id', id)
-        .eq('customer_id', customerId)
         .in('status', ['pending', 'accepted'])
+        .or(`customer_id.eq.${userId},recycler_id.eq.${userId}`)
         .select()
         .single();
 
@@ -379,6 +379,160 @@ export class WasteController {
       res.status(500).json({
         success: false,
         error: 'Failed to cancel collection'
+      });
+    }
+  }
+
+  /**
+   * Update collection status (generic status update)
+   */
+  static async updateStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { status, rejection_reason } = req.body;
+      const userId = req.user?.id;
+
+      // Validate status
+      const validStatuses = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'];
+      if (!validStatuses.includes(status)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid status provided'
+        });
+        return;
+      }
+
+      // Get the current collection to check if it was accepted by a recycler
+      const { data: currentCollection, error: fetchError } = await supabase
+        .from('waste_collections')
+        .select('id, customer_id, recycler_id, status')
+        .eq('id', id)
+        .single();
+
+      if (fetchError || !currentCollection) {
+        res.status(404).json({
+          success: false,
+          error: 'Collection not found'
+        });
+        return;
+      }
+
+      // Build update object
+      const updateData: any = {
+        status,
+        updated_at: new Date().toISOString()
+      };
+
+      // Add status-specific fields
+      switch (status) {
+        case 'accepted':
+          updateData.recycler_id = userId;
+          updateData.accepted_at = new Date().toISOString();
+          break;
+        case 'in_progress':
+          updateData.started_at = new Date().toISOString();
+          break;
+        case 'completed':
+          updateData.completed_at = new Date().toISOString();
+          break;
+        case 'cancelled':
+          updateData.cancelled_at = new Date().toISOString();
+          if (rejection_reason) {
+            updateData.rejection_reason = rejection_reason;
+          }
+          
+          // If a recycler is rejecting an accepted request, track them as rejected
+          if (currentCollection.recycler_id && currentCollection.recycler_id === userId && currentCollection.status === 'accepted') {
+            try {
+              await supabase
+                .from('rejected_recyclers')
+                .insert({
+                  request_id: id,
+                  customer_id: currentCollection.customer_id,
+                  recycler_id: userId,
+                  rejection_reason: rejection_reason || 'No reason provided'
+                });
+            } catch (trackError) {
+              console.warn('Failed to track rejected recycler:', trackError);
+              // Don't fail the main operation if tracking fails
+            }
+          }
+          break;
+      }
+
+      const { data: collection, error } = await supabase
+        .from('waste_collections')
+        .update(updateData)
+        .eq('id', id)
+        .or(`customer_id.eq.${userId},recycler_id.eq.${userId}`)
+        .select()
+        .single();
+
+      if (error || !collection) {
+        res.status(400).json({
+          success: false,
+          error: 'Failed to update collection status'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: collection,
+        message: `Collection status updated to ${status} successfully`
+      });
+    } catch (error) {
+      console.error('Error updating collection status:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update collection status'
+      });
+    }
+  }
+
+  /**
+   * Get available recyclers excluding those who have rejected this customer's requests
+   */
+  static async getAvailableRecyclersExcludingRejected(req: Request, res: Response): Promise<void> {
+    try {
+      const customerId = req.user?.id;
+      const { location } = req.query;
+
+      if (!customerId) {
+        res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+        return;
+      }
+
+      // Use the database function to get recyclers excluding rejected ones
+      let query = supabase.rpc('get_available_recyclers_excluding_rejected', {
+        p_customer_id: customerId,
+        p_location: location as string || null
+      });
+
+      const { data: recyclers, error } = await query;
+
+      if (error) {
+        console.error('Error fetching available recyclers:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch available recyclers'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: recyclers,
+        message: 'Available recyclers fetched successfully'
+      });
+    } catch (error) {
+      console.error('Error in getAvailableRecyclersExcludingRejected:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
       });
     }
   }

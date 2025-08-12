@@ -1,14 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { COLORS, DIMENSIONS } from '../../constants';
 import { apiService } from '../../services/apiService';
@@ -34,6 +34,15 @@ interface RecyclerData {
   specialties?: string[];
 }
 
+interface Review {
+  id: string;
+  rating: number;
+  comment?: string;
+  customer_name: string;
+  created_at: string;
+  collection_id: string;
+}
+
 export default function RecyclerProfileDetailsScreen() {
   const params = useLocalSearchParams();
   const recyclerId = params.recyclerId as string;
@@ -43,8 +52,11 @@ export default function RecyclerProfileDetailsScreen() {
   const rate = params.rate as string;
 
   const [recycler, setRecycler] = useState<RecyclerData | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [showAllReviews, setShowAllReviews] = useState(false);
 
   // Fetch recycler details
   useEffect(() => {
@@ -68,6 +80,9 @@ export default function RecyclerProfileDetailsScreen() {
             specialties: ['Plastic', 'Paper', 'Metal', 'Glass'],
           };
           setRecycler(enhancedRecycler);
+          
+          // Fetch reviews after setting recycler
+          await fetchRecyclerReviews(recyclerId);
         } else {
           Alert.alert('Error', 'Recycler not found');
           router.back();
@@ -83,6 +98,64 @@ export default function RecyclerProfileDetailsScreen() {
 
     fetchRecyclerDetails();
   }, [recyclerId]);
+
+  // Fetch recycler reviews
+  const fetchRecyclerReviews = async (recyclerId: string) => {
+    try {
+      setReviewsLoading(true);
+      // In a real app, this would call the API to get reviews
+      // For now, we'll use mock data
+      const mockReviews: Review[] = [
+        {
+          id: '1',
+          rating: 5,
+          comment: 'Excellent service! Very professional and punctual. Highly recommend!',
+          customer_name: 'Sarah M.',
+          created_at: '2024-01-15',
+          collection_id: 'col_001'
+        },
+        {
+          id: '2',
+          rating: 4,
+          comment: 'Good service, arrived on time. Would use again.',
+          customer_name: 'John D.',
+          created_at: '2024-01-10',
+          collection_id: 'col_002'
+        },
+        {
+          id: '3',
+          rating: 5,
+          comment: 'Amazing recycler! Very friendly and efficient.',
+          customer_name: 'Maria L.',
+          created_at: '2024-01-05',
+          collection_id: 'col_003'
+        },
+        {
+          id: '4',
+          rating: 4,
+          comment: 'Professional service, good communication.',
+          customer_name: 'David K.',
+          created_at: '2024-01-01',
+          collection_id: 'col_004'
+        },
+        {
+          id: '5',
+          rating: 5,
+          comment: 'Best recycler I\'ve used. Very reliable!',
+          customer_name: 'Lisa P.',
+          created_at: '2023-12-28',
+          collection_id: 'col_005'
+        }
+      ];
+      
+      setReviews(mockReviews);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      // Don't show alert for reviews failure, just log it
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
 
   const handleConfirm = async () => {
     if (!recycler) return;
@@ -214,6 +287,97 @@ export default function RecyclerProfileDetailsScreen() {
             <Text style={styles.statValue}>{recycler.rating.toFixed(1)}</Text>
             <Text style={styles.statLabel}>Rating</Text>
           </View>
+        </View>
+      </View>
+
+      {/* Ratings & Reviews Card */}
+      <View style={styles.ratingsCard}>
+        <Text style={styles.cardTitle}>⭐ Ratings & Reviews</Text>
+        
+        {/* Rating Summary */}
+        <View style={styles.ratingSummary}>
+          <View style={styles.ratingOverview}>
+            <Text style={styles.overallRating}>{recycler.rating.toFixed(1)}</Text>
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Text key={star} style={[
+                  styles.star,
+                  star <= recycler.rating ? styles.starFilled : styles.starEmpty
+                ]}>
+                  ★
+                </Text>
+              ))}
+            </View>
+            <Text style={styles.totalReviews}>{reviews.length} reviews</Text>
+          </View>
+          
+          <View style={styles.ratingBreakdown}>
+            {[5, 4, 3, 2, 1].map((rating) => {
+              const count = reviews.filter(r => r.rating === rating).length;
+              const percentage = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+              return (
+                <View key={rating} style={styles.ratingBar}>
+                  <Text style={styles.ratingLabel}>{rating}★</Text>
+                  <View style={styles.barContainer}>
+                    <View style={[styles.bar, { width: `${percentage}%` }]} />
+                  </View>
+                  <Text style={styles.ratingCount}>{count}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Recent Reviews */}
+        <View style={styles.reviewsSection}>
+          <View style={styles.reviewsHeader}>
+            <Text style={styles.reviewsTitle}>Recent Reviews</Text>
+            {reviews.length > 3 && (
+              <TouchableOpacity 
+                style={styles.showMoreButton}
+                onPress={() => setShowAllReviews(!showAllReviews)}
+              >
+                <Text style={styles.showMoreText}>
+                  {showAllReviews ? 'Show Less' : `Show All (${reviews.length})`}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {reviewsLoading ? (
+            <View style={styles.reviewsLoading}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.reviewsLoadingText}>Loading reviews...</Text>
+            </View>
+          ) : (
+            <View style={styles.reviewsList}>
+              {(showAllReviews ? reviews : reviews.slice(0, 3)).map((review) => (
+                <View key={review.id} style={styles.reviewItem}>
+                  <View style={styles.reviewHeader}>
+                    <View style={styles.reviewerInfo}>
+                      <Text style={styles.reviewerName}>{review.customer_name}</Text>
+                      <View style={styles.reviewStars}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Text key={star} style={[
+                            styles.reviewStar,
+                            star <= review.rating ? styles.starFilled : styles.starEmpty
+                          ]}>
+                            ★
+                          </Text>
+                        ))}
+                      </View>
+                    </View>
+                    <Text style={styles.reviewDate}>
+                      {new Date(review.created_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  {review.comment && (
+                    <Text style={styles.reviewComment}>{review.comment}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       </View>
 
@@ -670,5 +834,150 @@ const styles = StyleSheet.create({
     color: COLORS.red,
     textAlign: 'center',
     marginBottom: 20,
+  },
+  // Ratings & Reviews Styles
+  ratingsCard: {
+    backgroundColor: COLORS.white,
+    marginHorizontal: 18,
+    marginBottom: 24,
+    padding: 20,
+    borderRadius: DIMENSIONS.borderRadius,
+    shadowColor: COLORS.black,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  ratingSummary: {
+    marginBottom: 20,
+  },
+  ratingOverview: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  overallRating: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginBottom: 8,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  star: {
+    fontSize: 24,
+    marginHorizontal: 2,
+  },
+  starFilled: {
+    color: COLORS.primary,
+  },
+  starEmpty: {
+    color: '#E0E0E0',
+  },
+  totalReviews: {
+    fontSize: 16,
+    color: COLORS.gray,
+  },
+  ratingBreakdown: {
+    marginTop: 15,
+  },
+  ratingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ratingLabel: {
+    fontSize: 16,
+    color: COLORS.primary,
+    width: 30,
+    fontWeight: 'bold',
+  },
+  barContainer: {
+    flex: 1,
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    marginHorizontal: 10,
+    overflow: 'hidden',
+  },
+  bar: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 4,
+  },
+  reviewsSection: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.lightGray,
+    paddingTop: 20,
+  },
+  reviewsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  reviewsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  showMoreButton: {
+    padding: 8,
+  },
+  showMoreText: {
+    fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+  reviewsLoading: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  reviewsLoadingText: {
+    marginTop: 10,
+    color: COLORS.gray,
+  },
+  reviewsList: {
+    gap: 15,
+  },
+  reviewItem: {
+    backgroundColor: COLORS.background,
+    padding: 15,
+    borderRadius: DIMENSIONS.borderRadius,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  reviewerInfo: {
+    flex: 1,
+  },
+  reviewerName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
+  reviewStars: {
+    flexDirection: 'row',
+  },
+  reviewStar: {
+    fontSize: 16,
+    marginRight: 2,
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: COLORS.gray,
+  },
+  reviewComment: {
+    fontSize: 14,
+    color: COLORS.darkGreen,
+    lineHeight: 20,
   },
 }); 

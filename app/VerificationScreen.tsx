@@ -11,7 +11,7 @@ export default function VerificationScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const email = params.email as string;
-  const { verifyEmail } = useAuth();
+  const { verifyEmail, forgotPassword } = useAuth();
 
   useEffect(() => {
     console.log('VerificationScreen rendered');
@@ -69,7 +69,7 @@ export default function VerificationScreen() {
   const handleResendCode = async () => {
     try {
       setIsLoading(true);
-      await useAuth().forgotPassword(email);
+      await forgotPassword(email);
       Alert.alert('Code Resent', 'A new verification code has been sent to your email.');
     } catch (error: any) {
       Alert.alert('Error', 'Failed to resend code. Please try again.');
@@ -86,7 +86,7 @@ export default function VerificationScreen() {
       
       <View style={styles.contentContainer}>
         <Text style={styles.title}>Enter Verification Code</Text>
-        <Text style={styles.subtitle}>We've sent a 6-digit code to {email}</Text>
+        <Text style={styles.subtitle}>We&apos;ve sent a 6-digit code to {email}</Text>
 
         <View style={styles.inputContainer}>
           <Feather name="key" size={20} color="#263A13" style={styles.inputIcon} />
@@ -126,7 +126,7 @@ export default function VerificationScreen() {
           disabled={isLoading}
         >
           <Text style={styles.resendButtonText}>
-            Didn't receive code? Resend
+            Didn&apos;t receive code? Resend
           </Text>
         </TouchableOpacity>
       </View>

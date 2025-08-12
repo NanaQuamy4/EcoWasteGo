@@ -412,6 +412,13 @@ export class RecyclersController {
       const recyclerId = req.user?.id;
       const { availability_schedule, is_available } = req.body;
 
+      console.log('updateAvailability called with:', {
+        recyclerId,
+        availability_schedule,
+        is_available,
+        body: req.body
+      });
+
       if (!availability_schedule) {
         res.status(400).json({
           success: false,
@@ -419,6 +426,24 @@ export class RecyclersController {
         });
         return;
       }
+
+      // First check if the recycler profile exists
+      const { data: existingProfile, error: checkError } = await supabase
+        .from('recycler_profiles')
+        .select('*')
+        .eq('recycler_id', recyclerId)
+        .single();
+
+      if (checkError) {
+        console.error('Error checking existing profile:', checkError);
+        res.status(400).json({
+          success: false,
+          error: `Profile not found: ${checkError.message}`
+        });
+        return;
+      }
+
+      console.log('Existing profile found:', existingProfile);
 
       const { data: profile, error } = await supabase
         .from('recycler_profiles')
@@ -431,12 +456,15 @@ export class RecyclersController {
         .single();
 
       if (error) {
+        console.error('Error updating availability:', error);
         res.status(400).json({
           success: false,
-          error: 'Failed to update availability'
+          error: `Failed to update availability: ${error.message}`
         });
         return;
       }
+
+      console.log('Availability updated successfully:', profile);
 
       res.json({
         success: true,

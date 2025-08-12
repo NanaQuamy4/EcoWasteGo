@@ -23,7 +23,7 @@ router.get('/collections', authenticateToken, WasteController.getUserCollections
  * @desc Get specific waste collection details
  * @access Private
  */
-router.get('/collections/:id', authenticateToken, WasteController.getCollectionById);
+router.get('/collections/:id', authenticateToken, WasteController.getCollectionDetails);
 
 /**
  * @route PUT /api/waste/collections/:id/accept
@@ -54,10 +54,24 @@ router.put('/collections/:id/complete', authenticateRecycler, WasteController.co
 router.put('/collections/:id/cancel', authenticateToken, WasteController.cancelCollection);
 
 /**
+ * @route PUT /api/waste/status/:id
+ * @desc Update waste collection status (generic status update)
+ * @access Private
+ */
+router.put('/status/:id', authenticateToken, WasteController.updateStatus);
+
+/**
  * @route GET /api/waste/available
  * @desc Get available waste collections for recyclers
  * @access Private (Recycler only)
  */
 router.get('/available', authenticateRecycler, WasteController.getAvailableCollections);
+
+/**
+ * @route GET /api/waste/recyclers/available
+ * @desc Get available recyclers excluding those who have rejected this customer's requests
+ * @access Private (Customer only)
+ */
+router.get('/recyclers/available', authenticateCustomer, WasteController.getAvailableRecyclersExcludingRejected);
 
 export default router; 

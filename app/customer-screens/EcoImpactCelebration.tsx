@@ -3,12 +3,20 @@ import React, { useEffect, useState } from 'react';
 import { Animated, Easing, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import { DIMENSIONS } from '../../constants';
+import customerStats from '../utils/customerStats';
 
 export default function EcoImpactCelebrationScreen() {
   const params = useLocalSearchParams();
   
   // Extract parameters from navigation
-  const weight = params.weight as string || '8.5 kg';
+  const recyclerName = params.recyclerName as string;
+  const pickup = params.pickup as string;
+  const requestId = params.requestId as string;
+  const weight = params.weight as string;
+  const wasteType = params.wasteType as string;
+  const amount = params.amount as string;
+  const environmentalTax = params.environmentalTax as string;
+  const totalAmount = params.totalAmount as string;
 
   // Animation values
   const [fadeAnim] = useState(new Animated.Value(0));
@@ -17,8 +25,36 @@ export default function EcoImpactCelebrationScreen() {
   const [glitterAnim] = useState(new Animated.Value(0));
   const [sparkleAnim] = useState(new Animated.Value(0));
   const [showConfetti, setShowConfetti] = useState(true);
+  const [achievementsEarned, setAchievementsEarned] = useState<string[]>([]);
 
   useEffect(() => {
+    // Initialize customer stats and save the completed pickup
+    customerStats.initializeMockData();
+    
+    // Save the completed pickup to customer stats
+    if (requestId && weight && totalAmount) {
+      const weightNum = parseFloat(weight.replace(' kg', ''));
+      const amountNum = parseFloat(amount);
+      const environmentalTaxNum = parseFloat(environmentalTax);
+      const totalAmountNum = parseFloat(totalAmount);
+      
+      customerStats.addCompletedPickup({
+        id: requestId,
+        recyclerName: recyclerName,
+        pickupLocation: pickup,
+        wasteType: wasteType,
+        weight: weightNum,
+        amount: amountNum,
+        environmentalTax: environmentalTaxNum,
+        totalAmount: totalAmountNum
+      });
+
+      // Get newly earned achievements
+      const stats = customerStats.getStats();
+      const earnedAchievements = customerStats.getEarnedAchievements();
+      setAchievementsEarned(earnedAchievements.map(a => a.key));
+    }
+
     // Animate in the celebration screen
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -38,7 +74,6 @@ export default function EcoImpactCelebrationScreen() {
           toValue: 1,
           tension: 100,
           friction: 5,
-          useNativeDriver: true,
         }),
       ]),
     ]).start();
@@ -81,7 +116,7 @@ export default function EcoImpactCelebrationScreen() {
     setTimeout(() => {
       setShowConfetti(false);
     }, 3000);
-  }, [fadeAnim, scaleAnim, bounceAnim, glitterAnim, sparkleAnim]);
+  }, [fadeAnim, scaleAnim, bounceAnim, glitterAnim, sparkleAnim, requestId, weight, totalAmount, recyclerName, pickup, wasteType, amount, environmentalTax]);
 
   const handleReturnHome = () => {
     // Navigate to user home screen (user tabs)
@@ -89,9 +124,49 @@ export default function EcoImpactCelebrationScreen() {
   };
 
   const handleViewHistory = () => {
-    // Navigate to user history screen (user tabs)
-    router.push('/(tabs)/history');
+    // Navigate to user history screen with pickup data for detailed view
+    router.push({
+      pathname: '/(tabs)/history' as any,
+      params: {
+        completedPickup: 'true',
+        requestId: requestId,
+        recyclerName: recyclerName,
+        pickup: pickup,
+        weight: weight,
+        wasteType: wasteType,
+        amount: amount,
+        environmentalTax: environmentalTax,
+        totalAmount: totalAmount
+      }
+    });
   };
+
+  const handleViewRewards = () => {
+    // Navigate to rewards screen to show new achievements
+    router.push({
+      pathname: '/(tabs)/rewards' as any,
+      params: {
+        newAchievements: 'true',
+        achievementsEarned: achievementsEarned.join(',')
+      }
+    });
+  };
+
+  // Get environmental impact data
+  const getEnvironmentalImpact = () => {
+    if (weight) {
+      const weightNum = parseFloat(weight.replace(' kg', ''));
+      const co2Saved = weightNum * 2.5; // kg CO2 saved per kg recycled
+      const treesEquivalent = Math.round(co2Saved / 22); // 1 tree absorbs ~22kg CO2/year
+      const landfillSpaceSaved = Math.round(weightNum * 0.5); // 0.5 cubic meters per kg
+      const energySaved = Math.round(weightNum * 3.5); // kWh saved per kg recycled
+      
+      return { co2Saved, treesEquivalent, landfillSpaceSaved, energySaved };
+    }
+    return { co2Saved: 0, treesEquivalent: 0, landfillSpaceSaved: 0, energySaved: 0 };
+  };
+
+  const environmentalImpact = getEnvironmentalImpact();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -230,8 +305,37 @@ export default function EcoImpactCelebrationScreen() {
             <Text style={styles.contributionValue}>{weight}</Text>
           </View>
           <View style={styles.contributionItem}>
-            <Text style={styles.contributionLabel}>Environmental Impact:</Text>
-            <Text style={styles.contributionValue}>Positive 🌱</Text>
+            <Text style={styles.contributionLabel}>Waste Type:</Text>
+            <Text style={styles.contributionValue}>{wasteType}</Text>
+          </View>
+          <View style={styles.contributionItem}>
+            <Text style={styles.contributionLabel}>Recycler:</Text>
+            <Text style={styles.contributionValue}>{recyclerName}</Text>
+          </View>
+          <View style={styles.contributionItem}>
+            <Text style={styles.contributionLabel}>Total Amount:</Text>
+            <Text style={styles.contributionValue}>GHS {totalAmount}</Text>
+          </View>
+        </Animated.View>
+
+        {/* Environmental Impact Card */}
+        <Animated.View 
+          style={[
+            styles.impactCard,
+            {
+              transform: [{ scale: bounceAnim }]
+            }
+          ]}
+        >
+          <Text style={styles.impactTitle}>🌍 Environmental Impact</Text>
+          <Text style={styles.impactText}>
+            By recycling {weight}, you&apos;ve contributed to:
+          </Text>
+          <View style={styles.impactList}>
+            <Text style={styles.impactItem}>• {environmentalImpact.co2Saved.toFixed(1)} kg CO₂ saved</Text>
+            <Text style={styles.impactItem}>• {environmentalImpact.treesEquivalent} tree equivalent</Text>
+            <Text style={styles.impactItem}>• {environmentalImpact.landfillSpaceSaved} m³ landfill space saved</Text>
+            <Text style={styles.impactItem}>• {environmentalImpact.energySaved} kWh energy saved</Text>
           </View>
         </Animated.View>
 
@@ -246,7 +350,7 @@ export default function EcoImpactCelebrationScreen() {
         >
           <Text style={styles.thankYouTitle}>🌍 Together We Make a Difference</Text>
           <Text style={styles.thankYouMessage}>
-            By choosing EcoWasteGo, you're helping to create a cleaner, greener future for Ghana. 
+            By choosing EcoWasteGo, you&apos;re helping to create a cleaner, greener future for Ghana. 
             Every pickup counts towards our shared goal of environmental protection.
           </Text>
           <Text style={styles.thankYouQuote}>
@@ -265,6 +369,9 @@ export default function EcoImpactCelebrationScreen() {
         >
           <TouchableOpacity style={styles.historyButton} onPress={handleViewHistory}>
             <Text style={styles.historyButtonText}>View History</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.rewardsButton} onPress={handleViewRewards}>
+            <Text style={styles.rewardsButtonText}>View Rewards</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.continueButton} onPress={handleReturnHome}>
             <Text style={styles.continueButtonText}>Return Home</Text>
@@ -434,6 +541,34 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1C3301',
   },
+  impactCard: {
+    backgroundColor: '#CFDFBF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+  },
+  impactTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  impactText: {
+    fontSize: 14,
+    color: '#192E01',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  impactList: {
+    paddingLeft: 10,
+  },
+  impactItem: {
+    fontSize: 14,
+    color: '#192E01',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
   thankYouCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
@@ -470,14 +605,15 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 12,
     marginTop: 20,
     marginBottom: 20,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   historyButton: {
-    flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderRadius: 25,
     borderWidth: 2,
     borderColor: '#1C3301',
@@ -486,26 +622,45 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    minWidth: 120,
   },
   historyButtonText: {
     color: '#1C3301',
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  rewardsButton: {
+    backgroundColor: '#FFD700',
+    paddingVertical: 16,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#FFA500',
+    alignItems: 'center',
+    shadowColor: '#1C3301',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    minWidth: 120,
+  },
+  rewardsButtonText: {
+    color: '#1C3301',
+    fontSize: 14,
     fontWeight: 'bold',
   },
   continueButton: {
-    flex: 1,
     backgroundColor: '#1C3301',
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderRadius: 25,
     alignItems: 'center',
     shadowColor: '#1C3301',
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
+    minWidth: 120,
   },
   continueButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
 }); 

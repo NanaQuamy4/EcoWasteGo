@@ -98,6 +98,70 @@ export class AnalyticsService {
   }
 
   /**
+   * Get comprehensive user stats and earnings data for recycler
+   */
+  static async getUserStats(userId: string): Promise<any> {
+    try {
+      // Get all completed collections for the recycler
+      const { data: collections, error: collectionsError } = await supabase
+        .from('waste_collections')
+        .select('*')
+        .eq('recycler_id', userId)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false });
+
+      if (collectionsError) {
+        throw new Error(`Failed to fetch collections: ${collectionsError.message}`);
+      }
+
+      // Get all payments for the recycler
+      const { data: payments, error: paymentsError } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('recycler_id', userId)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false });
+
+      if (paymentsError) {
+        throw new Error(`Failed to fetch payments: ${paymentsError.message}`);
+      }
+
+      // Calculate current date and time periods
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+      const weekStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      // Calculate earnings for different periods
+      const totalEarnings = this.calculateTotalEarnings(collections || []);
+      const todayEarnings = this.calculateEarningsForPeriod(collections || [], today, now);
+      const yesterdayEarnings = this.calculateEarningsForPeriod(collections || [], yesterday, today);
+      const weeklyEarnings = this.calculateEarningsForPeriod(collections || [], weekStart, now);
+      const monthlyEarnings = this.calculateEarningsForPeriod(collections || [], monthStart, now);
+
+      // Calculate completed pickups
+      const completedPickups = collections?.length || 0;
+      const averagePerPickup = completedPickups > 0 ? totalEarnings / completedPickups : 0;
+
+      return {
+        totalEarnings,
+        todayEarnings,
+        yesterdayEarnings,
+        weeklyEarnings,
+        monthlyEarnings,
+        completedPickups,
+        averagePerPickup,
+        totalPayments: payments?.length || 0,
+        lastUpdated: now.toISOString()
+      };
+    } catch (error) {
+      console.error('Error getting user stats:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Calculate total earnings from collections
    */
   private static calculateTotalEarnings(collections: any[]): number {
@@ -107,6 +171,22 @@ export class AnalyticsService {
       const weight = collection.weight || 0;
       return total + (baseRate * weight);
     }, 0);
+  }
+
+  /**
+   * Calculate earnings for a specific period
+   */
+  private static calculateEarningsForPeriod(collections: any[], startDate: Date, endDate: Date): number {
+    return collections
+      .filter(collection => {
+        const pickupDate = new Date(collection.pickup_date || collection.created_at);
+        return pickupDate >= startDate && pickupDate < endDate;
+      })
+      .reduce((total, collection) => {
+        const baseRate = this.getBaseRate(collection.waste_type);
+        const weight = collection.weight || 0;
+        return total + (baseRate * weight);
+      }, 0);
   }
 
   /**

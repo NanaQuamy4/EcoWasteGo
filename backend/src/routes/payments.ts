@@ -148,6 +148,82 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route GET /api/payments/recycler
+ * @desc Get payments specifically for recycler (with enhanced data)
+ * @access Private (Recycler only)
+ */
+router.get('/recycler', authenticateRecycler, async (req, res) => {
+  try {
+    const recyclerId = req.user?.id;
+    const { status, page = 1, limit = 20 } = req.query;
+
+    let query = supabase
+      .from('payments')
+      .select(`
+        id,
+        amount,
+        status,
+        created_at,
+        collection_id,
+        collections:collection_id(
+          id,
+          waste_type,
+          weight,
+          pickup_date,
+          address,
+          customer_id,
+          customers:customer_id(username, phone)
+        )
+      `)
+      .eq('recycler_id', recyclerId)
+      .order('created_at', { ascending: false });
+
+    // Filter by status if provided
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    // Pagination
+    const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
+    query = query.range(offset, offset + parseInt(limit as string) - 1);
+
+    const { data: payments, error } = await query;
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch recycler payments'
+      });
+    }
+
+    // Format the data for the frontend
+    const formattedPayments = payments?.map(payment => ({
+      id: payment.id,
+      amount: payment.amount,
+      status: payment.status,
+      created_at: payment.created_at,
+      pickupId: payment.collection_id,
+      wasteType: payment.collections?.[0]?.waste_type || 'Mixed Waste',
+      weight: payment.collections?.[0]?.weight || 0,
+      customer: payment.collections?.[0]?.customers?.[0]?.username || 'Customer',
+      pickupDate: payment.collections?.[0]?.pickup_date || payment.created_at
+    })) || [];
+
+    return res.json({
+      success: true,
+      data: formattedPayments,
+      message: 'Recycler payments retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting recycler payments:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve recycler payments'
+    });
+  }
+});
+
+/**
  * @route GET /api/payments/:id
  * @desc Get specific payment details
  * @access Private

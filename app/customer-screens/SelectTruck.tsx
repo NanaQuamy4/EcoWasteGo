@@ -37,10 +37,12 @@ export default function SelectTruckScreen() {
   const pickup = params.pickup as string;
   const latitude = params.latitude as string;
   const longitude = params.longitude as string;
+  const requestId = params.requestId as string; // New parameter for rejected requests
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'Big Truck' | 'Small Truck'>('all');
   const [recyclers, setRecyclers] = useState<RecyclerData[]>([]);
   const [loading, setLoading] = useState(true);
   const [customerLocation, setCustomerLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isRetryRequest, setIsRetryRequest] = useState(false);
 
   // Calculate distance between two coordinates using Haversine formula
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -114,17 +116,22 @@ export default function SelectTruckScreen() {
       
       let recyclersData: RecyclerProfile[] = [];
       
-      // If we have a pickup location, search recyclers by location for better results
-      if (pickup && pickup !== 'Unknown Location') {
-        try {
-          recyclersData = await apiService.searchRecyclersByLocation(pickup);
-        } catch (error) {
-          console.warn('Location-based search failed, falling back to all recyclers:', error);
+      // Use the new API method that excludes rejected recyclers
+      try {
+        recyclersData = await apiService.getAvailableRecyclersExcludingRejected(pickup);
+      } catch (error) {
+        console.warn('Failed to fetch recyclers excluding rejected ones, falling back to all recyclers:', error);
+        // Fallback to regular recycler fetch if the new method fails
+        if (pickup && pickup !== 'Unknown Location') {
+          try {
+            recyclersData = await apiService.searchRecyclersByLocation(pickup);
+          } catch (fallbackError) {
+            console.warn('Location-based search failed, falling back to all recyclers:', fallbackError);
+            recyclersData = await apiService.getRecyclers();
+          }
+        } else {
           recyclersData = await apiService.getRecyclers();
         }
-      } else {
-        // Get all recyclers if no location
-        recyclersData = await apiService.getRecyclers();
       }
       
       // Filter only available recyclers
@@ -206,6 +213,13 @@ export default function SelectTruckScreen() {
     }
   }, [customerLocation]);
 
+  // Check if this is a retry request (coming from rejection)
+  useEffect(() => {
+    if (requestId) {
+      setIsRetryRequest(true);
+    }
+  }, [requestId]);
+
   const filteredRecyclers = recyclers.filter(recycler => {
     if (selectedFilter === 'all') return true;
     return recycler.vehicle_type === selectedFilter;
@@ -216,15 +230,23 @@ export default function SelectTruckScreen() {
   };
 
   const handleTruckPress = (recycler: RecyclerData) => {
+    const params: any = {
+      recyclerId: recycler.id,
+      pickup: pickup,
+      distance: recycler.distance?.toString() || '',
+      eta: recycler.eta || '',
+      rate: recycler.rate || ''
+    };
+
+    // If this is a retry request, pass the requestId
+    if (requestId) {
+      params.requestId = requestId;
+      params.isRetry = 'true';
+    }
+
     router.push({
       pathname: '/customer-screens/RecyclerProfileDetails' as any,
-      params: {
-        recyclerId: recycler.id,
-        pickup: pickup,
-        distance: recycler.distance?.toString() || '',
-        eta: recycler.eta || '',
-        rate: recycler.rate || ''
-      }
+      params: params
     });
   };
 
@@ -340,6 +362,25 @@ export default function SelectTruckScreen() {
           </View>
         )}
       </View>
+
+      {/* Pickups Banner */}
+      <View style={styles.pickupsBanner}>
+        <TouchableOpacity style={styles.pickupsButton}>
+          <Text style={styles.pickupsButtonText}>Pickups</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Retry Request Banner */}
+      {isRetryRequest && (
+        <View style={styles.retryBanner}>
+          <Text style={styles.retryBannerText}>
+            🔄 Retry Request - Previous recycler excluded from options
+          </Text>
+          <Text style={styles.retryBannerSubtext}>
+            Select a new recycler for your pickup request
+          </Text>
+        </View>
+      )}
 
       {/* Scrollable Recyclers */}
       <ScrollView style={styles.scrollArea} contentContainerStyle={{ paddingBottom: 32 }}>
@@ -801,5 +842,52 @@ const styles = StyleSheet.create({
   instructionsBold: {
     fontWeight: 'bold',
     color: COLORS.primary,
+  },
+  pickupsBanner: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginHorizontal: DIMENSIONS.padding,
+    marginBottom: 12,
+    borderRadius: DIMENSIONS.borderRadius,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  pickupsButton: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: DIMENSIONS.borderRadius,
+  },
+  pickupsButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  retryBanner: {
+    backgroundColor: COLORS.lightGray,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginHorizontal: DIMENSIONS.padding,
+    marginBottom: 12,
+    borderRadius: DIMENSIONS.borderRadius,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  retryBannerText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  retryBannerSubtext: {
+    fontSize: 12,
+    color: COLORS.gray,
+    textAlign: 'center',
   },
 });

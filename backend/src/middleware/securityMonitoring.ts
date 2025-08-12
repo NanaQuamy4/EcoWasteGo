@@ -151,6 +151,7 @@ export const securityMonitoring = (req: Request, res: Response, next: NextFuncti
   });
   
   next();
+  return;
 };
 
 /**

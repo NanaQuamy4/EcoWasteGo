@@ -1,7 +1,7 @@
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
@@ -16,7 +16,27 @@ const SUGGESTIONS = [
   'Atonsu unity oil',
 ];
 
+// Memoized suggestion item component
+const SuggestionItem = React.memo(({ item, onPress }: { item: string; onPress: (text: string) => void }) => (
+  <TouchableOpacity style={styles.suggestionItem} onPress={() => onPress(item)}>
+    <Text style={styles.suggestionText}>{item}</Text>
+  </TouchableOpacity>
+));
+SuggestionItem.displayName = 'SuggestionItem';
 
+// Memoized recycler item component
+const RecyclerItem = React.memo(({ recycler, onPress }: { recycler: any; onPress: (id: string) => void }) => (
+  <TouchableOpacity style={styles.recyclerItem} onPress={() => onPress(recycler.id)}>
+    <View style={styles.recyclerInfo}>
+      <Text style={styles.recyclerName}>{recycler.name}</Text>
+      <Text style={styles.recyclerDetails}>
+        🚛 {recycler.truckType} • ⭐ {recycler.rating} • 📍 {recycler.distance}
+      </Text>
+      <Text style={styles.recyclerStatus}>📊 {recycler.status}</Text>
+    </View>
+  </TouchableOpacity>
+));
+RecyclerItem.displayName = 'RecyclerItem';
 
 export default function HomeScreen() {
   const [search, setSearch] = useState('');
@@ -30,6 +50,245 @@ export default function HomeScreen() {
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
+
+  // Memoized filtered suggestions
+  const filteredSuggestions = useMemo(() => {
+    if (!search.trim()) return SUGGESTIONS;
+    return SUGGESTIONS.filter(suggestion => 
+      suggestion.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [search]);
+
+  // Memoized search handler
+  const handleSearch = useCallback((text: string) => {
+    setSearch(text);
+    setShowSuggestions(text.length > 0);
+    if (text.length > 0) {
+      handleLocationSearch(text);
+    } else {
+      setLocationSuggestions([]);
+    }
+  }, []);
+
+  // Memoized location search handler
+  const handleLocationSearch = useCallback(async (query: string) => {
+    if (query.length < 3) return;
+    
+    setIsSearching(true);
+    try {
+      const suggestions = await locationSearchService.searchLocations(query);
+      setLocationSuggestions(suggestions);
+    } catch (error) {
+      console.error('Location search error:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  // Memoized suggestion selection handler
+  const handleSuggestionSelect = useCallback((text: string) => {
+    setSearch(text);
+    setShowSuggestions(false);
+    setLocationSuggestions([]);
+  }, []);
+
+  // Memoized location selection handler
+  const handleLocationSelect = useCallback(async (suggestion: LocationSuggestion) => {
+    setSelectedLocation(suggestion);
+    setSearch(suggestion.address);
+    setShowSuggestions(false);
+    setLocationSuggestions([]);
+    
+          // Fetch nearby recyclers for the selected location
+      try {
+        const recyclers = await apiService.getRecyclers();
+        setNearbyRecyclers(recyclers);
+      } catch (error) {
+        console.error('Error fetching nearby recyclers:', error);
+      }
+  }, []);
+
+  // Memoized current location handler
+  const getCurrentLocation = useCallback(async (): Promise<Location.LocationObject | null> => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to find nearby recyclers.');
+        return null;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 5000,
+        distanceInterval: 10,
+      });
+
+      return location;
+    } catch (error) {
+      console.error('Error getting location:', error);
+      return null;
+    }
+  }, []);
+
+  // Memoized map location selection handler
+  const handleMapLocationSelect = useCallback(async (coordinate: { latitude: number; longitude: number }) => {
+    try {
+      const address = await locationSearchService.reverseGeocode(coordinate);
+      const locationSuggestion: LocationSuggestion = {
+        id: 'map-selected',
+        name: address,
+        address: address,
+        coordinate: coordinate,
+        type: 'geocode',
+      };
+      setSelectedLocation(locationSuggestion);
+      setSearch(address);
+    } catch (error) {
+      console.error('Error getting address from coordinates:', error);
+      Alert.alert(
+        'Location Selected',
+        `Latitude: ${coordinate.latitude.toFixed(4)}\nLongitude: ${coordinate.longitude.toFixed(4)}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Use This Location', onPress: () => {
+            setSearch('Selected Location');
+          }}
+        ]
+      );
+    }
+  }, []);
+
+  // Memoized map press handler
+  const handleMapPress = useCallback((coordinate: { latitude: number; longitude: number }) => {
+    handleMapLocationSelect(coordinate);
+  }, [handleMapLocationSelect]);
+
+  // Memoized recycler press handler
+  const handleRecyclerPress = useCallback((recyclerId: string) => {
+    const recycler = nearbyRecyclers.find(r => r.id === recyclerId);
+    if (recycler) {
+      Alert.alert(
+        recycler.name,
+        `🚛 ${recycler.truckType}\n⭐ Rating: ${recycler.rating}\n📍 Distance: ${recycler.distance}\n📊 Status: ${recycler.status}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Request Pickup', onPress: () => {
+            router.push({
+              pathname: '/customer-screens/CallRecyclerScreen' as any,
+              params: { recyclerName: recycler.name }
+            });
+          }},
+          { text: 'Track Truck', onPress: () => {
+            router.push({
+              pathname: '/customer-screens/TrackingScreen' as any,
+              params: { recyclerId: recycler.id }
+            });
+          }}
+        ]
+      );
+    }
+  }, [nearbyRecyclers, router]);
+
+  // Memoized location detection handler
+  const handleLocationDetection = useCallback(async () => {
+    setIsDetectingLocation(true);
+    try {
+      const location = await getCurrentLocation();
+      if (location) {
+        const address = await locationSearchService.reverseGeocode({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+        
+        if (address) {
+          setSearch(address);
+          setSelectedLocation({
+            id: 'current-location',
+            name: address,
+            address: address,
+            coordinate: {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            },
+            type: 'geocode',
+          });
+          
+          const accuracy = location.coords.accuracy;
+          let accuracyMessage = '';
+          if (accuracy && accuracy <= 10) {
+            accuracyMessage = 'High accuracy';
+          } else if (accuracy && accuracy <= 50) {
+            accuracyMessage = 'Good accuracy';
+          } else {
+            accuracyMessage = 'Low accuracy';
+          }
+          
+          Alert.alert(
+            'Location Detected',
+            `${address}\n\nAccuracy: ${accuracyMessage}\nLatitude: ${location.coords.latitude.toFixed(4)}\nLongitude: ${location.coords.longitude.toFixed(4)}`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Use This Location', onPress: () => {
+                                 // Fetch nearby recyclers for current location
+                 apiService.getRecyclers().then(setNearbyRecyclers).catch(console.error);
+              }}
+            ]
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Location detection error:', error);
+      Alert.alert('Error', 'Failed to detect your location. Please try again.');
+    } finally {
+      setIsDetectingLocation(false);
+    }
+  }, [getCurrentLocation]);
+
+  // Memoized drawer toggle handler
+  const toggleDrawer = useCallback(() => {
+    setDrawerOpen(!drawerOpen);
+  }, [drawerOpen]);
+
+  // Memoized keyboard dismiss handler
+  const dismissKeyboard = useCallback(() => {
+    Keyboard.dismiss();
+    setShowSuggestions(false);
+    setLocationSuggestions([]);
+  }, []);
+
+  // Memoized render item for FlatList
+  const renderSuggestionItem = useCallback(({ item }: { item: string }) => (
+    <SuggestionItem item={item} onPress={handleSuggestionSelect} />
+  ), [handleSuggestionSelect]);
+
+  const renderLocationItem = useCallback(({ item }: { item: LocationSuggestion }) => (
+    <TouchableOpacity style={styles.locationItem} onPress={() => handleLocationSelect(item)}>
+      <MaterialIcons name="location-on" size={20} color={COLORS.primary} />
+      <View style={styles.locationTextContainer}>
+        <Text style={styles.locationName}>{item.name}</Text>
+        <Text style={styles.locationAddress}>{item.address}</Text>
+      </View>
+    </TouchableOpacity>
+  ), [handleLocationSelect]);
+
+  const renderRecyclerItem = useCallback(({ item }: { item: any }) => (
+    <RecyclerItem recycler={item} onPress={handleRecyclerPress} />
+  ), [handleRecyclerPress]);
+
+  // Memoized key extractors
+  const keyExtractor = useCallback((item: any) => item.id || item.toString(), []);
+
+  // Memoized getItemLayout for FlatList optimization
+  const getItemLayout = useCallback((data: any, index: number) => ({
+    length: 60, // Height of each item
+    offset: 60 * index,
+    index,
+  }), []);
+
+  // Memoized initial num to render
+  const initialNumToRender = useMemo(() => 10, []);
+  const maxToRenderPerBatch = useMemo(() => 10, []);
+  const windowSize = useMemo(() => 10, []);
 
   // Mock nearby recyclers data with recycling trucks and facilities (around Ghana)
   const mockRecyclers = [
@@ -122,244 +381,6 @@ export default function HomeScreen() {
     getCurrentLocation();
   }, []);
 
-  const getCurrentLocation = async () => {
-    try {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      setUserLocation(location);
-      return location; // Return location for use in search
-    } catch (error) {
-      console.error('Error getting current location:', error);
-      
-      // Provide user-friendly error messages
-      let errorMessage = 'Unable to get your current location.';
-      
-      if (error instanceof Error) {
-        if (error.message.includes('permission')) {
-          errorMessage = 'Location permission denied. Please enable location access in your device settings.';
-        } else if (error.message.includes('timeout')) {
-          errorMessage = 'Location request timed out. Please try again.';
-        } else if (error.message.includes('location services')) {
-          errorMessage = 'Location services are disabled. Please enable GPS in your device settings.';
-        }
-      }
-      
-      Alert.alert('Location Error', errorMessage, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => {
-          // This would ideally open device settings, but we'll just show an alert
-          Alert.alert('Settings', 'Please go to your device Settings > Privacy & Security > Location Services and enable location access for this app.');
-        }}
-      ]);
-      
-      return null;
-    }
-  };
-
-  const handleSearchChange = async (text: string) => {
-    setSearch(text);
-    setShowSuggestions(true);
-    
-    if (text.length > 2) {
-      setIsSearching(true);
-      try {
-        const suggestions = await locationSearchService.searchLocations(
-          text,
-          userLocation ? {
-            latitude: userLocation.coords.latitude,
-            longitude: userLocation.coords.longitude,
-          } : undefined
-        );
-        setLocationSuggestions(suggestions);
-      } catch (error) {
-        console.error('Search error:', error);
-        setLocationSuggestions([]);
-      } finally {
-        setIsSearching(false);
-      }
-    } else {
-      setLocationSuggestions([]);
-    }
-  };
-
-
-  const filteredSuggestions = SUGGESTIONS.filter(s =>
-    s.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const handleSuggestionPress = (suggestion: LocationSuggestion) => {
-    setSearch(suggestion.name);
-    setSelectedLocation(suggestion);
-    setShowSuggestions(false);
-    Keyboard.dismiss();
-  };
-
-  const handleMapLocationSelect = async (coordinate: { latitude: number; longitude: number }) => {
-    try {
-      const address = await locationSearchService.reverseGeocode(coordinate);
-      const locationSuggestion: LocationSuggestion = {
-        id: 'map-selected',
-        name: address,
-        address: address,
-        coordinate: coordinate,
-        type: 'geocode',
-      };
-      setSelectedLocation(locationSuggestion);
-      setSearch(address);
-    } catch (error) {
-      console.error('Error getting address from coordinates:', error);
-      Alert.alert(
-        'Location Selected',
-        `Latitude: ${coordinate.latitude.toFixed(4)}\nLongitude: ${coordinate.longitude.toFixed(4)}`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Use This Location', onPress: () => {
-            setSearch('Selected Location');
-          }}
-        ]
-      );
-    }
-  };
-
-  const handleMapPress = (coordinate: { latitude: number; longitude: number }) => {
-    handleMapLocationSelect(coordinate);
-  };
-
-  const handleRecyclerPress = (recyclerId: string) => {
-    const recycler = nearbyRecyclers.find(r => r.id === recyclerId);
-    if (recycler) {
-      Alert.alert(
-        recycler.name,
-        `🚛 ${recycler.truckType}\n⭐ Rating: ${recycler.rating}\n📍 Distance: ${recycler.distance}\n📊 Status: ${recycler.status}`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Request Pickup', onPress: () => {
-            router.push({
-              pathname: '/customer-screens/CallRecyclerScreen' as any,
-              params: { recyclerName: recycler.name }
-            });
-          }},
-          { text: 'Track Truck', onPress: () => {
-            // Navigate to tracking screen
-            router.push({
-              pathname: '/customer-screens/TrackingScreen' as any,
-              params: { recyclerId: recycler.id }
-            });
-          }}
-        ]
-      );
-    }
-  };
-
-  // Handle location detection with accuracy feedback
-  const handleLocationDetection = async () => {
-    setIsDetectingLocation(true);
-    try {
-      const location = await getCurrentLocation();
-      if (location) {
-        // Get address from coordinates
-        const address = await locationSearchService.reverseGeocode({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-        
-        if (address) {
-          setSearch(address);
-          setSelectedLocation({
-            id: 'current-location',
-            name: address,
-            address: address,
-            coordinate: {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            },
-            type: 'geocode',
-          });
-          
-          // Show accuracy information
-          const accuracy = location.coords.accuracy;
-          let accuracyMessage = '';
-          if (accuracy && accuracy <= 10) {
-            accuracyMessage = 'High accuracy (within 10 meters)';
-          } else if (accuracy && accuracy <= 50) {
-            accuracyMessage = 'Good accuracy (within 50 meters)';
-          } else if (accuracy && accuracy <= 100) {
-            accuracyMessage = 'Fair accuracy (within 100 meters)';
-          } else {
-            accuracyMessage = 'Low accuracy (over 100 meters)';
-          }
-          
-          Alert.alert(
-            'Location Detected!',
-            `Your current location: ${address}\n\nAccuracy: ${accuracyMessage}\n\nThis will be set as your pickup point.`,
-            [
-              { text: 'Change Location', style: 'cancel' },
-              { text: 'Use This Location', onPress: () => {
-                // Automatically navigate to SelectTruck with the detected location and coordinates
-                router.push({ 
-                  pathname: '/customer-screens/SelectTruck', 
-                  params: { 
-                    pickup: address,
-                    latitude: location.coords.latitude.toString(),
-                    longitude: location.coords.longitude.toString()
-                  } 
-                } as any);
-              }}
-            ]
-          );
-        } else {
-          // If we can't get address, use coordinates
-          const coordText = `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`;
-          setSearch(coordText);
-          setSelectedLocation({
-            id: 'current-location',
-            name: coordText,
-            address: coordText,
-            coordinate: {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            },
-            type: 'geocode',
-          });
-          
-          Alert.alert(
-            'Location Detected!',
-            `Your current coordinates: ${coordText}\n\nNote: Could not determine exact address. You may want to verify this location on the map.`,
-            [
-              { text: 'Change Location', style: 'cancel' },
-              { text: 'Use This Location', onPress: () => {
-                router.push({ 
-                  pathname: '/customer-screens/SelectTruck', 
-                  params: { 
-                    pickup: coordText,
-                    latitude: location.coords.latitude.toString(),
-                    longitude: location.coords.longitude.toString()
-                  } 
-                } as any);
-              }}
-            ]
-          );
-        }
-      } else {
-        Alert.alert(
-          'Location Error',
-          'Unable to get your current location. Please check your GPS settings or enter your pickup point manually.',
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      console.error('Error getting current location:', error);
-      Alert.alert(
-        'Location Error',
-        'Failed to get your current location. Please enter your pickup point manually.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setIsDetectingLocation(false);
-    }
-  };
-
   return (
     <View style={styles.container}>
       <AppHeader
@@ -408,7 +429,7 @@ export default function HomeScreen() {
               style={styles.searchInput}
               placeholder="What's your pickup point?"
               value={search}
-              onChangeText={handleSearchChange}
+              onChangeText={handleSearch}
               onFocus={() => setShowSuggestions(true)}
               placeholderTextColor="#263A13"
             />
@@ -442,16 +463,12 @@ export default function HomeScreen() {
               ) : locationSuggestions.length > 0 ? (
                 <FlatList
                   data={locationSuggestions}
-                  keyExtractor={item => item.id}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSuggestionPress(item)}>
-                      <Feather name="map-pin" size={16} color="#263A13" style={{ marginRight: 8 }} />
-                      <View style={styles.suggestionContent}>
-                        <Text style={styles.suggestionText}>{item.name}</Text>
-                        <Text style={styles.suggestionAddress}>{item.address}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
+                  keyExtractor={keyExtractor}
+                  renderItem={renderLocationItem}
+                  getItemLayout={getItemLayout}
+                  initialNumToRender={initialNumToRender}
+                  maxToRenderPerBatch={maxToRenderPerBatch}
+                  windowSize={windowSize}
                 />
               ) : search.length > 2 ? (
                 <View style={styles.suggestionItem}>
@@ -791,5 +808,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  recyclerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  recyclerInfo: {
+    flex: 1,
+  },
+  recyclerName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#263A13',
+  },
+  recyclerDetails: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  recyclerStatus: {
+    fontSize: 12,
+    color: '#4CAF50', // A green color for status
+    marginTop: 2,
+  },
+  locationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  locationTextContainer: {
+    marginLeft: 10,
+  },
+  locationName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#263A13',
+  },
+  locationAddress: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
 });

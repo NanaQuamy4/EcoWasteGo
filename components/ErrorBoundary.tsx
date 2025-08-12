@@ -1,6 +1,6 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants';
 
 interface Props {
@@ -43,7 +43,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <MaterialIcons name="error-outline" size={64} color={COLORS.red} />
           <Text style={styles.title}>Something went wrong</Text>
           <Text style={styles.message}>
-            We're sorry, but something unexpected happened. Please try again.
+            We&apos;re sorry, but something unexpected happened. Please try again.
           </Text>
           <TouchableOpacity style={styles.retryButton} onPress={this.handleRetry}>
             <Text style={styles.retryText}>Try Again</Text>

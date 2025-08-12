@@ -177,4 +177,43 @@ export class AnalyticsController {
       });
     }
   }
+
+  /**
+   * Get user stats and earnings data for recycler
+   */
+  static async getUserStats(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User not authenticated'
+        });
+        return;
+      }
+
+      if (req.user?.role !== 'recycler') {
+        res.status(403).json({
+          success: false,
+          error: 'Access denied. Recycler role required.'
+        });
+        return;
+      }
+
+      const userStats = await AnalyticsService.getUserStats(userId);
+
+      res.status(200).json({
+        success: true,
+        data: userStats,
+        message: 'User stats retrieved successfully'
+      });
+    } catch (error) {
+      console.error('Error in getUserStats:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve user stats'
+      });
+    }
+  }
 } 

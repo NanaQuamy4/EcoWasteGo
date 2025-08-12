@@ -43,7 +43,7 @@ class LocationService {
           granted: false, 
           message: 'Location permission was denied. Please enable location access in your device settings to use this feature.' 
         };
-      } else if (status === 'restricted') {
+      } else if (status === 'restricted' as any) {
         return { 
           granted: false, 
           message: 'Location access is restricted. This might be due to parental controls or device policies.' 

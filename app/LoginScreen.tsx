@@ -2,16 +2,16 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { COLORS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
@@ -59,12 +59,16 @@ export default function LoginScreen() {
       return;
     }
 
+    console.log('LoginScreen: Starting login process...');
     setIsLoading(true);
+    
     try {
+      console.log('LoginScreen: Calling login function...');
       await login(email, password, selectedRole as 'customer' | 'recycler' | undefined);
+      console.log('LoginScreen: Login function completed successfully');
       // Navigation will be handled by useEffect when user state updates
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('LoginScreen: Login error occurred:', error);
       
       let message = 'Login failed. Please try again.';
       if (error.message === 'ACCOUNT_NOT_FOUND') {
@@ -79,29 +83,18 @@ export default function LoginScreen() {
         message = 'Network error. Please check your internet connection.';
       } else if (error.message?.includes('Access denied') || error.message?.includes('ROLE_MISMATCH')) {
         message = error.message || 'This account is registered with a different role. Please log in using the correct role.';
+      } else if (error.message?.includes('Request timed out')) {
+        message = 'Request timed out. Please check your internet connection and try again.';
+      } else if (error.message?.includes('Unable to connect to the server')) {
+        message = 'Unable to connect to the server. Please check your internet connection and ensure the backend is running.';
+      } else if (error.message?.includes('Backend server is not accessible')) {
+        message = 'Backend server is not accessible. Please check your internet connection and ensure the backend is running on port 3000.';
       }
       
-      // Show alert and stay on login screen for ALL login failures
-      Alert.alert(
-        'Login Failed', 
-        message,
-        [
-          {
-            text: 'Try Again',
-            onPress: () => {
-              // Clear the form for fresh attempt
-              setEmail('');
-              setPassword('');
-              // Navigate back to login screen with same role
-              router.replace({
-                pathname: '/LoginScreen',
-                params: { selectedRole }
-              });
-            }
-          }
-        ]
-      );
+      console.log('LoginScreen: Showing error alert with message:', message);
+      Alert.alert('Login Error', message);
     } finally {
+      console.log('LoginScreen: Setting loading to false');
       setIsLoading(false);
     }
   };
@@ -201,14 +194,14 @@ export default function LoginScreen() {
               disabled={isLoading}
             >
               <Text style={styles.loginButtonText}>
-                {isLoading ? 'Signing In...' : 'Sign In'}
+                {isLoading ? 'Logging in...' : 'LOGIN'}
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Footer */}
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
+            <Text style={styles.footerText}>Don&apos;t have an account? </Text>
             <TouchableOpacity onPress={handleRegister}>
               <Text style={styles.registerText}>Sign Up</Text>
             </TouchableOpacity>

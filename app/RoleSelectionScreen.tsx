@@ -1,12 +1,12 @@
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-  Image,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Image,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { COLORS } from '../constants';
 
@@ -33,7 +33,7 @@ export default function RoleSelectionScreen() {
         <View style={styles.titleContainer}>
           <Text style={styles.title}>Welcome to EcoWasteGo</Text>
         </View>
-        <Text style={styles.subtitle}>Choose how you'd like to use the app</Text>
+        <Text style={styles.subtitle}>Choose how you&apos;d like to use the app</Text>
       </View>
 
       <View style={styles.optionsContainer}>
