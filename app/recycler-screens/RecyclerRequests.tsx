@@ -107,9 +107,13 @@ export default function RecyclerRequests() {
   const fetchPickupRequests = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Attempting to fetch pickup requests...');
+      
       const response = await apiService.getWasteCollectionsForRecycler();
       
       if (response.success && response.data && Array.isArray(response.data)) {
+        console.log('✅ Successfully fetched', response.data.length, 'pickup requests');
+        
         // Transform the API response to match our interface
         const transformedRequests: PickupRequest[] = response.data.map(collection => ({
           id: collection.id,
@@ -163,22 +167,77 @@ export default function RecyclerRequests() {
           setTimeout(() => setHasNewRequests(false), 5000);
         }
       } else {
+        console.log('⚠️ Empty or invalid response from API');
         // Handle empty response
         setPickupRequests([]);
         setNotificationCount(0);
         setLastRequestCount(0);
       }
     } catch (error) {
-      console.error('Error fetching pickup requests:', error);
-      // Show error state instead of mock data
+      console.error('❌ Error fetching pickup requests:', error);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to fetch pickup requests.';
+      if (error instanceof Error) {
+        if (error.message.includes('Network request failed')) {
+          errorMessage = 'Network connection failed. Please check your internet connection.';
+        } else if (error.message.includes('Request timed out')) {
+          errorMessage = 'Request timed out. The server may be slow or unavailable.';
+        } else if (error.message.includes('Already read')) {
+          errorMessage = 'API communication error. Please try again.';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+      
+      // Show error state with retry option
       setPickupRequests([]);
       setNotificationCount(0);
       setLastRequestCount(0);
       
+      // Show fallback data for demo purposes
+      const fallbackData: PickupRequest[] = [
+        {
+          id: 'demo-1',
+          userName: 'Demo Customer 1',
+          location: 'Demo Location - Backend Unavailable',
+          phone: 'Demo Phone',
+          wasteType: 'Mixed Waste',
+          distance: '2.1 km',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          customer_id: 'demo-1',
+          waste_type: 'mixed',
+          pickup_address: 'Demo Location - Backend Unavailable',
+          isNew: true
+        },
+        {
+          id: 'demo-2',
+          userName: 'Demo Customer 2',
+          location: 'Demo Location - Backend Unavailable',
+          phone: 'Demo Phone',
+          wasteType: 'Plastic',
+          distance: '1.8 km',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          customer_id: 'demo-2',
+          waste_type: 'plastic',
+          pickup_address: 'Demo Location - Backend Unavailable',
+          isNew: false
+        }
+      ];
+      
+      setPickupRequests(fallbackData);
+      setNotificationCount(2);
+      setLastRequestCount(2);
+      
       Alert.alert(
         'Connection Error',
-        'Failed to fetch pickup requests. Please check your internet connection and try again.',
-        [{ text: 'Retry', onPress: () => fetchPickupRequests() }]
+        `${errorMessage}\n\nShowing demo data for now.`,
+        [
+          { text: 'OK' },
+          { text: 'Retry', onPress: () => fetchPickupRequests() }
+        ]
       );
     } finally {
       setLoading(false);
@@ -457,6 +516,39 @@ export default function RecyclerRequests() {
         <TouchableOpacity style={styles.pickupsButton}>
           <Text style={styles.pickupsButtonText}>Pickups</Text>
         </TouchableOpacity>
+        
+        {/* Connection Test Button */}
+        <TouchableOpacity 
+          style={styles.connectionTestButton}
+          onPress={async () => {
+            try {
+              console.log('🧪 Testing backend connection...');
+              
+              // First test basic health endpoint
+              const healthResponse = await fetch('http://10.132.144.9:3000/health');
+              console.log('🏥 Health check status:', healthResponse.status);
+              
+              // Then test the specific endpoint
+              const response = await apiService.getWasteCollectionsForRecycler();
+              console.log('✅ Backend connection successful:', response.success);
+              
+              Alert.alert(
+                'Connection Test',
+                `Health: ${healthResponse.status === 200 ? 'OK' : 'Failed'}\nAPI: ${response.success ? 'Connected' : 'Errors'}`,
+                [{ text: 'OK' }]
+              );
+            } catch (error) {
+              console.error('❌ Backend connection failed:', error);
+              Alert.alert(
+                'Connection Test',
+                `Backend connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                [{ text: 'OK' }]
+              );
+            }
+          }}
+        >
+          <Text style={styles.connectionTestButtonText}>🧪 Test Connection</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Filter Buttons */}
@@ -676,6 +768,18 @@ const styles = StyleSheet.create({
   pickupsButtonText: {
     color: COLORS.white,
     fontSize: 18,
+    fontWeight: 'bold',
+  },
+  connectionTestButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  connectionTestButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   filterContainer: {

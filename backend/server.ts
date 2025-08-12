@@ -51,6 +51,7 @@ import textRecyclerRoutes from './src/routes/text-recycler';
 import trackingRoutes from './src/routes/tracking';
 import usersRoutes from './src/routes/users';
 import wasteRoutes from './src/routes/waste';
+import { supabase } from './src/config/supabase';
 
 // Import security middleware
 import { apiRateLimit, authRateLimit, cspMiddleware, paymentRateLimit, requestSizeLimiter, sanitizeInput } from './src/middleware/security';
@@ -112,12 +113,42 @@ app.use('/api/payments', paymentRateLimit); // Payment rate limiting
 app.use('/api/', apiRateLimit); // General API rate limiting
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    message: 'EcoWasteGo Backend is running',
-    timestamp: new Date().toISOString()
-  });
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    const { data, error } = await supabase
+      .from('waste_collections')
+      .select('count')
+      .limit(1);
+    
+    if (error) {
+      console.error('Database connection test failed:', error);
+      res.status(500).json({ 
+        status: 'ERROR', 
+        message: 'EcoWasteGo Backend is running but database connection failed',
+        timestamp: new Date().toISOString(),
+        database: 'FAILED',
+        error: error.message
+      });
+      return;
+    }
+    
+    res.status(200).json({ 
+      status: 'OK', 
+      message: 'EcoWasteGo Backend is running',
+      timestamp: new Date().toISOString(),
+      database: 'CONNECTED'
+    });
+  } catch (dbError) {
+    console.error('Database connection test failed:', dbError);
+    res.status(500).json({ 
+      status: 'ERROR', 
+      message: 'EcoWasteGo Backend is running but database connection failed',
+      timestamp: new Date().toISOString(),
+      database: 'FAILED',
+      error: dbError instanceof Error ? dbError.message : 'Unknown error'
+    });
+  }
 });
 
 // Security monitoring endpoint (admin only)
