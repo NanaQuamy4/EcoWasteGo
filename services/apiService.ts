@@ -125,21 +125,21 @@ class ApiService {
       try {
         data = await response.json();
       } catch (parseError) {
-        // If JSON parsing fails, try to get the text response to debug
-        const textResponse = await response.text();
-        console.error('Failed to parse JSON response. Response starts with:', textResponse.substring(0, 100));
+        // If JSON parsing fails, we can't read the response body again
+        // Just log the parse error and throw a generic error
+        console.error('Failed to parse JSON response:', parseError);
         
-        // Check if it's an HTML error page
-        if (textResponse.includes('<html') || textResponse.includes('<!DOCTYPE')) {
+        // Check response headers to determine the issue
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('text/html')) {
           throw new Error('Server returned HTML instead of JSON. The backend may not be running or there may be a routing issue.');
         }
         
-        // Check if it's a plain text error
-        if (textResponse.startsWith('This page cannot be displayed') || textResponse.startsWith('The page cannot be displayed')) {
-          throw new Error('Cannot connect to the server. Please check if the backend is running and accessible.');
+        if (contentType && contentType.includes('text/plain')) {
+          throw new Error('Server returned plain text instead of JSON. Please check the backend configuration.');
         }
         
-        throw new Error(`Invalid server response: ${textResponse.substring(0, 50)}...`);
+        throw new Error('Server returned invalid JSON data. Please check if the backend is running and accessible.');
       }
 
       // Handle authentication errors
@@ -196,6 +196,12 @@ class ApiService {
         throw new Error('Cannot connect to the server. The backend may not be running or there may be a network issue.');
       }
 
+      // Handle "Already read" errors specifically
+      if (error instanceof Error && error.message.includes('Already read')) {
+        console.error('Response body already consumed - this indicates a bug in the request handling');
+        throw new Error('Request failed due to internal error. Please try again.');
+      }
+
       // Only log detailed error info for first attempt or non-retryable errors
       if (retryCount === 0 || (error instanceof Error && 
           (error.message.includes('Authentication failed') ||
@@ -213,7 +219,8 @@ class ApiService {
         !error.message.includes('ROLE_MISMATCH') &&
         !error.message.includes('registered as a') &&
         !error.message.includes('Request timed out') &&
-        !error.message.includes('Unable to connect to the server');
+        !error.message.includes('Unable to connect to the server') &&
+        !error.message.includes('Already read');
       
       if (shouldRetry) {
         console.log(`Retrying request (${retryCount + 1}/3)...`);
@@ -445,6 +452,8 @@ class ApiService {
         throw new Error('No authentication token available');
       }
 
+      console.log('Fetching waste collections for recycler from:', `${this.baseURL}/api/waste/recycler/requests`);
+
       // Fetch waste collections with customer information
       const response = await this.request<any[]>('/api/waste/recycler/requests', {
         method: 'GET',
@@ -454,6 +463,7 @@ class ApiService {
         },
       });
 
+      console.log('Successfully fetched waste collections:', response.success ? 'Yes' : 'No', 'Count:', response.data?.length || 0);
       return response;
     } catch (error) {
       console.error('Error fetching waste collections for recycler:', error);
