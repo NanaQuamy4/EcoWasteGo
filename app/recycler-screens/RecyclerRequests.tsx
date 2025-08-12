@@ -542,7 +542,24 @@ export default function RecyclerRequests() {
               Alert.alert(
                 'Connection Test',
                 `Backend connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                [{ text: 'OK' }]
+                [
+                  { text: 'OK' },
+                  { 
+                    text: 'Try Localhost', 
+                    onPress: async () => {
+                      try {
+                        const switched = await apiService.switchToFallbackURL();
+                        if (switched) {
+                          Alert.alert('Success', 'Switched to localhost. Please try again.');
+                        } else {
+                          Alert.alert('Failed', 'Could not switch to localhost.');
+                        }
+                      } catch (switchError) {
+                        Alert.alert('Error', 'Failed to switch URLs.');
+                      }
+                    }
+                  }
+                ]
               );
             }
           }}

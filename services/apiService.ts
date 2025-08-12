@@ -17,6 +17,42 @@ class ApiService {
   constructor() {
     this.baseURL = API_CONFIG.BASE_URL;
     this.loadToken();
+    this.testAndSetBaseURL();
+  }
+
+  // Test and set the best available base URL
+  private async testAndSetBaseURL(): Promise<void> {
+    try {
+      // Test the primary URL first
+      const primaryResponse = await fetch(`${this.baseURL}/health`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      if (primaryResponse.ok) {
+        console.log('✅ Primary URL is accessible:', this.baseURL);
+        return;
+      }
+    } catch (error) {
+      console.log('❌ Primary URL failed, trying fallback...');
+    }
+
+    // Try fallback URL
+    try {
+      const fallbackResponse = await fetch(`${API_CONFIG.FALLBACK_URL}/health`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      if (fallbackResponse.ok) {
+        this.baseURL = API_CONFIG.FALLBACK_URL;
+        console.log('✅ Using fallback URL:', this.baseURL);
+      } else {
+        console.log('❌ Both URLs failed');
+      }
+    } catch (error) {
+      console.log('❌ Fallback URL also failed');
+    }
   }
 
   // Load token from storage
@@ -1132,6 +1168,29 @@ class ApiService {
         failedIPs,
         error
       };
+    }
+  }
+
+  // Method to manually test and switch base URL
+  async switchToFallbackURL(): Promise<boolean> {
+    try {
+      console.log('🔄 Switching to fallback URL...');
+      const fallbackResponse = await fetch(`${API_CONFIG.FALLBACK_URL}/health`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      if (fallbackResponse.ok) {
+        this.baseURL = API_CONFIG.FALLBACK_URL;
+        console.log('✅ Successfully switched to fallback URL:', this.baseURL);
+        return true;
+      } else {
+        console.log('❌ Fallback URL also failed');
+        return false;
+      }
+    } catch (error) {
+      console.log('❌ Failed to switch to fallback URL:', error);
+      return false;
     }
   }
 
