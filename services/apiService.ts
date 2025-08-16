@@ -22,8 +22,13 @@ class ApiService {
 
   // Test and set the best available base URL
   private async testAndSetBaseURL(): Promise<void> {
+    console.log('🔍 Testing API connectivity...');
+    console.log('📍 Primary URL:', this.baseURL);
+    console.log('📍 Fallback URL:', API_CONFIG.FALLBACK_URL);
+    
     try {
       // Test the primary URL first
+      console.log('🧪 Testing primary URL...');
       const primaryResponse = await fetch(`${this.baseURL}/health`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
@@ -32,13 +37,16 @@ class ApiService {
       if (primaryResponse.ok) {
         console.log('✅ Primary URL is accessible:', this.baseURL);
         return;
+      } else {
+        console.log('❌ Primary URL returned status:', primaryResponse.status, primaryResponse.statusText);
       }
     } catch (error) {
-      console.log('❌ Primary URL failed, trying fallback...');
+      console.log('❌ Primary URL failed with error:', error);
     }
 
     // Try fallback URL
     try {
+      console.log('🧪 Testing fallback URL...');
       const fallbackResponse = await fetch(`${API_CONFIG.FALLBACK_URL}/health`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
@@ -48,10 +56,12 @@ class ApiService {
         this.baseURL = API_CONFIG.FALLBACK_URL;
         console.log('✅ Using fallback URL:', this.baseURL);
       } else {
+        console.log('❌ Fallback URL returned status:', fallbackResponse.status, fallbackResponse.statusText);
         console.log('❌ Both URLs failed');
       }
     } catch (error) {
-      console.log('❌ Fallback URL also failed');
+      console.log('❌ Fallback URL failed with error:', error);
+      console.log('❌ Both URLs failed');
     }
   }
 

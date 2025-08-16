@@ -38,13 +38,21 @@ import { apiRateLimit, authRateLimit, cspMiddleware, paymentRateLimit, requestSi
 import { getSecurityStats, securityMonitoring } from './src/middleware/securityMonitoring';
 
 // Load environment variables first
-const envLoaded = dotenv.config();
+const envLoaded = dotenv.config({ path: './.env' });
 
 if (envLoaded.error) {
   console.error('❌ Failed to load .env file:', envLoaded.error);
 } else {
   console.log('✅ .env file loaded successfully');
+  console.log('📁 Current working directory:', process.cwd());
+  console.log('📄 .env file path:', envLoaded.parsed ? 'loaded' : 'not parsed');
+  console.log('📄 .env file content preview:', Object.keys(envLoaded.parsed || {}).slice(0, 5));
   console.log('SUPABASE_URL:', process.env.SUPABASE_URL); // Test one variable
+  console.log('🔧 SMS Configuration Debug:', {
+    SMS_VERIFICATION_ENABLED: process.env.SMS_VERIFICATION_ENABLED,
+    MNOTIFY_API_KEY: process.env.MNOTIFY_API_KEY ? 'SET' : 'NOT_SET',
+    NODE_ENV: process.env.NODE_ENV
+  });
 }
 
 const app = express();
@@ -69,7 +77,12 @@ const corsOptions = {
           'http://localhost:8081', 
           'http://localhost:19006',
           'exp://localhost:8081',
-          'exp://localhost:19006'
+          'exp://localhost:19006',
+          'http://10.132.254.147:3000',
+          'http://10.132.254.147:8081',
+          'http://10.132.254.147:19006',
+          'exp://10.132.254.147:8081',
+          'exp://10.132.254.147:19006'
         ];
     
     if (allowedOrigins.includes(origin)) {
@@ -566,11 +579,11 @@ app.use('*', (req, res) => {
 app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`🚀 EcoWasteGo Backend Server is running!`);
   console.log(`📍 Local: http://localhost:${PORT}`);
-  console.log(`🌐 Network: http://10.132.53.210:${PORT}`);
-  console.log(`📱 Mobile App can connect to: http://10.132.53.210:${PORT}`);
+  console.log(`🌐 Network: http://10.132.254.147:${PORT}`);
+  console.log(`📱 Mobile App can connect to: http://10.132.254.147:${PORT}`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 Health Check: http://10.132.53.210:${PORT}/health`);
+  console.log(`📊 Health Check: http://10.132.254.147:${PORT}/health`);
 });
 
 export default app; 

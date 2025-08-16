@@ -2,7 +2,7 @@
 export const API_CONFIG = {
   // Base URL for development - using computer's IP address for mobile access
   // Will fallback to localhost if external IP is not accessible
-  BASE_URL: 'http://10.132.53.210:3000',
+  BASE_URL: 'http://10.132.254.147:3000',
   FALLBACK_URL: 'http://localhost:3000',
   
   // API endpoints

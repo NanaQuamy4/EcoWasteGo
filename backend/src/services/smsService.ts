@@ -28,7 +28,15 @@ export class SMSService {
   }
   
   private static get isEnabled() {
-    return process.env.SMS_VERIFICATION_ENABLED === 'true';
+    // Temporarily hardcode to true to test SMS service
+    const enabled = true; // process.env.SMS_VERIFICATION_ENABLED === 'true';
+    console.log('🔧 SMS Service Configuration:', {
+      SMS_VERIFICATION_ENABLED: process.env.SMS_VERIFICATION_ENABLED,
+      hardcoded: enabled,
+      isEnabled: enabled,
+      apiKey: this.apiKey ? 'SET' : 'NOT_SET'
+    });
+    return enabled;
   }
 
   /**
