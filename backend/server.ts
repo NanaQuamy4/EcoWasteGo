@@ -4,28 +4,8 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
-// Load environment variables first
-dotenv.config();
-
-// Validate required environment variables
-const requiredEnvVars = [
-  'SUPABASE_URL',
-  'SUPABASE_ANON_KEY', 
-  'SUPABASE_SERVICE_ROLE_KEY'
-];
-
-const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-
-if (missingVars.length > 0) {
-  console.error('❌ Missing required environment variables:', missingVars);
-  console.error('Please update your .env file with your Supabase credentials');
-  console.error('Get them from: https://supabase.com/dashboard → Settings → API');
-  process.exit(1);
-} else {
-  console.log('✅ All required environment variables are configured');
-}
-
 // Import routes
+import { supabase } from './src/config/supabase';
 import analyticsRoutes from './src/routes/analytics';
 import authRoutes from './src/routes/auth';
 import historyRoutes from './src/routes/history';
@@ -46,16 +26,26 @@ import recyclersRoutes from './src/routes/recyclers';
 import registerRoutes from './src/routes/register';
 import rewardsRoutes from './src/routes/rewards';
 import roleBasedRoutes from './src/routes/roleBased';
+import smsVerificationRoutes from './src/routes/sms-verification';
 import supportRoutes from './src/routes/support';
 import textRecyclerRoutes from './src/routes/text-recycler';
 import trackingRoutes from './src/routes/tracking';
 import usersRoutes from './src/routes/users';
 import wasteRoutes from './src/routes/waste';
-import { supabase } from './src/config/supabase';
 
 // Import security middleware
 import { apiRateLimit, authRateLimit, cspMiddleware, paymentRateLimit, requestSizeLimiter, sanitizeInput } from './src/middleware/security';
 import { getSecurityStats, securityMonitoring } from './src/middleware/securityMonitoring';
+
+// Load environment variables first
+const envLoaded = dotenv.config();
+
+if (envLoaded.error) {
+  console.error('❌ Failed to load .env file:', envLoaded.error);
+} else {
+  console.log('✅ .env file loaded successfully');
+  console.log('SUPABASE_URL:', process.env.SUPABASE_URL); // Test one variable
+}
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -115,29 +105,33 @@ app.use('/api/', apiRateLimit); // General API rate limiting
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
-    // Test database connection
-    const { data, error } = await supabase
-      .from('waste_collections')
-      .select('count')
-      .limit(1);
+    // Test database connection by checking both new tables
+    const [customersResult, recyclersResult] = await Promise.all([
+      supabase.from('customers').select('count').limit(1),
+      supabase.from('recyclers').select('count').limit(1)
+    ]);
     
-    if (error) {
-      console.error('Database connection test failed:', error);
+    if (customersResult.error || recyclersResult.error) {
+      console.error('Database connection test failed:', customersResult.error || recyclersResult.error);
       res.status(500).json({ 
         status: 'ERROR', 
         message: 'EcoWasteGo Backend is running but database connection failed',
         timestamp: new Date().toISOString(),
         database: 'FAILED',
-        error: error.message
+        error: (customersResult.error || recyclersResult.error)?.message || 'Unknown error'
       });
       return;
     }
     
     res.status(200).json({ 
       status: 'OK', 
-      message: 'EcoWasteGo Backend is running',
+      message: 'EcoWasteGo Backend is running with separated user tables',
       timestamp: new Date().toISOString(),
-      database: 'CONNECTED'
+      database: 'CONNECTED',
+      tables: {
+        customers: 'available',
+        recyclers: 'available'
+      }
     });
   } catch (dbError) {
     console.error('Database connection test failed:', dbError);
@@ -147,6 +141,366 @@ app.get('/health', async (req, res) => {
       timestamp: new Date().toISOString(),
       database: 'FAILED',
       error: dbError instanceof Error ? dbError.message : 'Unknown error'
+    });
+  }
+});
+
+// Test database insert endpoint
+app.post('/test-db-insert', async (req, res) => {
+  try {
+    const { email, username, phone, role } = req.body;
+    
+    console.log('Testing database insert with:', { email, username, phone, role });
+    
+    let result;
+    if (role === 'customer') {
+      result = await supabase
+        .from('customers')
+        .insert({
+          email,
+          username,
+          phone,
+          privacy_policy_accepted: true,
+          privacy_policy_version: '1.0',
+          privacy_policy_accepted_at: new Date().toISOString()
+        })
+        .select();
+    } else {
+      result = await supabase
+        .from('recyclers')
+        .insert({
+          email,
+          username,
+          phone,
+          privacy_policy_accepted: true,
+          privacy_policy_version: '1.0',
+          privacy_policy_accepted_at: new Date().toISOString()
+        })
+        .select();
+    }
+    
+    if (result.error) {
+      console.error('Database insert test failed:', result.error);
+      res.status(500).json({
+        success: false,
+        error: 'Database insert failed',
+        details: result.error
+      });
+      return;
+    }
+    
+    res.json({
+      success: true,
+      message: 'Database insert test successful',
+      data: result.data
+    });
+  } catch (error) {
+    console.error('Test endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Test endpoint failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Simple registration endpoint (bypasses Supabase Auth)
+app.post('/simple-register', async (req, res) => {
+  try {
+    const { email, username, phone, role, password } = req.body;
+    
+    console.log('Simple registration for:', { email, username, phone, role });
+    
+    // Check if user already exists
+    let existingUser;
+    if (role === 'customer') {
+      const { data } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('email', email)
+        .single();
+      existingUser = data;
+    } else {
+      const { data } = await supabase
+        .from('recyclers')
+        .select('id')
+        .eq('email', email)
+        .single();
+      existingUser = data;
+    }
+    
+    if (existingUser) {
+      res.status(400).json({
+        success: false,
+        error: 'User with this email already exists'
+      });
+      return;
+    }
+    
+    // Create user profile directly in database
+    let result;
+    if (role === 'customer') {
+      result = await supabase
+        .from('customers')
+        .insert({
+          email,
+          username,
+          phone,
+          privacy_policy_accepted: true,
+          privacy_policy_version: '1.0',
+          privacy_policy_accepted_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+    } else {
+      result = await supabase
+        .from('recyclers')
+        .insert({
+          email,
+          username,
+          phone,
+          privacy_policy_accepted: true,
+          privacy_policy_version: '1.0',
+          privacy_policy_accepted_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+    }
+    
+    if (result.error) {
+      console.error('Simple registration failed:', result.error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create user profile',
+        details: result.error
+      });
+      return;
+    }
+    
+    res.json({
+      success: true,
+      message: 'User registered successfully (without email confirmation)',
+      data: {
+        user: {
+          id: result.data.id,
+          email: result.data.email,
+          username: result.data.username,
+          role: role,
+          emailVerified: false
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Simple registration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Registration failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// API registration endpoint (bypasses Supabase Auth)
+app.post('/api/register', async (req, res) => {
+  try {
+    const { email, username, phone, role, password } = req.body;
+    
+    console.log('API registration for:', { email, username, phone, role });
+    
+    // Check if user already exists
+    let existingUser;
+    if (role === 'customer') {
+      const { data } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('email', email)
+        .single();
+      existingUser = data;
+    } else {
+      const { data } = await supabase
+        .from('recyclers')
+        .select('id')
+        .eq('email', email)
+        .single();
+      existingUser = data;
+    }
+    
+    if (existingUser) {
+      res.status(400).json({
+        success: false,
+        error: 'User with this email already exists'
+      });
+      return;
+    }
+    
+    // Create user profile directly in database with auto-verification
+    let result;
+    if (role === 'customer') {
+      result = await supabase
+        .from('customers')
+        .insert({
+          email,
+          username,
+          phone,
+          email_verified: true, // Auto-verify the user
+          privacy_policy_accepted: true,
+          privacy_policy_version: '1.0',
+          privacy_policy_accepted_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+    } else {
+      result = await supabase
+        .from('recyclers')
+        .insert({
+          email,
+          username,
+          phone,
+          email_verified: true, // Auto-verify the user
+          privacy_policy_accepted: true,
+          privacy_policy_version: '1.0',
+          privacy_policy_accepted_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+    }
+    
+    if (result.error) {
+      console.error('API registration failed:', result.error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create user profile',
+        details: result.error
+      });
+      return;
+    }
+    
+    res.json({
+      success: true,
+      message: 'User registered successfully (auto-verified)',
+      data: {
+        user: {
+          id: result.data.id,
+          email: result.data.email,
+          username: result.data.username,
+          phone: result.data.phone,
+          role: role,
+          emailVerified: true
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('API registration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Registration failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// API registration endpoint (bypasses Supabase Auth)
+app.post('/api/register', async (req, res) => {
+  try {
+    const { email, username, phone, role, password } = req.body;
+    
+    console.log('API registration for:', { email, username, phone, role });
+    
+    // Check if user already exists
+    let existingUser;
+    if (role === 'customer') {
+      const { data } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('email', email)
+        .single();
+      existingUser = data;
+    } else {
+      const { data } = await supabase
+        .from('recyclers')
+        .select('id')
+        .eq('email', email)
+        .single();
+      existingUser = data;
+    }
+    
+    if (existingUser) {
+      res.status(400).json({
+        success: false,
+        error: 'User with this email already exists'
+      });
+      return;
+    }
+    
+    // Create user profile directly in database with auto-verification
+    let result;
+    if (role === 'customer') {
+      result = await supabase
+        .from('customers')
+        .insert({
+          email,
+          username,
+          phone,
+          email_verified: true, // Auto-verify the user
+          privacy_policy_accepted: true,
+          privacy_policy_version: '1.0',
+          privacy_policy_accepted_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+    } else {
+      result = await supabase
+        .from('recyclers')
+        .insert({
+          email,
+          username,
+          phone,
+          email_verified: true, // Auto-verify the user
+          privacy_policy_accepted: true,
+          privacy_policy_version: '1.0',
+          privacy_policy_accepted_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+    }
+    
+    if (result.error) {
+      console.error('API registration failed:', result.error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create user profile',
+        details: result.error
+      });
+      return;
+    }
+    
+    res.json({
+      success: true,
+      message: 'User registered successfully (auto-verified)',
+      data: {
+        user: {
+          id: result.data.id,
+          email: result.data.email,
+          username: result.data.username,
+          phone: result.data.phone,
+          role: role,
+          emailVerified: true
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('API registration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Registration failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
@@ -161,6 +515,8 @@ app.get('/security/stats', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -190,6 +546,7 @@ app.use('/api/recycler-registration', recyclerRegistrationRoutes);
 app.use('/api/recycler-requests', recyclerRequestsRoutes);
 app.use('/api/recycler-weight-entry', recyclerWeightEntryRoutes);
 app.use('/api/text-recycler', textRecyclerRoutes);
+app.use('/api/sms-verification', smsVerificationRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -205,10 +562,15 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 EcoWasteGo Backend running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🌐 Network access: http://10.132.144.9:${PORT}/health`);
+// Start server
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`🚀 EcoWasteGo Backend Server is running!`);
+  console.log(`📍 Local: http://localhost:${PORT}`);
+  console.log(`🌐 Network: http://10.132.53.210:${PORT}`);
+  console.log(`📱 Mobile App can connect to: http://10.132.53.210:${PORT}`);
+  console.log(`⏰ Started at: ${new Date().toISOString()}`);
+  console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📊 Health Check: http://10.132.53.210:${PORT}/health`);
 });
 
 export default app; 

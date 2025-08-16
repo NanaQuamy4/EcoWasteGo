@@ -1,16 +1,66 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Image, ImageBackground, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, ImageBackground, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export const options = {
   headerShown: false,
+};
+
+// Preload all images for better performance
+const IMAGES = {
+  logo: require('../../assets/images/logo landscape.png'),
+  environment: require('../../assets/images/environment.jpg'),
+  disposal: require('../../assets/images/disposal.jpg'),
+  schedule: require('../../assets/images/schedule.jpg'),
+  compost: require('../../assets/images/compost.jpg'),
+  teach: require('../../assets/images/teach.jpg'),
+  videoImage: require('../../assets/images/videoImage.png'),
+  youtubeLogo: require('../../assets/images/youtube-logo.png'),
+  blend: require('../../assets/images/blend.jpg'),
 };
 
 export default function EducationScreen() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = React.useState(false);
   const [modalImage, setModalImage] = React.useState(null);
+  const [imageLoadingStates, setImageLoadingStates] = React.useState({
+    environment: false,
+    disposal: false,
+    schedule: false,
+    compost: false,
+    teach: false,
+    videoImage: false,
+    youtubeLogo: false,
+    logo: false,
+    blend: false
+  });
+
+  // Preload images when component mounts
+  React.useEffect(() => {
+    const preloadImages = async () => {
+      try {
+        // Preload all images
+        await Promise.all(
+          Object.values(IMAGES).map((imageSource) => {
+            return new Promise((resolve) => {
+              const image = Image.resolveAssetSource(imageSource);
+              if (image) {
+                resolve(image);
+              } else {
+                resolve(null);
+              }
+            });
+          })
+        );
+        console.log('✅ All images preloaded successfully');
+      } catch (error) {
+        console.log('⚠️ Some images failed to preload:', error);
+      }
+    };
+
+    preloadImages();
+  }, []);
 
   const handleImagePress = (imgSrc: any) => {
     setModalImage(imgSrc);
@@ -22,6 +72,43 @@ export default function EducationScreen() {
     setModalImage(null);
   };
 
+  const handleImageLoad = (imageKey: keyof typeof imageLoadingStates) => {
+    setImageLoadingStates(prev => ({
+      ...prev,
+      [imageKey]: false
+    }));
+  };
+
+  const handleImageLoadStart = (imageKey: keyof typeof imageLoadingStates) => {
+    setImageLoadingStates(prev => ({
+      ...prev,
+      [imageKey]: true
+    }));
+  };
+
+  const renderOptimizedImage = (source: any, style: any, imageKey: keyof typeof imageLoadingStates, resizeMode: 'cover' | 'contain' = 'cover') => (
+    <View style={style}>
+      {imageLoadingStates[imageKey] && (
+        <View style={[style, styles.loadingContainer]}>
+          <ActivityIndicator size="small" color="#263A13" />
+        </View>
+      )}
+      <Image 
+        source={source} 
+        style={[style, imageLoadingStates[imageKey] ? styles.hiddenImage : null]}
+        resizeMode={resizeMode}
+        onLoadStart={() => handleImageLoadStart(imageKey)}
+        onLoad={() => handleImageLoad(imageKey)}
+        onError={() => {
+          console.warn(`Failed to load image: ${imageKey}`);
+          handleImageLoad(imageKey); // Hide loading state even on error
+        }}
+        fadeDuration={300}
+        progressiveRenderingEnabled={true}
+      />
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
@@ -29,11 +116,12 @@ export default function EducationScreen() {
           <Feather name="arrow-left" size={28} color="#263A13" />
         </TouchableOpacity>
         <View style={styles.logoContainer}>
-          <Image
-            source={require('../../assets/images/logo landscape.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          {renderOptimizedImage(
+            require('../../assets/images/logo landscape.png'),
+            styles.logo,
+            'logo',
+            'contain'
+          )}
         </View>
         <View style={{ width: 28 }} />
       </View>
@@ -54,12 +142,20 @@ export default function EducationScreen() {
               Waste is anything we throw away: plastic wrappers, leftover food, old clothes, broken gadgets, or even garden trimmings. How we handle waste matters more than we think.
             </Text>
           </View>
-          <Image source={require('../../assets/images/environment.jpg')} style={styles.sectionImage} />
+          {renderOptimizedImage(
+            require('../../assets/images/environment.jpg'),
+            styles.sectionImage,
+            'environment'
+          )}
         </View>
 
         {/* Why Proper Waste Disposal Matters */}
         <View style={styles.sectionCard}>
-          <Image source={require('../../assets/images/disposal.jpg')} style={styles.cardImage} />
+          {renderOptimizedImage(
+            require('../../assets/images/disposal.jpg'),
+            styles.cardImage,
+            'disposal'
+          )}
           <Text style={styles.sectionTitle}>Why Proper Waste Disposal Matters;</Text>
           <Text style={styles.sectionText}>
             - Protects the Environment: Improper disposal pollutes our land, rivers, and air.{"\n"}
@@ -77,7 +173,11 @@ export default function EducationScreen() {
               Ghana generates over 12,000 tonnes of solid waste every day, and a significant portion is not properly managed. This leads to pollution, flooding, and serious health risks especially in urban communities.
             </Text>
           </View>
-          <Image source={require('../../assets/images/schedule.jpg')} style={styles.sectionImage} />
+          {renderOptimizedImage(
+            require('../../assets/images/schedule.jpg'),
+            styles.sectionImage,
+            'schedule'
+          )}
         </View>
 
         {/* What You Can Do */}
@@ -88,7 +188,11 @@ export default function EducationScreen() {
               <Text style={styles.sectionText}>• Schedule waste pickups with EcoWasteGo.</Text>
             </View>
             <Pressable onPress={() => handleImagePress(require('../../assets/images/schedule.jpg'))} style={styles.imageWrapper}>
-              <Image source={require('../../assets/images/schedule.jpg')} style={styles.actionImage} />
+              {renderOptimizedImage(
+                require('../../assets/images/schedule.jpg'),
+                styles.actionImage,
+                'schedule'
+              )}
             </Pressable>
           </View>
           <View style={styles.actionRow}>
@@ -96,7 +200,11 @@ export default function EducationScreen() {
               <Text style={styles.sectionText}>• Separate your waste at home.</Text>
             </View>
             <Pressable onPress={() => handleImagePress(require('../../assets/images/disposal.jpg'))} style={styles.imageWrapper}>
-              <Image source={require('../../assets/images/disposal.jpg')} style={styles.actionImage} />
+              {renderOptimizedImage(
+                require('../../assets/images/disposal.jpg'),
+                styles.actionImage,
+                'disposal'
+              )}
             </Pressable>
           </View>
           <View style={styles.actionRow}>
@@ -104,7 +212,11 @@ export default function EducationScreen() {
               <Text style={styles.sectionText}>• Compost your food scraps.</Text>
             </View>
             <Pressable onPress={() => handleImagePress(require('../../assets/images/compost.jpg'))} style={styles.imageWrapper}>
-              <Image source={require('../../assets/images/compost.jpg')} style={styles.actionImage} />
+              {renderOptimizedImage(
+                require('../../assets/images/compost.jpg'),
+                styles.actionImage,
+                'compost'
+              )}
             </Pressable>
           </View>
           <View style={styles.actionRow}>
@@ -112,7 +224,11 @@ export default function EducationScreen() {
               <Text style={styles.sectionText}>• Teach someone what you’ve learned.</Text>
             </View>
             <Pressable onPress={() => handleImagePress(require('../../assets/images/teach.jpg'))} style={styles.imageWrapper}>
-              <Image source={require('../../assets/images/teach.jpg')} style={styles.actionImage} />
+              {renderOptimizedImage(
+                require('../../assets/images/teach.jpg'),
+                styles.actionImage,
+                'teach'
+              )}
             </Pressable>
           </View>
         </View>
@@ -143,8 +259,16 @@ export default function EducationScreen() {
           <Text style={styles.linkText} onPress={() => Linking.openURL('https://www.epa.gov/recycle/frequent-questions-recycling')}>📘 &quot;More Waste Facts&quot;</Text>
           <Text style={styles.sectionTitle}>🎥 &quot;Watch Tutorials&quot;</Text>
           <Pressable style={styles.youtubePlayerPlaceholder} onPress={() => Linking.openURL('https://youtu.be/AJVky2Fzl54?si=rjfF5WIgltkpwEMj')}>
-            <Image source={require('../../assets/images/videoImage.png')} style={styles.youtubeThumbnail} />
-            <Image source={require('../../assets/images/youtube-logo.png')} style={styles.youtubeLogoLarge} />
+            {renderOptimizedImage(
+              require('../../assets/images/videoImage.png'),
+              styles.youtubeThumbnail,
+              'videoImage'
+            )}
+            {renderOptimizedImage(
+              require('../../assets/images/youtube-logo.png'),
+              styles.youtubeLogoLarge,
+              'youtubeLogo'
+            )}
             <View style={styles.youtubePlayButtonContainer}>
               <View style={styles.youtubePlayButton}>
                 <View style={styles.youtubePlayTriangle} />
@@ -461,5 +585,19 @@ const styles = StyleSheet.create({
   logoContainer: {
     flex: 1,
     alignItems: 'center',
+  },
+  loadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 12,
+  },
+  hiddenImage: {
+    opacity: 0,
   },
 }); 

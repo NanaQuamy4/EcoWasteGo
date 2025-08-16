@@ -13,17 +13,32 @@ router.get('/profile', authenticateToken, async (req, res) => {
   try {
     const userId = req.user?.id;
     
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, username, email, phone, role, email_verified, created_at')
+    // Try to find user in customers table first
+    let { data: user, error } = await supabase
+      .from('customers')
+      .select('id, username, email, phone, email_verified, created_at')
       .eq('id', userId)
       .single();
 
+    let userRole = 'customer';
+
+    // If not found in customers, check recyclers table
     if (error || !user) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'User profile not found' 
-      });
+      const { data: recycler, error: recyclerError } = await supabase
+        .from('recyclers')
+        .select('id, username, email, phone, email_verified, created_at')
+        .eq('id', userId)
+        .single();
+
+      if (recyclerError || !recycler) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'User profile not found' 
+        });
+      }
+
+      user = recycler;
+      userRole = 'recycler';
     }
 
     // Format response to match EditProfileScreen expectations
@@ -31,7 +46,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
       name: user.username,
       email: user.email,
       phone: user.phone || '',
-      role: user.role,
+      role: userRole,
       emailVerified: user.email_verified,
       createdAt: user.created_at
     };
@@ -98,168 +113,103 @@ router.put('/profile', authenticateToken, async (req, res) => {
       }
 
       // Verify current password with Supabase Auth
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        return res.status(401).json({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: req.user?.email || '',
+        password: currentPassword
+      });
+
+      if (signInError) {
+        return res.status(400).json({
           success: false,
-          error: 'Authentication failed'
+          error: 'Current password is incorrect'
         });
       }
 
       // Update password in Supabase Auth
-      const { error: passwordError } = await supabase.auth.updateUser({
+      const { error: updatePasswordError } = await supabase.auth.updateUser({
         password: newPassword
       });
 
-      if (passwordError) {
-        return res.status(400).json({
+      if (updatePasswordError) {
+        return res.status(500).json({
           success: false,
-          error: passwordError.message
+          error: 'Failed to update password'
         });
       }
     }
 
-    // Update profile data in database
-    const updateData: any = {};
-    if (name) updateData.username = name; // Map name to username field
-    if (email) updateData.email = email;
-    if (phone) updateData.phone = phone;
+    // Determine which table to update based on user role
+    let updateResult = null;
+    let userRole = 'customer';
 
-    // Only update database if there are profile changes
-    if (Object.keys(updateData).length > 0) {
-      const { data: user, error } = await supabase
-        .from('users')
-        .update(updateData)
+    // Try to update in customers table first
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .update({
+        username: name,
+        email: email,
+        phone: phone,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (customer) {
+      updateResult = customer;
+    } else {
+      // If not in customers table, try recyclers table
+      const { data: recycler, error: recyclerError } = await supabase
+        .from('recyclers')
+        .update({
+          username: name,
+          email: email,
+          phone: phone,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', userId)
         .select()
         .single();
 
-      if (error) {
-        return res.status(400).json({
+      if (recycler) {
+        updateResult = recycler;
+        userRole = 'recycler';
+      } else {
+        return res.status(404).json({
           success: false,
-          error: 'Failed to update profile'
+          error: 'User profile not found'
         });
       }
-
-      return res.json({
-        success: true,
-        data: user,
-        message: 'Profile updated successfully'
-      });
-    } else {
-      // If only password was changed, return success
-      return res.json({
-        success: true,
-        message: 'Password updated successfully'
-      });
     }
+
+    return res.json({
+      success: true,
+      data: {
+        user: {
+          id: updateResult.id,
+          name: updateResult.username,
+          email: updateResult.email,
+          phone: updateResult.phone,
+          role: userRole
+        }
+      },
+      message: 'Profile updated successfully'
+    });
   } catch (error) {
     console.error('Error updating user profile:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to update profile'
+      error: 'Failed to update user profile'
     });
   }
 });
 
 /**
- * @route GET /api/users/recyclers
- * @desc Get all recyclers (for customers to browse)
- * @access Public
- */
-router.get('/recyclers', async (req, res) => {
-  try {
-    const { data: recyclers, error } = await supabase
-      .from('users')
-      .select(`
-        id,
-        username,
-        phone,
-        address,
-        city,
-        state,
-        profile_image,
-        created_at,
-        recycler_profiles!inner(*)
-      `)
-      .eq('role', 'recycler')
-      .eq('email_verified', true);
-
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to fetch recyclers'
-      });
-    }
-
-    return res.json({
-      success: true,
-      data: recyclers,
-      message: 'Recyclers retrieved successfully'
-    });
-  } catch (error) {
-    console.error('Error getting recyclers:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve recyclers'
-    });
-  }
-});
-
-/**
- * @route GET /api/users/recyclers/:id
- * @desc Get specific recycler details
- * @access Public
- */
-router.get('/recyclers/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const { data: recycler, error } = await supabase
-      .from('users')
-      .select(`
-        id,
-        username,
-        phone,
-        address,
-        city,
-        state,
-        profile_image,
-        created_at,
-        recycler_profiles!inner(*)
-      `)
-      .eq('id', id)
-      .eq('role', 'recycler')
-      .eq('email_verified', true)
-      .single();
-
-    if (error || !recycler) {
-      return res.status(404).json({
-        success: false,
-        error: 'Recycler not found'
-      });
-    }
-
-    return res.json({
-      success: true,
-      data: recycler,
-      message: 'Recycler details retrieved successfully'
-    });
-  } catch (error) {
-    console.error('Error getting recycler details:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve recycler details'
-    });
-  }
-});
-
-/**
- * @route DELETE /api/users/account
- * @desc Delete user account
+ * @route DELETE /api/users/profile
+ * @desc Delete current user profile
  * @access Private
  */
-router.delete('/account', authenticateToken, async (req, res) => {
+router.delete('/profile', authenticateToken, async (req, res) => {
   try {
     const userId = req.user?.id;
 
@@ -270,40 +220,158 @@ router.delete('/account', authenticateToken, async (req, res) => {
       });
     }
 
-    // Delete user from Supabase Auth using admin client
-    if (supabaseAdmin) {
-      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-      if (authError) {
-        console.error('Auth deletion error:', authError);
-        // Continue anyway, the user might not exist in auth
-      }
-    }
+    // Try to delete from customers table first
+    let { error: deleteError } = await supabase
+      .from('customers')
+      .delete()
+      .eq('id', userId);
 
-    // Try to delete user profile from database (optional)
-    try {
-      const { error: profileError } = await supabase
-        .from('users')
+    let userRole = 'customer';
+
+    // If not found in customers, try recyclers table
+    if (deleteError) {
+      const { error: recyclerDeleteError } = await supabase
+        .from('recyclers')
         .delete()
         .eq('id', userId);
 
-      if (profileError) {
-        console.error('Profile deletion error:', profileError);
-        // Continue anyway, the user might not have a profile
+      if (recyclerDeleteError) {
+        return res.status(404).json({
+          success: false,
+          error: 'User profile not found'
+        });
       }
-    } catch (profileError) {
-      console.error('Profile deletion failed:', profileError);
-      // Continue anyway
+      userRole = 'recycler';
+    }
+
+    // Delete user from Supabase Auth
+    if (supabaseAdmin) {
+      const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (authDeleteError) {
+        console.error('Error deleting user from auth:', authDeleteError);
+      }
     }
 
     return res.json({
       success: true,
-      message: 'Account deleted successfully'
+      message: 'User profile deleted successfully'
     });
   } catch (error) {
-    console.error('Delete account error:', error);
+    console.error('Error deleting user profile:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to delete account'
+      error: 'Failed to delete user profile'
+    });
+  }
+});
+
+/**
+ * @route GET /api/users/search
+ * @desc Search users by name or email
+ * @access Private
+ */
+router.get('/search', authenticateToken, async (req, res) => {
+  try {
+    const { query, role } = req.query;
+    
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        error: 'Search query is required'
+      });
+    }
+
+    let results = [];
+
+    // Search in appropriate table based on role
+    if (role === 'customer' || !role) {
+      const { data: customers, error: customerError } = await supabase
+        .from('customers')
+        .select('id, username, email, phone, created_at')
+        .or(`username.ilike.%${query}%,email.ilike.%${query}%`)
+        .limit(10);
+
+      if (!customerError && customers) {
+        results.push(...customers.map(c => ({ ...c, role: 'customer' })));
+      }
+    }
+
+    if (role === 'recycler' || !role) {
+      const { data: recyclers, error: recyclerError } = await supabase
+        .from('recyclers')
+        .select('id, username, email, phone, created_at')
+        .or(`username.ilike.%${query}%,email.ilike.%${query}%`)
+        .limit(10);
+
+      if (!recyclerError && recyclers) {
+        results.push(...recyclers.map(r => ({ ...r, role: 'recycler' })));
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: results,
+      message: 'Search completed successfully'
+    });
+  } catch (error) {
+    console.error('Error searching users:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to search users'
+    });
+  }
+});
+
+/**
+ * @route GET /api/users/:id
+ * @desc Get user by ID
+ * @access Private
+ */
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // Try to find user in customers table first
+    let { data: user, error } = await supabase
+      .from('customers')
+      .select('id, username, email, phone, email_verified, created_at')
+      .eq('id', userId)
+      .single();
+
+    let userRole = 'customer';
+
+    // If not found in customers, check recyclers table
+    if (error || !user) {
+      const { data: recycler, error: recyclerError } = await supabase
+        .from('recyclers')
+        .select('id, username, email, phone, email_verified, created_at')
+        .eq('id', userId)
+        .single();
+
+      if (recyclerError || !recycler) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'User not found' 
+        });
+      }
+
+      user = recycler;
+      userRole = 'recycler';
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        ...user,
+        role: userRole
+      },
+      message: 'User retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting user:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve user'
     });
   }
 });

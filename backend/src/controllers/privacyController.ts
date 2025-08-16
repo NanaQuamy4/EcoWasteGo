@@ -135,8 +135,9 @@ export class PrivacyController {
       const userId = req.user?.id;
       const { version } = req.body;
 
-      const { data: user, error } = await supabase
-        .from('users')
+      // Try to update in customers table first
+      let { data: user, error } = await supabase
+        .from('customers')
         .update({
           privacy_policy_accepted: true,
           privacy_policy_version: version || '1.0',
@@ -145,6 +146,23 @@ export class PrivacyController {
         .eq('id', userId)
         .select()
         .single();
+
+      // If not found in customers, try recyclers table
+      if (error || !user) {
+        const result = await supabase
+          .from('recyclers')
+          .update({
+            privacy_policy_accepted: true,
+            privacy_policy_version: version || '1.0',
+            privacy_policy_accepted_at: new Date().toISOString()
+          })
+          .eq('id', userId)
+          .select()
+          .single();
+        
+        user = result.data;
+        error = result.error;
+      }
 
       if (error) {
         res.status(500).json({
@@ -175,11 +193,24 @@ export class PrivacyController {
     try {
       const userId = req.user?.id;
 
-      const { data: user, error } = await supabase
-        .from('users')
+      // Try to get from customers table first
+      let { data: user, error } = await supabase
+        .from('customers')
         .select('privacy_policy_accepted, privacy_policy_version, privacy_policy_accepted_at')
         .eq('id', userId)
         .single();
+
+      // If not found in customers, try recyclers table
+      if (error || !user) {
+        const result = await supabase
+          .from('recyclers')
+          .select('privacy_policy_accepted, privacy_policy_version, privacy_policy_accepted_at')
+          .eq('id', userId)
+          .single();
+        
+        user = result.data;
+        error = result.error;
+      }
 
       if (error) {
         res.status(500).json({
@@ -192,9 +223,9 @@ export class PrivacyController {
       res.json({
         success: true,
         data: {
-          isAccepted: user.privacy_policy_accepted || false,
-          version: user.privacy_policy_version,
-          acceptedAt: user.privacy_policy_accepted_at
+          isAccepted: user?.privacy_policy_accepted || false,
+          version: user?.privacy_policy_version || '1.0',
+          acceptedAt: user?.privacy_policy_accepted_at || null
         },
         message: 'Privacy status retrieved successfully'
       });
@@ -214,8 +245,9 @@ export class PrivacyController {
     try {
       const userId = req.user?.id;
 
-      const { data: user, error } = await supabase
-        .from('users')
+      // Try to update in customers table first
+      let { data: user, error } = await supabase
+        .from('customers')
         .update({
           privacy_policy_accepted: false,
           privacy_policy_withdrawn_at: new Date().toISOString()
@@ -223,6 +255,22 @@ export class PrivacyController {
         .eq('id', userId)
         .select()
         .single();
+
+      // If not found in customers, try recyclers table
+      if (error || !user) {
+        const result = await supabase
+          .from('recyclers')
+          .update({
+            privacy_policy_accepted: false,
+            privacy_policy_withdrawn_at: new Date().toISOString()
+          })
+          .eq('id', userId)
+          .select()
+          .single();
+        
+        user = result.data;
+        error = result.error;
+      }
 
       if (error) {
         res.status(500).json({

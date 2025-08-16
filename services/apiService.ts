@@ -133,6 +133,74 @@ class ApiService {
     return headers;
   }
 
+  // Generic request method with custom timeout
+  private async requestWithCustomTimeout<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    timeout: number
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseURL}${endpoint}`;
+    const config: RequestInit = {
+      ...options,
+      headers: this.getHeaders(),
+    };
+
+    try {
+      // Create an AbortController for custom timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(url, {
+        ...config,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('Failed to parse JSON response:', parseError);
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('text/html')) {
+          throw new Error('Server returned HTML instead of JSON. The backend may not be running or there may be a routing issue.');
+        }
+        throw new Error('Server returned invalid JSON data. Please check if the backend is running and accessible.');
+      }
+
+      // Handle authentication errors
+      if (response.status === 401) {
+        console.log('Authentication failed, clearing token and redirecting to login');
+        await this.clearToken();
+        throw new Error('Authentication failed. Please login again.');
+      }
+
+      // Handle other errors
+      if (!response.ok) {
+        const errorMessage = data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(errorMessage);
+      }
+
+      return data;
+    } catch (error) {
+      // Handle timeout/abort errors
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error('Request timed out after', timeout, 'ms');
+        throw new Error(`Request timed out after ${timeout/1000} seconds. Please check your internet connection and try again.`);
+      }
+
+      // Handle network errors
+      if (error instanceof Error && error.message.includes('Network request failed')) {
+        console.error('Network request failed - backend may not be accessible');
+        throw new Error('Unable to connect to the server. Please check your internet connection and ensure the backend is running.');
+      }
+
+      console.error(`API Request failed:`, error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  }
+
   // Generic request method with retry logic
   public async request<T>(
     endpoint: string,
@@ -1048,8 +1116,7 @@ class ApiService {
   // Try alternative IP addresses if primary fails
   private async tryAlternativeIPs(): Promise<string | null> {
     const alternativeIPs = [
-      'http://10.132.144.9:3000',  // Current configured IP
-      'http://10.133.121.133:3000', // Alternative IP from previous config
+      'http://10.36.50.88:3000',  // Current configured IP
       'http://localhost:3000',      // Local development
       'http://127.0.0.1:3000'      // Local development alternative
     ];
@@ -1122,8 +1189,7 @@ class ApiService {
 
       // Test all alternative IPs
       const alternativeIPs = [
-        'http://10.132.144.9:3000',
-        'http://10.133.121.133:3000',
+        'http://10.36.50.88:3000',
         'http://localhost:3000',
         'http://127.0.0.1:3000'
       ];
@@ -1247,6 +1313,155 @@ class ApiService {
         error: error instanceof Error ? error.message : 'Network error'
       };
     }
+  }
+
+  // Helper methods for common HTTP verbs
+  private async get<T = any>(endpoint: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'GET' });
+  }
+
+  private async post<T = any>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  private async put<T = any>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  private async delete<T = any>(endpoint: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'DELETE' });
+  }
+
+  // SMS Verification Methods with proper timeout handling
+  /**
+   * Send SMS verification code
+   */
+  async sendSMSVerificationCode(phoneNumber: string, userType: 'customer' | 'recycler' = 'customer'): Promise<ApiResponse> {
+    console.log('Sending SMS verification code to:', phoneNumber);
+    
+    try {
+      // Use longer timeout for SMS operations
+      const response = await this.requestWithCustomTimeout<ApiResponse>(
+        API_CONFIG.ENDPOINTS.SMS_VERIFICATION.SEND_CODE,
+        {
+          method: 'POST',
+          body: JSON.stringify({ phoneNumber, userType }),
+        },
+        API_CONFIG.SMS_TIMEOUT
+      );
+      
+      console.log('SMS verification code sent successfully');
+      return response;
+    } catch (error) {
+      console.error('Failed to send SMS verification code:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify SMS code
+   */
+  async verifySMSCode(phoneNumber: string, code: string, userType: 'customer' | 'recycler' = 'customer'): Promise<ApiResponse> {
+    console.log('Verifying SMS code for:', phoneNumber);
+    
+    try {
+      const response = await this.requestWithCustomTimeout<ApiResponse>(
+        API_CONFIG.ENDPOINTS.SMS_VERIFICATION.VERIFY_CODE,
+        {
+          method: 'POST',
+          body: JSON.stringify({ phoneNumber, code, userType }),
+        },
+        API_CONFIG.SMS_TIMEOUT
+      );
+      
+      console.log('SMS code verified successfully');
+      return response;
+    } catch (error) {
+      console.error('Failed to verify SMS code:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Resend SMS verification code
+   */
+  async resendSMSVerificationCode(phoneNumber: string, userType: 'customer' | 'recycler' = 'customer'): Promise<ApiResponse> {
+    console.log('Resending SMS verification code to:', phoneNumber);
+    
+    try {
+      const response = await this.requestWithCustomTimeout<ApiResponse>(
+        API_CONFIG.ENDPOINTS.SMS_VERIFICATION.RESEND_CODE,
+        {
+          method: 'POST',
+          body: JSON.stringify({ phoneNumber, userType }),
+        },
+        API_CONFIG.SMS_TIMEOUT
+      );
+      
+      console.log('SMS verification code resent successfully');
+      return response;
+    } catch (error) {
+      console.error('Failed to resend SMS verification code:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Register user with SMS verification
+   */
+  async registerWithSMSVerification(userData: {
+    email: string;
+    password: string;
+    username: string;
+    phone: string;
+    role: 'customer' | 'recycler';
+    companyName?: string;
+    smsVerified: boolean;
+  }): Promise<AuthResponse> {
+    console.log('Registering user with SMS verification:', userData.email);
+    
+    try {
+      const response = await this.requestWithCustomTimeout<any>(
+        API_CONFIG.ENDPOINTS.SMS_VERIFICATION.REGISTER,
+        {
+          method: 'POST',
+          body: JSON.stringify(userData),
+        },
+        API_CONFIG.SMS_TIMEOUT
+      );
+      
+      // Handle the response data properly
+      if (response.success && response.data) {
+        // Handle different token formats
+        const token = response.data.token || response.data.session?.access_token;
+        if (token) {
+          await this.saveToken(token);
+        }
+        
+        // Ensure the response matches AuthResponse structure
+        if (response.data.user && (response.data.token || response.data.session)) {
+          return response.data;
+        }
+      }
+      
+      throw new Error('Invalid response from SMS registration endpoint');
+    } catch (error) {
+      console.error('Failed to register with SMS verification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get SMS service status
+   */
+  async getSMSServiceStatus(): Promise<ApiResponse> {
+    return this.get(API_CONFIG.ENDPOINTS.SMS_VERIFICATION.STATUS);
   }
 }
 

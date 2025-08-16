@@ -2,21 +2,23 @@
 export const API_CONFIG = {
   // Base URL for development - using computer's IP address for mobile access
   // Will fallback to localhost if external IP is not accessible
-  BASE_URL: 'http://10.132.144.9:3000',
+  BASE_URL: 'http://10.132.53.210:3000',
   FALLBACK_URL: 'http://localhost:3000',
   
   // API endpoints
   ENDPOINTS: {
     // Authentication
     AUTH: {
-      REGISTER: '/api/auth/register',
-      LOGIN: '/api/auth/login',
+      REGISTER: '/api/register', // Changed from /api/auth/register to use simplified endpoint
+      LOGIN: '/api/auth/simple-login', // Changed to use simplified login
       LOGOUT: '/api/auth/logout',
       FORGOT_PASSWORD: '/api/auth/forgot-password',
       RESET_PASSWORD: '/api/auth/reset-password',
       VERIFY_EMAIL: '/api/auth/verify-email',
       ME: '/api/auth/me',
       SWITCH_ROLE: '/api/auth/switch-role',
+      SIMPLE_REGISTER: '/api/register', // Direct simplified registration
+      SIMPLE_LOGIN: '/api/auth/simple-login', // Direct simplified login
     },
     
     // Users
@@ -124,6 +126,15 @@ export const API_CONFIG = {
 
     // Payment Summary
     PAYMENT_SUMMARY: '/api/payment-summary',
+
+    // SMS Verification
+    SMS_VERIFICATION: {
+      SEND_CODE: '/api/sms-verification/send-code',
+      VERIFY_CODE: '/api/sms-verification/verify-code',
+      RESEND_CODE: '/api/sms-verification/resend-code',
+      REGISTER: '/api/sms-verification/register',
+      STATUS: '/api/sms-verification/status',
+    },
   },
   
   // Request headers
@@ -134,6 +145,7 @@ export const API_CONFIG = {
   
   // Timeout settings
   TIMEOUT: 30000, // 30 seconds
+  SMS_TIMEOUT: 60000, // 60 seconds for SMS operations (longer due to external API)
   
   // Retry settings
   RETRY_ATTEMPTS: 5,

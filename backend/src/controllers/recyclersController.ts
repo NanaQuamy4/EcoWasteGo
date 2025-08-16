@@ -10,22 +10,17 @@ export class RecyclersController {
       const { id } = req.params;
 
       const { data: recycler, error } = await supabase
-        .from('users')
+        .from('recyclers')
         .select(`
           id,
           username,
           phone,
           profile_image,
-          recycler_profiles!inner(
-            business_name,
-            average_rating,
-            vehicle_info,
-            hourly_rate,
-            experience_years
-          )
+          company_name,
+          verification_status,
+          created_at
         `)
         .eq('id', id)
-        .eq('role', 'recycler')
         .eq('email_verified', true)
         .single();
 
@@ -49,12 +44,12 @@ export class RecyclersController {
         name: recycler.username,
         phone: recycler.phone,
         profileImage: recycler.profile_image,
-        businessName: recycler.recycler_profiles?.[0]?.business_name,
-        rating: recycler.recycler_profiles?.[0]?.average_rating || 0,
-        truckType: recycler.recycler_profiles?.[0]?.vehicle_info || 'Standard Truck',
-        rate: `GHS ${recycler.recycler_profiles?.[0]?.hourly_rate || 0}/hr`,
+        businessName: recycler.company_name || 'Independent Recycler',
+        rating: 5.0, // Default rating for now
+        truckType: 'Standard Truck', // Default for now
+        rate: 'GHS 50/hr', // Default rate for now
         pastPickups: pastPickups?.length || 0,
-        experienceYears: recycler.recycler_profiles?.[0]?.experience_years || 0
+        experienceYears: 1 // Default for now
       };
 
       res.json({
@@ -311,9 +306,10 @@ export class RecyclersController {
         .from('recycler_profiles')
         .select(`
           *,
-          recyclers:recycler_id(id, username, phone, address, city, state, profile_image)
+          customer:customer_id(id, username),
+          recycler:recycler_id(id, username)
         `)
-        .eq('recyclers.email_verified', true)
+        .eq('recycler.email_verified', true)
         .eq('is_available', true); // Only show available recyclers
 
       // Filter by location
@@ -376,10 +372,11 @@ export class RecyclersController {
         .from('recycler_profiles')
         .select(`
           *,
-          recyclers:recycler_id(id, username, phone, address, city, state, profile_image, created_at)
+          customer:customer_id(id, username),
+          recycler:recycler_id(id, username, created_at)
         `)
         .eq('recycler_id', id)
-        .eq('recyclers.email_verified', true)
+        .eq('recycler.email_verified', true)
         .single();
 
       if (error || !recycler) {
@@ -581,8 +578,8 @@ export class RecyclersController {
         .from('recycler_reviews')
         .select(`
           *,
-          customers:customer_id(id, username),
-          collections:collection_id(id, waste_type, pickup_date)
+          customer:customer_id(id, username),
+          collection:collection_id(id, waste_type, pickup_date)
         `)
         .eq('recycler_id', id)
         .range(offset, offset + parseInt(limit as string) - 1)

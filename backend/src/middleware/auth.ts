@@ -53,11 +53,32 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     }
 
     // Get user details from database (optional)
-    const { data: userProfile, error: profileError } = await supabase
-      .from('users')
-      .select('id, email, role, username')
+    let userProfile = null;
+    let profileError = null;
+
+    // Try to find user in customers table first
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .select('id, email, username')
       .eq('id', user.id)
       .single();
+
+    if (customer) {
+      userProfile = { ...customer, role: 'customer' as const };
+    } else {
+      // If not found in customers, check recyclers table
+      const { data: recycler, error: recyclerError } = await supabase
+        .from('recyclers')
+        .select('id, email, username')
+        .eq('id', user.id)
+        .single();
+
+      if (recycler) {
+        userProfile = { ...recycler, role: 'recycler' as const };
+      } else {
+        profileError = recyclerError;
+      }
+    }
 
     if (profileError || !userProfile) {
       // If user profile doesn't exist in database, use Supabase Auth data
@@ -66,7 +87,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
       req.user = {
         id: user.id,
         email: user.email || '',
-        role: user.user_metadata?.role || 'customer',
+        role: (user.user_metadata?.role as 'customer' | 'recycler') || 'customer',
         username: user.user_metadata?.username || user.email?.split('@')[0] || ''
       };
     } else {

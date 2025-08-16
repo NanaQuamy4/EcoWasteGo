@@ -56,18 +56,29 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    const { data: existingUser, error: checkError } = await supabaseAdmin
-      .from('users')
+    // Check if email exists in either customers or recyclers table
+    let existingUser = null;
+    
+    // Check customers table first
+    const { data: existingCustomer, error: customerError } = await supabaseAdmin
+      .from('customers')
       .select('*')
       .eq('email', email.toLowerCase())
       .single();
 
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error('Error checking existing user:', checkError);
-      return res.status(500).json({
-        success: false,
-        error: 'Database error'
-      });
+    if (existingCustomer) {
+      existingUser = existingCustomer;
+    } else {
+      // Check recyclers table
+      const { data: existingRecycler, error: recyclerError } = await supabaseAdmin
+        .from('recyclers')
+        .select('*')
+        .eq('email', email.toLowerCase())
+        .single();
+
+      if (existingRecycler) {
+        existingUser = existingRecycler;
+      }
     }
 
     if (existingUser) {
@@ -112,12 +123,15 @@ router.post('/register', async (req, res) => {
       email: email.toLowerCase(),
       username: username,
       phone: phone || '',
-      role: role,
       email_verified: authData.user.email_confirmed_at ? true : false,
       onboarding_completed: false,
       company_name: role === 'recycler' ? companyName : null,
       verification_status: role === 'recycler' ? 'unverified' : 'verified',
-      status: 'active'
+      status: 'active',
+      privacy_policy_accepted: true,
+      privacy_policy_version: '1.0',
+      privacy_policy_accepted_at: new Date().toISOString(),
+      created_at: new Date().toISOString()
     };
 
     console.log('Inserting user profile:', userData);
@@ -127,21 +141,41 @@ router.post('/register', async (req, res) => {
     let profileError = null;
     
     if (supabaseAdmin) {
-      const result = await supabaseAdmin
-        .from('users')
-        .insert(userData)
-        .select()
-        .single();
-      profile = result.data;
-      profileError = result.error;
+      if (role === 'customer') {
+        const result = await supabaseAdmin
+          .from('customers')
+          .insert(userData)
+          .select()
+          .single();
+        profile = result.data;
+        profileError = result.error;
+      } else if (role === 'recycler') {
+        const result = await supabaseAdmin
+          .from('recyclers')
+          .insert(userData)
+          .select()
+          .single();
+        profile = result.data;
+        profileError = result.error;
+      }
     } else {
-      const result = await supabase
-        .from('users')
-        .insert(userData)
-        .select()
-        .single();
-      profile = result.data;
-      profileError = result.error;
+      if (role === 'customer') {
+        const result = await supabase
+          .from('customers')
+          .insert(userData)
+          .select()
+          .single();
+        profile = result.data;
+        profileError = result.error;
+      } else if (role === 'recycler') {
+        const result = await supabase
+          .from('recyclers')
+          .insert(userData)
+          .select()
+          .single();
+        profile = result.data;
+        profileError = result.error;
+      }
     }
 
     if (profileError) {
@@ -211,11 +245,34 @@ router.post('/login', async (req, res) => {
     }
 
     // Get user profile from database
-    const { data: profile, error: profileError } = await supabase
-      .from('users')
+    let profile = null;
+    let profileError = null;
+
+    // Try to find user in customers table first
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
       .select('*')
       .eq('id', data.user.id)
       .single();
+
+    if (customer) {
+      profile = customer;
+      profile.role = 'customer';
+    } else {
+      // If not found in customers, check recyclers table
+      const { data: recycler, error: recyclerError } = await supabase
+        .from('recyclers')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (recycler) {
+        profile = recycler;
+        profile.role = 'recycler';
+      } else {
+        profileError = new Error('User profile not found');
+      }
+    }
 
     if (profileError) {
       console.error('Profile fetch error:', profileError);
@@ -270,18 +327,30 @@ router.post('/login', async (req, res) => {
  */
 router.get('/users', async (req, res) => {
   try {
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching users:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to fetch users'
-      });
+    // Fetch users from both customers and recyclers tables
+    const [customersResult, recyclersResult] = await Promise.all([
+      supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('recyclers')
+        .select('*')
+        .order('created_at', { ascending: false })
+    ]);
+
+    let users = [];
+
+    if (customersResult.data) {
+      users.push(...customersResult.data.map(c => ({ ...c, role: 'customer' })));
     }
+
+    if (recyclersResult.data) {
+      users.push(...recyclersResult.data.map(r => ({ ...r, role: 'recycler' })));
+    }
+
+    // Sort by creation date
+    users.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     
     return res.json({
       success: true,
@@ -362,18 +431,29 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    const { data: existingUser, error: checkError } = await supabaseAdmin
-      .from('users')
+    // Check if email exists in either customers or recyclers table
+    let existingUser = null;
+    
+    // Check customers table first
+    const { data: existingCustomer, error: customerError } = await supabaseAdmin
+      .from('customers')
       .select('*')
       .eq('email', email.toLowerCase())
       .single();
 
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error('Error checking existing user:', checkError);
-      return res.status(500).json({
-        success: false,
-        error: 'Database error'
-      });
+    if (existingCustomer) {
+      existingUser = existingCustomer;
+    } else {
+      // Check recyclers table
+      const { data: existingRecycler, error: recyclerError } = await supabaseAdmin
+        .from('recyclers')
+        .select('*')
+        .eq('email', email.toLowerCase())
+        .single();
+
+      if (existingRecycler) {
+        existingUser = existingRecycler;
+      }
     }
 
     if (!existingUser) {
@@ -531,13 +611,32 @@ router.post('/reset-password', async (req, res) => {
       });
     }
 
-    const { data: existingUser, error: checkError } = await supabaseAdmin
-      .from('users')
+    // Check if email exists in either customers or recyclers table
+    let existingUser = null;
+    
+    // Check customers table first
+    const { data: existingCustomer, error: customerError } = await supabaseAdmin
+      .from('customers')
       .select('*')
       .eq('email', email.toLowerCase())
       .single();
 
-    if (checkError || !existingUser) {
+    if (existingCustomer) {
+      existingUser = existingCustomer;
+    } else {
+      // Check recyclers table
+      const { data: existingRecycler, error: recyclerError } = await supabaseAdmin
+        .from('recyclers')
+        .select('*')
+        .eq('email', email.toLowerCase())
+        .single();
+
+      if (existingRecycler) {
+        existingUser = existingRecycler;
+      }
+    }
+
+    if (!existingUser) {
       return res.status(400).json({
         success: false,
         error: 'INVALID_EMAIL'
@@ -643,10 +742,19 @@ router.post('/verify-email', async (req, res) => {
 
     // Update user profile to mark email as verified
     if (supabaseAdmin && data.user) {
-      await supabaseAdmin
-        .from('users')
+      // Try to update in customers table first
+      const { error: customerError } = await supabaseAdmin
+        .from('customers')
         .update({ email_verified: true })
         .eq('id', data.user.id);
+
+      // If not found in customers, try recyclers table
+      if (customerError) {
+        await supabaseAdmin
+          .from('recyclers')
+          .update({ email_verified: true })
+          .eq('id', data.user.id);
+      }
     }
 
     return res.json({
@@ -673,17 +781,32 @@ router.post('/verify-email', async (req, res) => {
  */
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const { data: profile, error } = await supabase
-      .from('users')
+    // Try to find user in customers table first
+    let { data: profile, error } = await supabase
+      .from('customers')
       .select('*')
       .eq('id', req.user?.id)
       .single();
 
+    let userRole = 'customer';
+
+    // If not found in customers, check recyclers table
     if (error || !profile) {
-      return res.status(404).json({
-        success: false,
-        error: 'User profile not found'
-      });
+      const { data: recycler, error: recyclerError } = await supabase
+        .from('recyclers')
+        .select('*')
+        .eq('id', req.user?.id)
+        .single();
+
+      if (recyclerError || !recycler) {
+        return res.status(404).json({
+          success: false,
+          error: 'User profile not found'
+        });
+      }
+
+      profile = recycler;
+      userRole = 'recycler';
     }
 
     return res.json({
@@ -693,8 +816,10 @@ router.get('/me', authenticateToken, async (req, res) => {
           id: profile.id,
           email: profile.email,
           username: profile.username,
-          role: profile.role,
-          email_verified: profile.email_verified
+          phone: profile.phone,
+          role: userRole,
+          email_verified: profile.email_verified,
+          created_at: profile.created_at
         }
       }
     });
@@ -843,28 +968,45 @@ router.post('/switch-role', authenticateToken, async (req, res) => {
 
     // Update user role in database
     if (supabaseAdmin) {
-      const { data: updatedUser, error: updateError } = await supabaseAdmin
-        .from('users')
+      // Try to update in customers table first
+      let { data: updatedUser, error: updateError } = await supabaseAdmin
+        .from('customers')
         .update({ 
-          role: role,
           updated_at: new Date().toISOString()
         })
         .eq('id', userId)
-        .select()
-        .single();
+        .select();
 
-      if (updateError) {
-        console.error('Role update error:', updateError);
-        return res.status(500).json({
+      // If not found in customers, try recyclers table
+      if (updateError || !updatedUser) {
+        const result = await supabaseAdmin
+          .from('recyclers')
+          .update({ 
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId)
+          .select();
+        
+        updatedUser = result.data;
+        updateError = result.error;
+      }
+
+      if (updateError || !updatedUser) {
+        return res.status(404).json({
           success: false,
-          error: 'Failed to update user role'
+          error: 'User not found'
         });
       }
 
+      // Note: Role switching between tables is not supported in the new structure
+      // Users are created in their respective tables and cannot switch between them
       return res.json({
         success: true,
-        message: `Role switched to ${role} successfully`,
-        data: updatedUser
+        message: `User profile updated successfully`,
+        data: {
+          ...updatedUser,
+          role: role === 'customer' ? 'customer' : 'recycler'
+        }
       });
     } else {
       return res.status(500).json({
@@ -927,7 +1069,7 @@ router.post('/complete-recycler-registration', async (req, res) => {
     // Update user profile with complete registration data
     if (supabaseAdmin) {
       const { data: updatedUser, error: updateError } = await supabaseAdmin
-        .from('users')
+        .from('recyclers')
         .update({
           company_name: companyName,
           business_location: businessLocation,
@@ -1014,6 +1156,88 @@ router.post('/apple', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Apple login failed'
+    });
+  }
+});
+
+/**
+ * @route POST /api/auth/simple-login
+ * @desc Simple login that bypasses Supabase Auth
+ * @access Public
+ */
+router.post('/simple-login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and password are required'
+      });
+    }
+
+    // Check if user exists in either customers or recyclers table
+    let user = null;
+    let userRole = null;
+    
+    // Check customers table first
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .single();
+    
+    if (customer) {
+      user = customer;
+      userRole = 'customer';
+    } else {
+      // Check recyclers table
+      const { data: recycler } = await supabase
+        .from('recyclers')
+        .select('*')
+        .eq('email', email.toLowerCase())
+        .single();
+      
+      if (recycler) {
+        user = recycler;
+        userRole = 'recycler';
+      }
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password'
+      });
+    }
+
+    // For now, we'll accept any password (you can add password hashing later)
+    // In production, you should implement proper password verification
+    
+    // Generate a simple session token (you can use JWT later)
+    const sessionToken = `session_${user.id}_${Date.now()}`;
+    
+    return res.json({
+      success: true,
+      message: 'Login successful!',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          phone: user.phone,
+          role: userRole,
+          emailVerified: user.email_verified,
+          created_at: user.created_at,
+          sessionToken: sessionToken
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Simple login error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to login'
     });
   }
 });

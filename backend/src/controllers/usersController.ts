@@ -9,11 +9,24 @@ export class UsersController {
     try {
       const userId = req.user?.id;
       
-      const { data: user, error } = await supabase
-        .from('users')
+      // Try to find user in customers table first
+      let { data: user, error } = await supabase
+        .from('customers')
         .select('*')
         .eq('id', userId)
         .single();
+
+      // If not found in customers, check recyclers table
+      if (error || !user) {
+        const result = await supabase
+          .from('recyclers')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        user = result.data;
+        error = result.error;
+      }
 
       if (error || !user) {
         res.status(404).json({ 
@@ -53,12 +66,26 @@ export class UsersController {
       if (state) updateData.state = state;
       if (profile_image) updateData.profile_image = profile_image;
 
-      const { data: user, error } = await supabase
-        .from('users')
+      // Try to update in customers table first
+      let { data: user, error } = await supabase
+        .from('customers')
         .update(updateData)
         .eq('id', userId)
         .select()
         .single();
+
+      // If not found in customers, try recyclers table
+      if (error || !user) {
+        const result = await supabase
+          .from('recyclers')
+          .update(updateData)
+          .eq('id', userId)
+          .select()
+          .single();
+        
+        user = result.data;
+        error = result.error;
+      }
 
       if (error) {
         res.status(400).json({
@@ -88,7 +115,7 @@ export class UsersController {
   static async getRecyclers(req: Request, res: Response): Promise<void> {
     try {
       const { data: recyclers, error } = await supabase
-        .from('users')
+        .from('recyclers')
         .select(`
           id,
           username,
@@ -133,7 +160,7 @@ export class UsersController {
       const { id } = req.params;
 
       const { data: recycler, error } = await supabase
-        .from('users')
+        .from('recyclers')
         .select(`
           id,
           username,
@@ -142,11 +169,9 @@ export class UsersController {
           city,
           state,
           profile_image,
-          created_at,
-          recycler_profiles!inner(*)
+          created_at
         `)
         .eq('id', id)
-        .eq('role', 'recycler')
         .eq('email_verified', true)
         .single();
 

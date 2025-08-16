@@ -525,7 +525,7 @@ export default function RecyclerRequests() {
               console.log('🧪 Testing backend connection...');
               
               // First test basic health endpoint
-              const healthResponse = await fetch('http://10.132.144.9:3000/health');
+              const healthResponse = await fetch('http://10.132.53.210:3000/health');
               console.log('🏥 Health check status:', healthResponse.status);
               
               // Then test the specific endpoint

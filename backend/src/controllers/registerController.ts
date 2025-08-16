@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase';
 import { sendVerificationEmail } from '../services/emailService';
+import SMSService from '../services/smsService';
 
 export class RegisterController {
   /**
@@ -8,22 +9,40 @@ export class RegisterController {
    */
   static async registerUser(req: Request, res: Response): Promise<void> {
     try {
-      const { email, password, username, phone, role = 'customer' } = req.body;
+      const { email, password, username, phone, role = 'customer', companyName } = req.body;
 
-      if (!email || !password || !username) {
+      if (!email || !username) {
         res.status(400).json({
           success: false,
-          error: 'Email, password, and username are required'
+          error: 'Email and username are required'
         });
         return;
       }
 
-      // Check if email already exists
-      const { data: existingUser, error: checkError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email)
-        .single();
+      // Check if email already exists in either customers or recyclers table
+      let existingUser = null;
+      
+      if (role === 'customer') {
+        const { data: existingCustomer } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('email', email)
+          .single();
+        
+        if (existingCustomer) {
+          existingUser = existingCustomer;
+        }
+      } else if (role === 'recycler') {
+        const { data: existingRecycler } = await supabase
+          .from('recyclers')
+          .select('id')
+          .eq('email', email)
+          .single();
+        
+        if (existingRecycler) {
+          existingUser = existingRecycler;
+        }
+      }
 
       if (existingUser) {
         res.status(400).json({
@@ -33,44 +52,52 @@ export class RegisterController {
         return;
       }
 
-      // Create user in Supabase Auth
-      const { data: authUser, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            username,
-            role
-          }
-        }
-      });
+      // Create user profile directly in database (bypass Supabase Auth entirely)
+      let user = null;
+      let profileError = null;
 
-      if (authError) {
-        res.status(500).json({
-          success: false,
-          error: 'Failed to create user account'
-        });
-        return;
+      if (role === 'customer') {
+        const { data: customer, error: error } = await supabase
+          .from('customers')
+          .insert({
+            email,
+            username,
+            phone,
+            company_name: companyName,
+            privacy_policy_accepted: true,
+            privacy_policy_version: '1.0',
+            privacy_policy_accepted_at: new Date().toISOString(),
+            email_verified: true, // Auto-verify the user
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+        
+        user = customer;
+        profileError = error;
+      } else if (role === 'recycler') {
+        const { data: recycler, error: error } = await supabase
+          .from('recyclers')
+          .insert({
+            email,
+            username,
+            phone,
+            company_name: companyName,
+            privacy_policy_accepted: true,
+            privacy_policy_version: '1.0',
+            privacy_policy_accepted_at: new Date().toISOString(),
+            email_verified: true, // Auto-verify the user
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+        
+        user = recycler;
+        profileError = error;
       }
 
-      // Create user profile in database with privacy policy acceptance
-      const { data: user, error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: authUser.user?.id,
-          email,
-          username,
-          phone,
-          role,
-          privacy_policy_accepted: true,
-          privacy_policy_version: '1.0',
-          privacy_policy_accepted_at: new Date().toISOString(),
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (profileError) {
+      if (profileError || !user) {
+        console.error('Profile creation error:', profileError);
         res.status(500).json({
           success: false,
           error: 'Failed to create user profile'
@@ -78,33 +105,20 @@ export class RegisterController {
         return;
       }
 
-      // Send verification email
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // Store OTP in database (you might want to create a separate table for this)
-      await supabase
-        .from('email_verifications')
-        .insert({
-          user_id: user.id,
-          email,
-          otp,
-          expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
-        });
-
-      // Send email
-      await sendVerificationEmail(email, otp);
-
+      // Successfully created and auto-verified user
       res.json({
         success: true,
+        message: 'User registered and verified successfully!',
         data: {
           user: {
             id: user.id,
             email: user.email,
             username: user.username,
-            role: user.role
+            role: role,
+            emailVerified: true,
+            message: 'No email confirmation needed - you can login immediately!'
           }
-        },
-        message: 'Registration successful. Please check your email for verification.'
+        }
       });
     } catch (error) {
       console.error('Error registering user:', error);
@@ -147,18 +161,39 @@ export class RegisterController {
         return;
       }
 
-      // Update user as verified
-      const { data: user, error: updateError } = await supabase
-        .from('users')
-        .update({
-          email_verified: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', verification.user_id)
-        .select()
-        .single();
+      // Update user as verified in appropriate table
+      let user = null;
+      let updateError = null;
 
-      if (updateError) {
+      if (verification.user_type === 'customer') {
+        const { data: customer, error: error } = await supabase
+          .from('customers')
+          .update({
+            email_verified: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', verification.user_id)
+          .select()
+          .single();
+        
+        user = customer;
+        updateError = error;
+      } else if (verification.user_type === 'recycler') {
+        const { data: recycler, error: error } = await supabase
+          .from('recyclers')
+          .update({
+            email_verified: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', verification.user_id)
+          .select()
+          .single();
+        
+        user = recycler;
+        updateError = error;
+      }
+
+      if (updateError || !user) {
         res.status(500).json({
           success: false,
           error: 'Failed to verify email'
@@ -208,14 +243,32 @@ export class RegisterController {
         return;
       }
 
-      // Check if user exists
-      const { data: user, error: userError } = await supabase
-        .from('users')
+      // Check if user exists in either customers or recyclers table
+      let user = null;
+      
+      // Check customers table first
+      const { data: customer, error: customerError } = await supabase
+        .from('customers')
         .select('id, email_verified')
         .eq('email', email)
         .single();
+      
+      if (customer) {
+        user = customer;
+      } else {
+        // Check recyclers table
+        const { data: recycler, error: recyclerError } = await supabase
+          .from('recyclers')
+          .select('id, email_verified')
+          .eq('email', email)
+          .single();
+        
+        if (recycler) {
+          user = recycler;
+        }
+      }
 
-      if (userError || !user) {
+      if (!user) {
         res.status(404).json({
           success: false,
           error: 'User not found'
@@ -234,11 +287,18 @@ export class RegisterController {
       // Generate new OTP
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
+      // Determine user type for verification record
+      let userType = 'customer';
+      if (await supabase.from('recyclers').select('id').eq('id', user.id).single().then(r => r.data)) {
+        userType = 'recycler';
+      }
+
       // Update or create verification record
       await supabase
         .from('email_verifications')
         .upsert({
           user_id: user.id,
+          user_type: userType,
           email,
           otp,
           expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
@@ -261,6 +321,185 @@ export class RegisterController {
   }
 
   /**
+   * Register user with SMS verification
+   */
+  static async registerWithSMSVerification(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, password, username, phone, role = 'customer', companyName, smsVerified } = req.body;
+
+      if (!email || !username || !phone) {
+        res.status(400).json({
+          success: false,
+          error: 'Email, username, and phone number are required'
+        });
+        return;
+      }
+
+      // Verify that SMS verification was completed
+      if (!smsVerified) {
+        res.status(400).json({
+          success: false,
+          error: 'SMS_VERIFICATION_REQUIRED',
+          message: 'Please verify your phone number first'
+        });
+        return;
+      }
+
+      // Verify SMS verification status in database
+      const formattedPhone = SMSService['formatPhoneNumber'](phone);
+      let isVerified = false;
+
+      // Check in verification_attempts table for successful SMS verification
+      const { data: verificationData } = await supabase
+        .from('verification_attempts')
+        .select('*')
+        .eq('contact_info', formattedPhone)
+        .eq('verification_type', 'sms')
+        .eq('is_successful', true)
+        .gt('verified_at', new Date(Date.now() - 30 * 60 * 1000).toISOString()) // Within last 30 minutes
+        .order('verified_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (verificationData) {
+        isVerified = true;
+      } else {
+        // Fallback check in email_verifications table
+        const { data: legacyVerificationData } = await supabase
+          .from('email_verifications')
+          .select('*')
+          .eq('phone_number', formattedPhone)
+          .eq('verification_type', 'sms')
+          .eq('is_used', true)
+          .single();
+
+        if (legacyVerificationData) {
+          isVerified = true;
+        }
+      }
+
+      if (!isVerified) {
+        res.status(400).json({
+          success: false,
+          error: 'PHONE_NOT_VERIFIED',
+          message: 'Phone number verification not found or expired. Please verify your phone number again.'
+        });
+        return;
+      }
+
+      // Check if email already exists in either customers or recyclers table
+      let existingUser = null;
+      
+      if (role === 'customer') {
+        const { data: existingCustomer } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('email', email)
+          .single();
+        
+        if (existingCustomer) {
+          existingUser = existingCustomer;
+        }
+      } else if (role === 'recycler') {
+        const { data: existingRecycler } = await supabase
+          .from('recyclers')
+          .select('id')
+          .eq('email', email)
+          .single();
+        
+        if (existingRecycler) {
+          existingUser = existingRecycler;
+        }
+      }
+
+      if (existingUser) {
+        res.status(400).json({
+          success: false,
+          error: 'Email already registered'
+        });
+        return;
+      }
+
+      // Create user profile directly in database with verified phone
+      let user = null;
+      let profileError = null;
+
+      const userData = {
+        email,
+        username,
+        phone: formattedPhone,
+        company_name: companyName,
+        privacy_policy_accepted: true,
+        privacy_policy_version: '1.0',
+        privacy_policy_accepted_at: new Date().toISOString(),
+        email_verified: false, // Email still needs verification
+        phone_verified: true, // Phone is verified via SMS
+        phone_verified_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      };
+
+      if (role === 'customer') {
+        const { data: customer, error: error } = await supabase
+          .from('customers')
+          .insert(userData)
+          .select()
+          .single();
+        
+        user = customer;
+        profileError = error;
+      } else if (role === 'recycler') {
+        const { data: recycler, error: error } = await supabase
+          .from('recyclers')
+          .insert(userData)
+          .select()
+          .single();
+        
+        user = recycler;
+        profileError = error;
+      }
+
+      if (profileError || !user) {
+        console.error('Profile creation error:', profileError);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to create user profile'
+        });
+        return;
+      }
+
+      // Send welcome SMS
+      await SMSService.sendSMS({
+        recipient: formattedPhone,
+        message: `Welcome to EcoWasteGo! Your account has been created successfully. You can now start ${role === 'recycler' ? 'receiving pickup requests' : 'scheduling waste pickups'}.`
+      });
+
+      // Successfully created user with verified phone
+      res.json({
+        success: true,
+        message: 'User registered successfully with verified phone number!',
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            phone: user.phone,
+            role: role,
+            emailVerified: false,
+            phoneVerified: true,
+            message: 'Account created! You can login immediately. Email verification is optional.'
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error registering user with SMS:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to register user'
+      });
+    }
+  }
+
+  /**
    * Check if email is available
    */
   static async checkEmailAvailability(req: Request, res: Response): Promise<void> {
@@ -275,14 +514,20 @@ export class RegisterController {
         return;
       }
 
-      // Check if email exists
-      const { data: existingUser, error } = await supabase
-        .from('users')
+      // Check if email exists in either customers or recyclers table
+      const { data: existingCustomer } = await supabase
+        .from('customers')
         .select('id')
         .eq('email', email)
         .single();
 
-      const isAvailable = !existingUser;
+      const { data: existingRecycler } = await supabase
+        .from('recyclers')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+      const isAvailable = !existingCustomer && !existingRecycler;
 
       res.json({
         success: true,
@@ -297,6 +542,86 @@ export class RegisterController {
       res.status(500).json({
         success: false,
         error: 'Failed to check email availability'
+      });
+    }
+  }
+
+  /**
+   * Simple login (bypasses Supabase Auth)
+   */
+  static async simpleLogin(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        res.status(400).json({
+          success: false,
+          error: 'Email and password are required'
+        });
+        return;
+      }
+
+      // Check if user exists in either customers or recyclers table
+      let user = null;
+      let userRole = null;
+      
+      // Check customers table first
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('email', email)
+        .single();
+      
+      if (customer) {
+        user = customer;
+        userRole = 'customer';
+      } else {
+        // Check recyclers table
+        const { data: recycler } = await supabase
+          .from('recyclers')
+          .select('*')
+          .eq('email', email)
+          .single();
+        
+        if (recycler) {
+          user = recycler;
+          userRole = 'recycler';
+        }
+      }
+
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          error: 'Invalid email or password'
+        });
+        return;
+      }
+
+      // For now, we'll accept any password (you can add password hashing later)
+      // In production, you should implement proper password verification
+      
+      // Generate a simple session token (you can use JWT later)
+      const sessionToken = `session_${user.id}_${Date.now()}`;
+      
+      res.json({
+        success: true,
+        message: 'Login successful!',
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            role: userRole,
+            emailVerified: user.email_verified,
+            sessionToken: sessionToken
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error during login:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to login'
       });
     }
   }

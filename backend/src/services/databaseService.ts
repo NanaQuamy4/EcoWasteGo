@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Pool } from 'pg';
+import { supabaseAnonKey, supabaseServiceKey, supabaseUrl } from '../config/supabase';
 
 // Database performance configuration
 const DB_CONFIG = {
@@ -102,8 +103,8 @@ class DatabaseCache {
 
 // Query performance monitoring
 class QueryMonitor {
-  private queries: Array<{ sql: string; duration: number; timestamp: number }> = [];
-  private slowQueries: Array<{ sql: string; duration: number; timestamp: number }> = [];
+  private queries: { sql: string; duration: number; timestamp: number }[] = [];
+  private slowQueries: { sql: string; duration: number; timestamp: number }[] = [];
 
   logQuery(sql: string, duration: number): void {
     const queryInfo = { sql, duration, timestamp: Date.now() };
@@ -140,31 +141,38 @@ class QueryMonitor {
 
 // Optimized database service
 export class DatabaseService {
-  private supabase: SupabaseClient;
-  private supabaseAdmin: SupabaseClient | null;
+  private supabase!: SupabaseClient;
+  private supabaseAdmin!: SupabaseClient | null;
   private pgPool: Pool | null = null;
-  private cache: DatabaseCache;
-  private monitor: QueryMonitor;
+  private cache!: DatabaseCache;
+  private monitor!: QueryMonitor;
 
   constructor() {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Missing Supabase configuration');
-    }
-
-    this.supabase = createClient(supabaseUrl, supabaseAnonKey);
-    this.supabaseAdmin = supabaseServiceKey 
-      ? createClient(supabaseUrl, supabaseServiceKey)
-      : null;
+    // Initialize with retries for Supabase connection
+    this.initializeSupabase();
 
     this.cache = new DatabaseCache(DB_CONFIG.cache.maxSize);
     this.monitor = new QueryMonitor();
 
     // Initialize PostgreSQL connection pool for direct database access
     this.initializePgPool();
+  }
+
+  private initializeSupabase(): void {
+    try {
+      // Create Supabase client with anon key for regular operations
+      this.supabase = createClient(supabaseUrl, supabaseAnonKey);
+      
+      // Create Supabase admin client with service role key for admin operations
+      this.supabaseAdmin = supabaseServiceKey 
+        ? createClient(supabaseUrl, supabaseServiceKey)
+        : null;
+
+      console.log('✅ Supabase clients initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize Supabase clients:', error);
+      throw new Error('Failed to initialize Supabase clients');
+    }
   }
 
   private initializePgPool(): void {
@@ -277,7 +285,7 @@ export class DatabaseService {
   }
 
   // Optimized batch operations
-  async batchQuery(queries: Array<{ sql: string; params?: any[] }>): Promise<any[][]> {
+  async batchQuery(queries: { sql: string; params?: any[] }[]): Promise<any[][]> {
     if (!this.pgPool) {
       throw new Error('PostgreSQL pool not available');
     }
@@ -330,11 +338,33 @@ export class DatabaseService {
   async getUserProfile(userId: string): Promise<any> {
     const cacheKey = `user_profile_${userId}`;
     return this.supabaseQuery(
-      (supabase) => supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single(),
+      async (supabase) => {
+        // Try to find user in customers table first
+        let { data: profile, error } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+        if (profile) {
+          profile.role = 'customer';
+          return { data: profile, error: null };
+        }
+
+        // If not found in customers, check recyclers table
+        const { data: recycler, error: recyclerError } = await supabase
+          .from('recyclers')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+        if (recycler) {
+          recycler.role = 'recycler';
+          return { data: recycler, error: null };
+        }
+
+        return { data: null, error: recyclerError };
+      },
       cacheKey,
       600 // 10 minutes cache for user profiles
     );
@@ -347,21 +377,21 @@ export class DatabaseService {
     
     return this.supabaseQuery(
       (supabase) => supabase
-        .from('users')
+        .from('recyclers')
         .select(`
           id,
           username,
           phone,
-          address,
-          city,
-          state,
+          business_location,
+          areas_of_operation,
           profile_image,
           created_at,
-          recycler_profiles!inner(*)
+          is_available,
+          verification_status
         `)
-        .eq('role', 'recycler')
         .eq('email_verified', true)
-        .eq('recycler_profiles.is_available', true) // Only show available recyclers
+        .eq('is_available', true) // Only show available recyclers
+        .eq('verification_status', 'verified') // Only show verified recyclers
         .range(offset, offset + limit - 1)
         .order('created_at', { ascending: false }),
       cacheKey,

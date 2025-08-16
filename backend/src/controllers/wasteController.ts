@@ -77,8 +77,8 @@ export class WasteController {
         .from('waste_collections')
         .select(`
           *,
-          customers:customer_id(id, username, phone, address),
-          recyclers:recycler_id(id, username, phone)
+          customer:customer_id(id, username, phone, address),
+          recycler:recycler_id(id, username, phone)
         `);
 
       // Filter by user role
@@ -135,8 +135,8 @@ export class WasteController {
         .from('waste_collections')
         .select(`
           *,
-          customers:customer_id(id, username, phone, address),
-          recyclers:recycler_id(id, username, phone)
+          customer:customer_id(id, username, phone, address),
+          recycler:recycler_id(id, username, phone)
         `)
         .eq('id', id);
 
@@ -184,7 +184,7 @@ export class WasteController {
         .from('waste_collections')
         .select(`
           *,
-          customers:customer_id(id, username, phone, address)
+          customer:customer_id(id, username, phone, address)
         `)
         .eq('status', 'pending')
         .range(offset, offset + parseInt(limit as string) - 1)
@@ -565,7 +565,7 @@ export class WasteController {
           created_at,
           customer_id,
           recycler_id,
-          customers:customer_id(
+          customer:customer_id(
             id,
             username,
             phone,
@@ -607,9 +607,9 @@ export class WasteController {
         customer_id: collection.customer_id,
         recycler_id: collection.recycler_id,
         customer: {
-          username: collection.customers?.[0]?.username || 'Unknown Customer',
-          phone: collection.customers?.[0]?.phone || 'No phone',
-          address: collection.customers?.[0]?.address || 'No address'
+          username: collection.customer?.[0]?.username || 'Unknown Customer',
+          phone: collection.customer?.[0]?.phone || 'No phone',
+          address: collection.customer?.[0]?.address || 'No address'
         }
       })) || [];
 

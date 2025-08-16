@@ -16,17 +16,22 @@ import {
 import PhoneNumberInput from '../components/PhoneNumberInput';
 import { COLORS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
+import { apiService } from '../services/apiService';
 import { SignupValidationData, validateSignup } from '../utils/validation';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { selectedRole } = useLocalSearchParams<{ selectedRole?: string }>();
+  const { selectedRole, smsVerified, verifiedPhone } = useLocalSearchParams<{ 
+    selectedRole?: string;
+    smsVerified?: string;
+    verifiedPhone?: string;
+  }>();
   const { register, user } = useAuth();
   
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
-    phone: '',
+    phone: verifiedPhone || '',
     password: '',
     confirmPassword: '',
     companyName: '', // For recyclers
@@ -42,6 +47,10 @@ export default function RegisterScreen() {
   // Privacy policy agreement states
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [disagreeToTerms, setDisagreeToTerms] = useState(true);
+
+  // SMS verification states
+  const [phoneVerified, setPhoneVerified] = useState(smsVerified === 'true');
+  const [isVerifyingPhone, setIsVerifyingPhone] = useState(false);
 
   const isRecycler = selectedRole === 'recycler';
 
@@ -143,9 +152,57 @@ export default function RegisterScreen() {
     setAgreeToTerms(false);
   };
 
+  const handleVerifyPhone = async () => {
+    // Validate phone number first
+    if (!isPhoneValid || !formData.phone.trim()) {
+      Alert.alert('Invalid Phone', 'Please enter a valid phone number before verification.');
+      return;
+    }
+
+    setIsVerifyingPhone(true);
+    try {
+      const response = await apiService.sendSMSVerificationCode(
+        formData.phone, 
+        selectedRole as 'customer' | 'recycler'
+      );
+
+      if (response.success) {
+        // Navigate to SMS verification screen
+        router.push({
+          pathname: '/SMSVerificationScreen',
+          params: {
+            phoneNumber: formData.phone,
+            userType: selectedRole,
+            formData: JSON.stringify(formData)
+          }
+        });
+      } else {
+        Alert.alert('Verification Failed', response.message || 'Failed to send verification code');
+      }
+    } catch (error: any) {
+      console.error('SMS verification error:', error);
+      Alert.alert('Verification Failed', 'Failed to send SMS verification code. Please try again.');
+    } finally {
+      setIsVerifyingPhone(false);
+    }
+  };
+
   const handleRegister = async () => {
     // Clear previous validation errors
     setValidationErrors([]);
+
+    // Check if phone is verified
+    if (!phoneVerified) {
+      Alert.alert(
+        'Phone Verification Required', 
+        'Please verify your phone number before registering.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Verify Now', onPress: handleVerifyPhone }
+        ]
+      );
+      return;
+    }
 
     // Check terms agreement
     if (!agreeToTerms) {
@@ -187,29 +244,35 @@ export default function RegisterScreen() {
     }
 
     setIsLoading(true);
-    console.log('Starting registration process...');
-    console.log('Email value:', JSON.stringify(formData.email));
-    console.log('Registration data:', {
-      email: formData.email,
-      username: formData.fullName,
-      phone: formData.phone,
-      role: selectedRole,
-      companyName: isRecycler ? formData.companyName : undefined,
-      termsAgreed: true,
-    });
+    console.log('Starting SMS-verified registration process...');
     
     try {
-      console.log('Calling register function...');
-      await register({
+      // Use SMS-verified registration endpoint
+      const response = await apiService.registerWithSMSVerification({
         email: formData.email,
         password: formData.password,
         username: formData.fullName,
         phone: validation.formattedPhone || formData.phone,
         role: selectedRole as 'customer' | 'recycler',
         companyName: isRecycler ? formData.companyName : undefined,
+        smsVerified: phoneVerified
       });
-      console.log('Registration successful!');
-      // Navigation will be handled by useEffect when user state updates
+
+      if (response.success) {
+        console.log('SMS-verified registration successful!');
+        Alert.alert(
+          'Registration Successful!',
+          'Your account has been created with verified phone number. You can now login.',
+          [
+            {
+              text: 'Login Now',
+              onPress: () => router.push('/LoginScreen')
+            }
+          ]
+        );
+      } else {
+        throw new Error(response.message || 'Registration failed');
+      }
     } catch (error: any) {
       console.error('Registration error:', error);
       console.error('Error details:', {
@@ -281,6 +344,7 @@ export default function RegisterScreen() {
     !emailError &&
     !passwordError &&
     isPhoneValid &&
+    phoneVerified && // Must verify phone number
     (isRecycler ? formData.companyName.trim() !== '' : true);
 
   return (
@@ -454,6 +518,37 @@ export default function RegisterScreen() {
                 error={phoneError || (formData.phone.trim() === '' ? 'Phone number is required' : undefined)}
                 onValidationChange={handlePhoneValidation}
               />
+              
+              {/* Phone Verification Section */}
+              <View style={styles.phoneVerificationSection}>
+                {phoneVerified ? (
+                  <View style={styles.verifiedContainer}>
+                    <MaterialIcons name="verified" size={20} color={COLORS.green} />
+                    <Text style={styles.verifiedText}>Phone number verified ✓</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.verifyPhoneButton,
+                      (!isPhoneValid || isVerifyingPhone) && styles.verifyPhoneButtonDisabled
+                    ]}
+                    onPress={handleVerifyPhone}
+                    disabled={!isPhoneValid || isVerifyingPhone}
+                  >
+                    <MaterialIcons 
+                      name="sms" 
+                      size={16} 
+                      color={isPhoneValid && !isVerifyingPhone ? COLORS.white : COLORS.gray} 
+                    />
+                    <Text style={[
+                      styles.verifyPhoneButtonText,
+                      (!isPhoneValid || isVerifyingPhone) && styles.verifyPhoneButtonTextDisabled
+                    ]}>
+                      {isVerifyingPhone ? 'Sending...' : 'Verify via SMS'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             <View style={styles.inputGroup}>
@@ -753,5 +848,41 @@ const styles = StyleSheet.create({
     color: COLORS.orange,
     fontSize: 16,
     fontWeight: '600',
+  },
+  phoneVerificationSection: {
+    marginTop: 12,
+  },
+  verifiedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.green + '20',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  verifiedText: {
+    color: COLORS.green,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  verifyPhoneButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.orange,
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+    justifyContent: 'center',
+  },
+  verifyPhoneButtonDisabled: {
+    backgroundColor: COLORS.lightGray,
+  },
+  verifyPhoneButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  verifyPhoneButtonTextDisabled: {
+    color: COLORS.gray,
   },
 }); 

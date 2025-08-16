@@ -100,9 +100,8 @@ export class PaymentsController {
         .from('payments')
         .select(`
           *,
-          collections:collection_id(id, waste_type, weight, address),
-          customers:customer_id(id, username),
-          recyclers:recycler_id(id, username)
+          customer:customer_id(id, username),
+          collection:collection_id(id, waste_type, pickup_date, address)
         `);
 
       // Filter by user role
@@ -159,9 +158,8 @@ export class PaymentsController {
         .from('payments')
         .select(`
           *,
-          collections:collection_id(id, waste_type, weight, address, pickup_date),
-          customers:customer_id(id, username, phone),
-          recyclers:recycler_id(id, username, phone)
+          customer:customer_id(id, username, phone),
+          collection:collection_id(id, waste_type, pickup_date, address)
         `)
         .eq('id', id);
 

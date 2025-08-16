@@ -145,8 +145,8 @@ export class TrackingController {
         .from('tracking_sessions')
         .select(`
           *,
-          recyclers:recycler_id(id, username, phone, profile_image),
-          customers:customer_id(id, username, phone)
+          customer:customer_id(id, username, phone),
+          recycler:recycler_id(id, username, phone)
         `)
         .eq('pickup_id', pickupId);
 

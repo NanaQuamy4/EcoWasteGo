@@ -14,7 +14,7 @@ export default function ConnectionTest() {
       setConnectionDetails('');
       
       // Test the health endpoint using computer's IP address
-      const response = await fetch('http://10.132.144.9:3000/health');
+      const response = await fetch('http://10.132.53.210:3000/health');
       const data = await response.json();
       
       if (response.ok) {

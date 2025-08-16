@@ -15,8 +15,8 @@ export class HistoryController {
         .from('waste_collections')
         .select(`
           *,
-          customers:customer_id(id, username, phone, address),
-          recyclers:recycler_id(id, username, phone)
+          customer:customer_id(id, username, phone, address),
+          recycler:recycler_id(id, username, phone)
         `);
 
       // Filter by user role
@@ -78,8 +78,8 @@ export class HistoryController {
         .from('waste_collections')
         .select(`
           *,
-          customers:customer_id(id, username, phone, address),
-          recyclers:recycler_id(id, username, phone),
+          customer:customer_id(id, username, phone, address),
+          recycler:recycler_id(id, username, phone),
           payments!inner(*)
         `)
         .eq('id', id);
@@ -201,8 +201,8 @@ export class HistoryController {
         .from('waste_collections')
         .select(`
           *,
-          customers:customer_id(username),
-          recyclers:recycler_id(username)
+          customer:customer_id(username),
+          recycler:recycler_id(username)
         `);
 
       // Filter by user role
@@ -229,7 +229,7 @@ export class HistoryController {
         const csvHeaders = 'Date,Status,Waste Type,Weight (kg),Address,Recycler,Notes\n';
         const csvRows = collections?.map(collection => {
           const date = new Date(collection.created_at).toLocaleDateString();
-          const recyclerName = collection.recyclers?.username || 'N/A';
+          const recyclerName = collection.recycler?.username || 'N/A';
           return `${date},${collection.status},${collection.waste_type},${collection.weight},${collection.address},${recyclerName},${collection.notes || ''}`;
         }).join('\n') || '';
 
@@ -276,8 +276,8 @@ export class HistoryController {
         .from('waste_collections')
         .select(`
           *,
-          customers:customer_id(id, username, phone, address),
-          recyclers:recycler_id(id, username, phone)
+          customer:customer_id(id, username, phone, address),
+          recycler:recycler_id(id, username, phone)
         `);
 
       // Filter by user role
