@@ -16,15 +16,16 @@ interface SendSMSParams {
 export class SMSService {
   // Get environment variables dynamically to ensure they're loaded after dotenv.config()
   private static get apiKey() {
-    return process.env.MNOTIFY_API_KEY;
+    // Temporarily hardcode API key to test SMS service
+    return 'kydQP0b7Kcfc2c0VUfRLnwbx1'; // process.env.MNOTIFY_API_KEY;
   }
   
   private static get baseUrl() {
-    return process.env.MNOTIFY_API_BASE_URL || 'https://api.mnotify.com';
+    return 'https://api.mnotify.com'; // process.env.MNOTIFY_API_BASE_URL || 'https://api.mnotify.com';
   }
   
   private static get defaultSenderId() {
-    return process.env.MNOTIFY_SENDER_ID || 'EcoWasteGo';
+    return 'EcoWasteGo'; // process.env.MNOTIFY_SENDER_ID || 'EcoWasteGo';
   }
   
   private static get isEnabled() {
