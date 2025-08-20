@@ -2,7 +2,7 @@
 export const API_CONFIG = {
   // Base URL for development - using computer's IP address for mobile access
   // Will fallback to localhost if external IP is not accessible
-  BASE_URL: 'http://10.132.254.147:3000',
+  BASE_URL: 'http://192.168.246.157:3000',
   FALLBACK_URL: 'http://localhost:3000',
   
   // API endpoints
@@ -134,6 +134,13 @@ export const API_CONFIG = {
       RESEND_CODE: '/api/sms-verification/resend-code',
       REGISTER: '/api/sms-verification/register',
       STATUS: '/api/sms-verification/status',
+    },
+
+    // SMS (Quick SMS)
+    SMS: {
+      QUICK: '/api/sms/quick',
+      SEND: '/api/sms/send',
+      STATUS: '/api/sms/status',
     },
   },
   

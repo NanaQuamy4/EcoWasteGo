@@ -33,6 +33,13 @@ router.post('/resend-code', SMSVerificationController.resendCode);
 router.get('/status', SMSVerificationController.getServiceStatus);
 
 /**
+ * @route GET /api/sms-verification/test
+ * @desc Test SMS service configuration and mNotify API connectivity
+ * @access Public
+ */
+router.get('/test', SMSVerificationController.testSMSConfiguration);
+
+/**
  * @route POST /api/sms-verification/register
  * @desc Register user with verified SMS
  * @access Public

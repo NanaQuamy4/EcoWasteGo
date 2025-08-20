@@ -26,6 +26,7 @@ import recyclersRoutes from './src/routes/recyclers';
 import registerRoutes from './src/routes/register';
 import rewardsRoutes from './src/routes/rewards';
 import roleBasedRoutes from './src/routes/roleBased';
+import smsRoutes from './src/routes/sms';
 import smsVerificationRoutes from './src/routes/sms-verification';
 import supportRoutes from './src/routes/support';
 import textRecyclerRoutes from './src/routes/text-recycler';
@@ -38,7 +39,7 @@ import { apiRateLimit, authRateLimit, cspMiddleware, paymentRateLimit, requestSi
 import { getSecurityStats, securityMonitoring } from './src/middleware/securityMonitoring';
 
 // Load environment variables first
-const envLoaded = dotenv.config({ path: './.env' });
+const envLoaded = dotenv.config({ path: '.env' });
 
 if (envLoaded.error) {
   console.error('❌ Failed to load .env file:', envLoaded.error);
@@ -73,16 +74,10 @@ const corsOptions = {
           process.env.MOBILE_APP_URL || 'https://ecowastego.com'
         ]
       : [
-          'http://localhost:3000',
-          'http://localhost:8081', 
-          'http://localhost:19006',
-          'exp://localhost:8081',
-          'exp://localhost:19006',
-          'http://10.132.254.147:3000',
-          'http://10.132.254.147:8081',
-          'http://10.132.254.147:19006',
-          'exp://10.132.254.147:8081',
-          'exp://10.132.254.147:19006'
+          'http://localhost:3000', 'http://localhost:8081', 'http://localhost:19006',
+          'exp://localhost:8081', 'exp://localhost:19006',
+          'http://192.168.71.157:3000', 'http://192.168.71.157:8081', 'http://192.168.71.157:19006',
+          'exp://192.168.71.157:8081', 'exp://192.168.71.157:19006'
         ];
     
     if (allowedOrigins.includes(origin)) {
@@ -560,6 +555,7 @@ app.use('/api/recycler-requests', recyclerRequestsRoutes);
 app.use('/api/recycler-weight-entry', recyclerWeightEntryRoutes);
 app.use('/api/text-recycler', textRecyclerRoutes);
 app.use('/api/sms-verification', smsVerificationRoutes);
+app.use('/api/sms', smsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -579,11 +575,11 @@ app.use('*', (req, res) => {
 app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`🚀 EcoWasteGo Backend Server is running!`);
   console.log(`📍 Local: http://localhost:${PORT}`);
-  console.log(`🌐 Network: http://10.132.254.147:${PORT}`);
-  console.log(`📱 Mobile App can connect to: http://10.132.254.147:${PORT}`);
+  console.log(`🌐 Network: http://192.168.71.157:${PORT}`);
+  console.log(`📱 Mobile App can connect to: http://192.168.71.157:${PORT}`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 Health Check: http://10.132.254.147:${PORT}/health`);
+  console.log(`📊 Health Check: http://192.168.71.157:${PORT}/health`);
 });
 
 export default app; 

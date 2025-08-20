@@ -27,7 +27,8 @@ export class SMSVerificationController {
         userType: userType
       });
 
-      // Check rate limiting
+      // Check rate limiting - TEMPORARILY DISABLED to allow unlimited attempts
+      /*
       if (supabaseAdmin) {
         const { data: rateLimitCheck } = await supabaseAdmin
           .rpc('check_verification_rate_limit', {
@@ -44,6 +45,9 @@ export class SMSVerificationController {
           return;
         }
       }
+      */
+      
+      console.log('⚠️ Rate limiting temporarily disabled - allowing unlimited SMS verification attempts');
 
       // Generate verification code
       const verificationCode = SMSService.generateVerificationCode();
@@ -336,6 +340,146 @@ export class SMSVerificationController {
       res.status(500).json({
         success: false,
         error: 'Failed to get SMS service status'
+      });
+    }
+  }
+
+  /**
+   * Send SMS via mNotify API (proxy endpoint)
+   */
+  static async sendQuickSMS(req: Request, res: Response): Promise<void> {
+    try {
+      const { recipient, sender, message, is_schedule = false, schedule_date = '' } = req.body;
+
+      if (!recipient || !message) {
+        res.status(400).json({
+          success: false,
+          error: 'Recipient and message are required'
+        });
+        return;
+      }
+
+      console.log('📱 Quick SMS Request:', { recipient, sender, message, is_schedule, schedule_date });
+
+      // Send SMS via mNotify API
+      // Handle both array and string recipient formats
+      const recipientPhone = Array.isArray(recipient) ? recipient[0] : recipient;
+      
+      const smsSent = await SMSService.sendSMS({ 
+        recipient: recipientPhone, 
+        message, 
+        senderId: sender 
+      });
+
+      if (smsSent) {
+        res.json({
+          success: true,
+          message: 'SMS sent successfully via mNotify',
+          data: {
+            recipient,
+            sender: sender || 'EcoWasteGo',
+            message,
+            sentAt: new Date().toISOString()
+          }
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to send SMS via mNotify'
+        });
+      }
+    } catch (error) {
+      console.error('Error sending quick SMS:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send SMS',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  /**
+   * Send SMS via mNotify API
+   */
+  static async sendSMS(req: Request, res: Response): Promise<void> {
+    try {
+      const { recipient, sender, message, is_schedule = false, schedule_date = '' } = req.body;
+
+      if (!recipient || !message) {
+        res.status(400).json({
+          success: false,
+          error: 'Recipient and message are required'
+        });
+        return;
+      }
+
+      console.log('📱 SMS Request:', { recipient, sender, message, is_schedule, schedule_date });
+
+      // Send SMS via mNotify API
+      // Handle both array and string recipient formats
+      const recipientPhone = Array.isArray(recipient) ? recipient[0] : recipient;
+      
+      const smsSent = await SMSService.sendSMS({ 
+        recipient: recipientPhone, 
+        message, 
+        senderId: sender 
+      });
+
+      if (smsSent) {
+        res.json({
+          success: true,
+          message: 'SMS sent successfully via mNotify',
+          data: {
+            recipient,
+            sender: sender || 'EcoWasteGo',
+            message,
+            sentAt: new Date().toISOString()
+          }
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to send SMS via mNotify'
+        });
+      }
+    } catch (error) {
+      console.error('Error sending SMS:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send SMS',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  /**
+   * Test SMS service configuration and mNotify API connectivity
+   */
+  static async testSMSConfiguration(req: Request, res: Response): Promise<void> {
+    try {
+      console.log('🧪 Testing SMS Configuration from Controller...');
+      
+      const testResult = await SMSService.testConfiguration();
+      
+      if (testResult.success) {
+        res.json({
+          success: true,
+          message: 'SMS service configuration test passed',
+          data: testResult.details
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'SMS service configuration test failed',
+          data: testResult.details
+        });
+      }
+    } catch (error) {
+      console.error('Error testing SMS configuration:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to test SMS configuration',
+        details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }

@@ -350,22 +350,41 @@ export class RegisterController {
       let isVerified = false;
 
       // Check in verification_attempts table for successful SMS verification
-      const { data: verificationData } = await supabase
+      console.log('🔍 Checking phone verification for:', formattedPhone);
+      
+      const { data: verificationData, error: verificationError } = await supabase
         .from('verification_attempts')
         .select('*')
         .eq('contact_info', formattedPhone)
         .eq('verification_type', 'sms')
         .eq('is_successful', true)
-        .gt('verified_at', new Date(Date.now() - 30 * 60 * 1000).toISOString()) // Within last 30 minutes
         .order('verified_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
-      if (verificationData) {
-        isVerified = true;
+      console.log('📊 Verification data found:', verificationData);
+      console.log('❌ Verification error:', verificationError);
+      
+      if (verificationData && verificationData.length > 0) {
+        const verification = verificationData[0];
+        const verifiedTime = new Date(verification.verified_at);
+        const currentTime = new Date();
+        const timeDiff = currentTime.getTime() - verifiedTime.getTime();
+        const minutesDiff = Math.floor(timeDiff / (1000 * 60));
+        
+        console.log('⏰ Verification time:', verifiedTime);
+        console.log('⏰ Current time:', currentTime);
+        console.log('⏰ Time difference (minutes):', minutesDiff);
+        
+        if (minutesDiff <= 30) {
+          isVerified = true;
+          console.log('✅ Phone verification is valid (within 30 minutes)');
+        } else {
+          console.log('❌ Phone verification expired (older than 30 minutes)');
+        }
       } else {
         // Fallback check in email_verifications table
-        const { data: legacyVerificationData } = await supabase
+        console.log('🔄 Checking legacy email_verifications table...');
+        const { data: legacyVerificationData, error: legacyError } = await supabase
           .from('email_verifications')
           .select('*')
           .eq('phone_number', formattedPhone)
@@ -373,12 +392,19 @@ export class RegisterController {
           .eq('is_used', true)
           .single();
 
+        console.log('📊 Legacy verification data:', legacyVerificationData);
+        console.log('❌ Legacy verification error:', legacyError);
+
         if (legacyVerificationData) {
           isVerified = true;
+          console.log('✅ Legacy phone verification found');
         }
       }
 
+      console.log('🔍 Final verification status:', isVerified);
+      
       if (!isVerified) {
+        console.log('❌ Phone verification failed - sending error response');
         res.status(400).json({
           success: false,
           error: 'PHONE_NOT_VERIFIED',
@@ -386,6 +412,8 @@ export class RegisterController {
         });
         return;
       }
+      
+      console.log('✅ Phone verification successful - proceeding with registration');
 
       // Check if email already exists in either customers or recyclers table
       let existingUser = null;
