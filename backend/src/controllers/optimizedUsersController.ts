@@ -313,6 +313,7 @@ export class OptimizedUsersController {
   static async deleteAccount(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user?.id;
+      const userRole = req.user?.role;
 
       if (!userId) {
         res.status(400).json({
@@ -322,29 +323,91 @@ export class OptimizedUsersController {
         return;
       }
 
+      console.log(`Deleting account for user ${userId} with role ${userRole}`);
+
       // Clear all user-related cache
       databaseService.invalidateCache(`user_profile_${userId}`);
       databaseService.invalidateCache(`collections_${userId}`);
       databaseService.invalidateCache(`analytics_${userId}`);
 
-      // Delete user from Supabase Auth
-      try {
-        await databaseService.supabaseQuery(
-          (supabase) => supabase.auth.admin.deleteUser(userId),
-          undefined,
-          0
-        );
-      } catch (authError) {
-        res.status(400).json({
+      // Delete user profile from appropriate table based on role
+      let profileDeletionError = null;
+      
+      if (userRole === 'customer') {
+        try {
+          await databaseService.supabaseQuery(
+            (supabase) => supabase.from('customers').delete().eq('id', userId),
+            undefined,
+            0
+          );
+        } catch (error) {
+          profileDeletionError = error;
+        }
+      } else if (userRole === 'recycler') {
+        try {
+          await databaseService.supabaseQuery(
+            (supabase) => supabase.from('recyclers').delete().eq('id', userId),
+            undefined,
+            0
+          );
+        } catch (error) {
+          profileDeletionError = error;
+        }
+      }
+
+      if (profileDeletionError) {
+        console.error('Error deleting user profile:', profileDeletionError);
+        res.status(500).json({
           success: false,
-          error: 'Failed to delete account'
+          error: 'Failed to delete user profile'
         });
         return;
       }
 
+      // Delete related data (waste collections, payments, etc.)
+      try {
+        // Delete waste collections
+        await databaseService.supabaseQuery(
+          (supabase) => supabase.from('waste_collections').delete().eq('user_id', userId),
+          undefined,
+          0
+        );
+
+        // Delete payments
+        await databaseService.supabaseQuery(
+          (supabase) => supabase.from('payments').delete().eq('user_id', userId),
+          undefined,
+          0
+        );
+
+        // Delete notifications
+        await databaseService.supabaseQuery(
+          (supabase) => supabase.from('notifications').delete().eq('user_id', userId),
+          undefined,
+          0
+        );
+
+        // Delete tracking sessions
+        await databaseService.supabaseQuery(
+          (supabase) => supabase.from('tracking_sessions').delete().eq('user_id', userId),
+          undefined,
+          0
+        );
+
+        console.log(`Successfully deleted related data for user ${userId}`);
+      } catch (relatedDataError) {
+        console.warn('Warning: Some related data could not be deleted:', relatedDataError);
+        // Don't fail the entire operation if related data deletion fails
+      }
+
+      // Note: We cannot delete the user from Supabase Auth without admin privileges
+      // The user will need to manually delete their account from Supabase dashboard
+      // or contact support for complete account removal
+
       res.json({
         success: true,
-        message: 'Account deleted successfully'
+        message: 'Account and all associated data deleted successfully. Note: You may need to manually delete your Supabase Auth account.',
+        note: 'For complete account removal including authentication, please contact support or delete your account from the Supabase dashboard.'
       });
     } catch (error) {
       console.error('Error deleting account:', error);

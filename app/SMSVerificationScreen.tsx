@@ -1,15 +1,7 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import {
-    Alert,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants';
 import { apiService } from '../services/apiService';
 
@@ -17,6 +9,7 @@ interface VerificationData {
   phoneNumber: string;
   userType: 'customer' | 'recycler';
   formData: any;
+  isRegistration?: boolean;
 }
 
 export default function SMSVerificationScreen() {
@@ -25,10 +18,12 @@ export default function SMSVerificationScreen() {
     phoneNumber?: string;
     userType?: string;
     formData?: string;
+    isRegistration?: string;
   }>();
   
   const [verificationCode, setVerificationCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [codeError, setCodeError] = useState('');
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
   const [canResend, setCanResend] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60); // 1 minute resend cooldown
@@ -36,7 +31,8 @@ export default function SMSVerificationScreen() {
   const verificationData: VerificationData = {
     phoneNumber: params.phoneNumber || '',
     userType: (params.userType as 'customer' | 'recycler') || 'customer',
-    formData: params.formData ? JSON.parse(params.formData) : {}
+    formData: params.formData ? JSON.parse(params.formData) : {},
+    isRegistration: params.isRegistration === 'true'
   };
 
   // Timer for code expiration
@@ -78,17 +74,25 @@ export default function SMSVerificationScreen() {
   };
 
   const handleVerifyCode = async () => {
+    if (!verificationCode.trim()) {
+      setCodeError('Please enter the verification code.');
+      return;
+    }
+
     if (verificationCode.length !== 6) {
-      Alert.alert('Invalid Code', 'Please enter a 6-digit verification code');
+      setCodeError('Please enter a 6-digit verification code.');
       return;
     }
 
     setIsLoading(true);
+    setCodeError('');
+
     try {
       console.log('Verifying SMS code:', {
         phoneNumber: verificationData.phoneNumber,
         code: verificationCode,
-        userType: verificationData.userType
+        userType: verificationData.userType,
+        isRegistration: verificationData.isRegistration
       });
 
       const response = await apiService.verifySMSCode(
@@ -98,26 +102,32 @@ export default function SMSVerificationScreen() {
       );
 
       if (response.success) {
-        Alert.alert(
-          'Phone Verified!',
-          'Your phone number has been verified successfully.',
-          [
-            {
-              text: 'Continue',
-              onPress: () => {
-                // Navigate back to registration with verified status
-                router.replace({
-                  pathname: '/RegisterScreen',
-                  params: {
-                    ...verificationData.formData,
-                    smsVerified: 'true',
-                    verifiedPhone: verificationData.phoneNumber
-                  }
-                });
+        if (verificationData.isRegistration) {
+          // This is for registration - create account automatically
+          await handleRegistration();
+        } else {
+          // This is for regular verification - show success and navigate back
+          Alert.alert(
+            'Phone Verified!',
+            'Your phone number has been verified successfully.',
+            [
+              {
+                text: 'Continue',
+                onPress: () => {
+                  // Navigate back to registration with verified status
+                  router.replace({
+                    pathname: '/RegisterScreen',
+                    params: {
+                      ...verificationData.formData,
+                      smsVerified: 'true',
+                      verifiedPhone: verificationData.phoneNumber
+                    }
+                  });
+                }
               }
-            }
-          ]
-        );
+            ]
+          );
+        }
       } else {
         Alert.alert('Verification Failed', response.message || 'Invalid verification code');
       }
@@ -134,6 +144,57 @@ export default function SMSVerificationScreen() {
       Alert.alert('Verification Failed', message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Handle registration after successful verification
+  const handleRegistration = async () => {
+    try {
+      console.log('Creating account with verified phone...');
+      
+      const response = await apiService.registerWithSMSVerification({
+        email: verificationData.formData.email,
+        password: verificationData.formData.password,
+        username: verificationData.formData.username,
+        phone: verificationData.formData.phone,
+        role: verificationData.formData.role,
+        companyName: verificationData.formData.companyName,
+        smsVerified: true
+      });
+
+      if (response.success && response.data && response.data.user) {
+        console.log('Registration successful!');
+        Alert.alert(
+          'Registration Successful!',
+          'Your account has been created successfully! You will be redirected to the home screen.',
+          [
+            {
+              text: 'Continue',
+              onPress: () => {
+                // Navigate to appropriate home screen based on role
+                if (verificationData.formData.role === 'recycler') {
+                  router.replace('/(recycler-tabs)');
+                } else {
+                  router.replace('/(tabs)');
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        throw new Error('Registration failed - no user data received');
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      let message = 'Registration failed. Please try again.';
+      
+      if (error.message === 'EMAIL_EXISTS' || error.message?.includes('already exists')) {
+        message = 'An account with this email already exists. Please try logging in instead.';
+      } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
+        message = 'Network error. Please check your internet connection and try again.';
+      }
+      
+      Alert.alert('Registration Failed', message);
     }
   };
 
@@ -179,92 +240,86 @@ export default function SMSVerificationScreen() {
   const maskedPhoneNumber = verificationData.phoneNumber.replace(/(\+233\d{2})\d{5}(\d{2})/, '$1*****$2');
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={handleBackToRegistration}
-          >
-            <MaterialIcons name="arrow-back" size={24} color={COLORS.darkGreen} />
-          </TouchableOpacity>
-          
-          <View style={styles.iconContainer}>
-            <MaterialIcons name="sms" size={64} color={COLORS.darkGreen} />
-          </View>
-          
-          <Text style={styles.title}>Verify Your Phone</Text>
-          <Text style={styles.subtitle}>
-            We've sent a 6-digit verification code to{'\n'}
-            <Text style={styles.phoneNumber}>{maskedPhoneNumber}</Text>
-          </Text>
-        </View>
-
-        {/* Verification Code Input */}
-        <View style={styles.form}>
-          <Text style={styles.label}>Enter Verification Code</Text>
-          <View style={styles.codeInputContainer}>
-            <TextInput
-              style={styles.codeInput}
-              value={verificationCode}
-              onChangeText={setVerificationCode}
-              placeholder="000000"
-              keyboardType="numeric"
-              maxLength={6}
-              autoFocus
-              textAlign="center"
-            />
-          </View>
-          
-          {/* Timer */}
-          <View style={styles.timerContainer}>
-            <Text style={styles.timerText}>
-              Code expires in: <Text style={styles.timerValue}>{formatTime(timeLeft)}</Text>
-            </Text>
-          </View>
-
-          {/* Verify Button */}
-          <TouchableOpacity
-            style={[
-              styles.verifyButton,
-              (verificationCode.length !== 6 || isLoading || timeLeft === 0) && styles.verifyButtonDisabled
-            ]}
-            onPress={handleVerifyCode}
-            disabled={verificationCode.length !== 6 || isLoading || timeLeft === 0}
-          >
-            <Text style={styles.verifyButtonText}>
-              {isLoading ? 'Verifying...' : 'Verify Code'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Resend Code */}
-          <View style={styles.resendContainer}>
-            <Text style={styles.resendText}>Didn't receive the code? </Text>
-            <TouchableOpacity
-              onPress={handleResendCode}
-              disabled={!canResend || isLoading}
-              style={styles.resendButton}
-            >
-              <Text style={[
-                styles.resendButtonText,
-                (!canResend || isLoading) && styles.resendButtonTextDisabled
-              ]}>
-                {canResend ? 'Resend Code' : `Resend in ${resendCooldown}s`}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Security Notice */}
-        <View style={styles.securityNotice}>
-          <MaterialIcons name="security" size={20} color={COLORS.gray} />
-          <Text style={styles.securityText}>
-            We use SMS verification to secure your account and prevent unauthorized access.
-          </Text>
-        </View>
+    <View style={styles.container}>
+      <View style={styles.logoRow}>
+        <Image source={require('../assets/images/logo landscape.png')} style={styles.logo} />
       </View>
-    </SafeAreaView>
+      
+      <View style={styles.contentContainer}>
+        <Text style={styles.title}>
+          {verificationData.isRegistration ? 'Verify & Create Account' : 'Verify Your Phone'}
+        </Text>
+        <Text style={styles.subtitle}>
+          {verificationData.isRegistration 
+            ? `We've sent a 6-digit verification code to complete your registration{'\n'}`
+            : `We've sent a 6-digit verification code to{'\n'}`
+          }
+          <Text style={styles.phoneNumber}>{maskedPhoneNumber}</Text>
+        </Text>
+
+        {/* Timer */}
+        <View style={styles.timerContainer}>
+          <Text style={styles.timerText}>
+            Code expires in: <Text style={styles.timerValue}>{formatTime(timeLeft)}</Text>
+          </Text>
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Feather name="key" size={20} color="#263A13" style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Enter 6-digit code"
+            value={verificationCode}
+            onChangeText={text => { 
+              setVerificationCode(text.replace(/[^0-9]/g, '').slice(0, 6)); 
+              setCodeError(''); 
+            }}
+            placeholderTextColor="#999"
+            keyboardType="numeric"
+            maxLength={6}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+            textAlign="center"
+          />
+        </View>
+        
+        {codeError ? (
+          <Text style={styles.errorText}>{codeError}</Text>
+        ) : null}
+
+        <TouchableOpacity 
+          style={[styles.verifyButton, (isLoading || timeLeft === 0) && styles.verifyButtonDisabled]} 
+          onPress={handleVerifyCode}
+          disabled={isLoading || timeLeft === 0}
+        >
+          <Text style={styles.verifyButtonText}>
+            {isLoading ? 'Verifying...' : verificationData.isRegistration ? 'Verify & Create Account' : 'Verify Code'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.resendButton} 
+          onPress={handleResendCode}
+          disabled={!canResend || isLoading}
+        >
+          <Text style={[
+            styles.resendButtonText,
+            (!canResend || isLoading) && styles.resendButtonTextDisabled
+          ]}>
+            {canResend ? 'Didn\'t receive code? Resend' : `Resend in ${resendCooldown}s`}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Back Button */}
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={handleBackToRegistration}
+        >
+          <Text style={styles.backButtonText}>← Back to Registration</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
@@ -273,23 +328,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.white,
   },
-  content: {
+  logoRow: {
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingBottom: 20,
+  },
+  logo: {
+    width: 150,
+    height: 50,
+  },
+  contentContainer: {
     flex: 1,
     padding: 20,
-  },
-  header: {
-    alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 40,
-  },
-  backButton: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    padding: 8,
-  },
-  iconContainer: {
-    marginBottom: 20,
   },
   title: {
     fontSize: 28,
@@ -308,33 +358,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.darkGreen,
   },
-  form: {
-    gap: 20,
-    marginBottom: 40,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.darkGreen,
-    textAlign: 'center',
-  },
-  codeInputContainer: {
-    alignItems: 'center',
-  },
-  codeInput: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.darkGreen,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.lightGray,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    minWidth: 200,
-    letterSpacing: 8,
-  },
   timerContainer: {
     alignItems: 'center',
     marginTop: 10,
+    marginBottom: 20,
   },
   timerText: {
     fontSize: 14,
@@ -343,6 +370,29 @@ const styles = StyleSheet.create({
   timerValue: {
     fontWeight: 'bold',
     color: COLORS.orange,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    marginTop: 20,
+    marginBottom: 15,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 18,
+    color: COLORS.darkGreen,
+    paddingVertical: 12,
+  },
+  errorText: {
+    color: COLORS.red,
+    textAlign: 'center',
+    marginBottom: 15,
   },
   verifyButton: {
     backgroundColor: COLORS.darkGreen,
@@ -359,18 +409,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  resendContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  resendText: {
-    color: COLORS.gray,
-    fontSize: 14,
-  },
   resendButton: {
-    padding: 4,
+    alignSelf: 'center',
+    marginTop: 10,
   },
   resendButtonText: {
     color: COLORS.orange,
@@ -380,18 +421,13 @@ const styles = StyleSheet.create({
   resendButtonTextDisabled: {
     color: COLORS.gray,
   },
-  securityNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: COLORS.lightGray + '40',
-    padding: 16,
-    borderRadius: 8,
-    gap: 12,
+  backButton: {
+    alignSelf: 'center',
+    marginTop: 20,
   },
-  securityText: {
-    flex: 1,
-    fontSize: 12,
-    color: COLORS.gray,
-    lineHeight: 16,
+  backButtonText: {
+    color: COLORS.darkGreen,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });

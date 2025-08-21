@@ -5,8 +5,8 @@ import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } fro
 import { useAuth } from '../contexts/AuthContext';
 
 export default function ForgotPasswordScreen() {
-  const [email, setEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
+  const [phone, setPhone] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { forgotPassword } = useAuth();
@@ -15,36 +15,37 @@ export default function ForgotPasswordScreen() {
     console.log('ForgotPasswordScreen rendered');
   }, []);
 
-  function validateEmail(email: string) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  function validatePhone(phone: string) {
+    const cleaned = phone.replace(/\D/g, '');
+    return cleaned.length >= 9 && cleaned.length <= 15;
   }
 
   const handleSendVerificationCode = async () => {
-    if (!email.trim()) {
-      setEmailError('Please enter your email address.');
+    if (!phone.trim()) {
+      setPhoneError('Please enter your phone number.');
       return;
     }
 
-    if (!validateEmail(email)) {
-      setEmailError('Please enter a valid email address.');
+    if (!validatePhone(phone)) {
+      setPhoneError('Please enter a valid phone number.');
       return;
     }
 
     setIsLoading(true);
-    setEmailError('');
+    setPhoneError('');
 
     try {
-      await forgotPassword(email);
+      await forgotPassword(phone);
       
       Alert.alert(
         'Verification Code Sent',
-        'We\'ve sent a 6-digit verification code to your email address. Please check your inbox and enter the code.',
+        'We\'ve sent a 6-digit verification code to your phone number. Please check your SMS and enter the code.',
         [
           {
             text: 'OK',
             onPress: () => router.push({
               pathname: '/VerificationScreen',
-              params: { email: email }
+              params: { phone: phone }
             })
           }
         ]
@@ -53,8 +54,8 @@ export default function ForgotPasswordScreen() {
       console.error('Forgot password error:', error);
       
       let message = 'Failed to send verification code. Please try again.';
-      if (error.message === 'EMAIL_NOT_FOUND') {
-        message = 'No account found with this email address.';
+      if (error.message === 'PHONE_NOT_FOUND') {
+        message = 'No account found with this phone number.';
       } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
         message = 'Network error. Please check your internet connection and try again.';
       }
@@ -73,24 +74,24 @@ export default function ForgotPasswordScreen() {
       
       <View style={styles.contentContainer}>
         <Text style={styles.title}>Forgotten Password?</Text>
-        <Text style={styles.subtitle}>Please Enter Your Email Address To Receive a 6-Digit Verification Code</Text>
+        <Text style={styles.subtitle}>Please Enter Your Phone Number To Receive a 6-Digit Verification Code</Text>
 
         <View style={styles.inputContainer}>
-          <Feather name="mail" size={20} color="#263A13" style={styles.inputIcon} />
+          <Feather name="phone" size={20} color="#263A13" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            placeholder="Enter your email address"
-            value={email}
-            onChangeText={text => { setEmail(text); setEmailError(''); }}
+            placeholder="Enter your phone number"
+            value={phone}
+            onChangeText={text => { setPhone(text); setPhoneError(''); }}
             placeholderTextColor="#999"
-            keyboardType="email-address"
+            keyboardType="phone-pad"
             autoCapitalize="none"
             autoCorrect={false}
           />
         </View>
         
-        {emailError ? (
-          <Text style={styles.errorText}>{emailError}</Text>
+        {phoneError ? (
+          <Text style={styles.errorText}>{phoneError}</Text>
         ) : null}
 
         <TouchableOpacity 

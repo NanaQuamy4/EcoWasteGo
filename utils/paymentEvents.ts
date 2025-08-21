@@ -62,5 +62,3 @@ const handlePickupCompleted = () => {
   emitPickupCompleted(pickupData);
 };
 */
-
-

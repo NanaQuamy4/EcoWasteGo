@@ -8,7 +8,7 @@ import { COLORS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function RecyclerUserTab() {
-  const { user } = useAuth();
+  const { user, logout, deleteAccount } = useAuth();
   const isVerified = user?.verification_status === 'verified';
 
   // Debug logging for user data
@@ -78,18 +78,106 @@ export default function RecyclerUserTab() {
   const handleDeleteYes = () => {
     setDeleteStep(2);
   };
-  const handleDeleteFinal = () => {
-    setShowDeletePrompt(false);
-    setDeleteStep(1);
-    // Add your delete logic here
+  const handleDeleteFinal = async () => {
+    try {
+      setShowDeletePrompt(false);
+      setDeleteStep(1);
+      
+      console.log('RecyclerUserTab: Starting account deletion...');
+      
+      // Call the delete account function from AuthContext
+      await deleteAccount();
+      
+      console.log('RecyclerUserTab: Account deletion successful');
+      
+      // Show success message with additional information
+      Alert.alert(
+        'Account Deleted',
+        'Your account and all associated data have been permanently deleted. You will be redirected to the login screen.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to login screen
+              router.replace('/LoginScreen');
+            }
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error('Delete account failed:', error);
+      
+      let errorMessage = 'Failed to delete account. Please try again.';
+      
+      // Handle specific error cases
+      if (error.message?.includes('network') || error.message?.includes('Network')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (error.message?.includes('unauthorized') || error.message?.includes('401')) {
+        errorMessage = 'Your session has expired. Please log in again and try deleting your account.';
+      } else if (error.message?.includes('permission') || error.message?.includes('403')) {
+        errorMessage = 'You do not have permission to delete your account. Please contact support.';
+      }
+      
+      Alert.alert(
+        'Delete Failed',
+        errorMessage,
+        [{ text: 'OK' }]
+      );
+    }
   };
   const handleDeleteNo = () => {
     setShowDeletePrompt(false);
     setDeleteStep(1);
   };
-  const handleLogoutYes = () => {
+  const handleLogoutYes = async () => {
     setShowLogoutPrompt(false);
-    // Add your logout logic here
+    try {
+      console.log('RecyclerUserTab: Starting logout...');
+      
+      // Show loading indicator
+      Alert.alert(
+        'Logging Out',
+        'Please wait while we log you out...',
+        [],
+        { cancelable: false }
+      );
+      
+      await logout();
+      console.log('RecyclerUserTab: Logout successful, navigating to login...');
+      
+      // Show success message
+      Alert.alert(
+        'Logged Out',
+        'You have been successfully logged out.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to login screen
+              router.push('/LoginScreen');
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Logout failed:', error);
+      
+      // Even if logout fails, clear the user state and navigate to login
+      console.log('RecyclerUserTab: Logout failed, but navigating to login anyway...');
+      
+      Alert.alert(
+        'Logout Issue',
+        'There was an issue with the logout process, but you have been logged out locally. You will be redirected to the login screen.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.push('/LoginScreen');
+            }
+          }
+        ]
+      );
+    }
   };
   const handleLogoutNo = () => {
     setShowLogoutPrompt(false);

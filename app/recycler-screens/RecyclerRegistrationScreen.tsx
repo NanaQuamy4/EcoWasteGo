@@ -3,15 +3,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  Image,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    Image,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,36 +19,78 @@ import apiService from '../../services/apiService';
 
 interface FormData {
   companyName: string;
-  businessLocation: string;
+  residentialAddress: string;
   areasOfOperation: string;
-  availableResources: string;
-  passportPhoto: ImagePicker.ImagePickerAsset | null;
-  businessDocument: ImagePicker.ImagePickerAsset | null;
+  truckNumberPlate: string;
+  truckSize: 'small' | 'big';
+  profilePhoto: ImagePicker.ImagePickerAsset | null;
 }
 
 export default function RecyclerRegistrationScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [formData, setFormData] = useState<FormData>({
     companyName: '',
-    businessLocation: '',
+    residentialAddress: '',
     areasOfOperation: '',
-    availableResources: '',
-    passportPhoto: null,
-    businessDocument: null,
+    truckNumberPlate: '',
+    truckSize: 'small',
+    profilePhoto: null,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Function to refresh user data
+  const handleRefreshUserData = async () => {
+    try {
+      setIsRefreshing(true);
+      console.log('RecyclerRegistrationScreen: Refreshing user data...');
+      await refreshUser();
+      console.log('RecyclerRegistrationScreen: User data refreshed');
+    } catch (error) {
+      console.error('RecyclerRegistrationScreen: Failed to refresh user data:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Function to manually set company name for debugging
+  const handleSetCompanyName = () => {
+    const testCompanyName = 'Test Company Name';
+    console.log('RecyclerRegistrationScreen: Manually setting company name to:', testCompanyName);
+    setFormData(prev => ({ ...prev, companyName: testCompanyName }));
+  };
 
   // Pre-fill company name from user data
   useEffect(() => {
     console.log('RecyclerRegistrationScreen: User data:', user);
     console.log('RecyclerRegistrationScreen: Company name:', user?.company_name);
+    console.log('RecyclerRegistrationScreen: All user fields:', user ? Object.keys(user) : 'No user data');
+    console.log('RecyclerRegistrationScreen: User role:', user?.role);
+    console.log('RecyclerRegistrationScreen: Verification status:', user?.verification_status);
+    
     if (user?.company_name) {
+      console.log('RecyclerRegistrationScreen: Setting company name from user data:', user.company_name);
       setFormData(prev => ({ ...prev, companyName: user.company_name || '' }));
+    } else {
+      console.log('RecyclerRegistrationScreen: No company name found in user data');
+      // Try to get company name from other possible fields
+      if (user?.company_name) {
+        console.log('RecyclerRegistrationScreen: Found company_name, using that:', user.company_name);
+        setFormData(prev => ({ ...prev, companyName: user.company_name || '' }));
+      }
     }
   }, [user]);
 
-  const pickImage = async (type: 'photo' | 'document') => {
+  // Refresh user data when component mounts to ensure we have latest data
+  useEffect(() => {
+    if (!user?.company_name) {
+      console.log('RecyclerRegistrationScreen: No company name found, refreshing user data...');
+      handleRefreshUserData();
+    }
+  }, []);
+
+  const pickImage = async (type: 'photo') => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -59,9 +101,7 @@ export default function RecyclerRegistrationScreen() {
 
       if (!result.canceled && result.assets[0]) {
         if (type === 'photo') {
-          setFormData(prev => ({ ...prev, passportPhoto: result.assets[0] }));
-        } else {
-          setFormData(prev => ({ ...prev, businessDocument: result.assets[0] }));
+          setFormData(prev => ({ ...prev, profilePhoto: result.assets[0] }));
         }
       }
     } catch (error) {
@@ -74,19 +114,23 @@ export default function RecyclerRegistrationScreen() {
       Alert.alert('Error', 'Company name is required');
       return false;
     }
-    if (!formData.businessLocation.trim()) {
-      Alert.alert('Error', 'Business location is required');
+    if (!formData.residentialAddress.trim()) {
+      Alert.alert('Error', 'Residential address is required');
       return false;
     }
     if (!formData.areasOfOperation.trim()) {
       Alert.alert('Error', 'Areas of operation is required');
       return false;
     }
-    if (!formData.availableResources.trim()) {
-      Alert.alert('Error', 'Available resources is required');
+    if (!formData.truckNumberPlate.trim()) {
+      Alert.alert('Error', 'Truck number plate is required');
       return false;
     }
-    if (!formData.passportPhoto) {
+    if (!formData.truckSize) {
+      Alert.alert('Error', 'Truck size is required');
+      return false;
+    }
+    if (!formData.profilePhoto) {
       Alert.alert('Error', 'Profile photo is required');
       return false;
     }
@@ -121,11 +165,11 @@ export default function RecyclerRegistrationScreen() {
       // Call API to complete registration
       const response = await apiService.completeRecyclerRegistration({
         companyName: formData.companyName,
-        businessLocation: formData.businessLocation,
+        residentialAddress: formData.residentialAddress,
         areasOfOperation: formData.areasOfOperation,
-        availableResources: formData.availableResources,
-        passportPhotoUrl: formData.passportPhoto?.uri,
-        businessDocumentUrl: formData.businessDocument?.uri,
+        truckNumberPlate: formData.truckNumberPlate,
+        truckSize: formData.truckSize,
+        profilePhotoUrl: formData.profilePhoto?.uri,
       });
       
       Alert.alert(
@@ -156,8 +200,42 @@ export default function RecyclerRegistrationScreen() {
           <MaterialIcons name="business" size={48} color={COLORS.orange} />
           <Text style={styles.title}>Complete Your Registration</Text>
           <Text style={styles.subtitle}>
-            Please provide the following information to verify your business
+            Please provide the following information to verify your business and vehicle details
           </Text>
+          
+          {/* Debug Button */}
+          <TouchableOpacity 
+            style={[styles.debugButton, { marginTop: 16 }]} 
+            onPress={handleRefreshUserData}
+            disabled={isRefreshing}
+          >
+            <Text style={styles.debugButtonText}>
+              {isRefreshing ? 'Refreshing...' : 'Debug: Refresh User Data'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Debug Button to set company name */}
+          <TouchableOpacity 
+            style={[styles.debugButton, { marginTop: 10 }]} 
+            onPress={handleSetCompanyName}
+          >
+            <Text style={styles.debugButtonText}>
+              Debug: Set Company Name
+            </Text>
+          </TouchableOpacity>
+          
+          {/* Debug Info */}
+          <View style={styles.debugInfo}>
+            <Text style={styles.debugText}>User ID: {user?.id || 'None'}</Text>
+            <Text style={styles.debugText}>Role: {user?.role || 'None'}</Text>
+            <Text style={styles.debugText}>Company Name: {user?.company_name || 'None'}</Text>
+            <Text style={styles.debugText}>Form Company Name: {formData.companyName || 'Empty'}</Text>
+            <Text style={styles.debugText}>Form Residential Address: {formData.residentialAddress || 'Empty'}</Text>
+            <Text style={styles.debugText}>Form Areas of Operation: {formData.areasOfOperation || 'Empty'}</Text>
+            <Text style={styles.debugText}>Form Truck Number Plate: {formData.truckNumberPlate || 'Empty'}</Text>
+            <Text style={styles.debugText}>Form Truck Size: {formData.truckSize || 'Not Set'}</Text>
+            <Text style={styles.debugText}>Form Profile Photo: {formData.profilePhoto ? 'Selected' : 'Not Selected'}</Text>
+          </View>
         </View>
 
         <View style={styles.form}>
@@ -172,14 +250,14 @@ export default function RecyclerRegistrationScreen() {
             />
           </View>
 
-          {/* Business Location */}
+          {/* Residential Address */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Business Location *</Text>
+            <Text style={styles.label}>Residential Address *</Text>
             <TextInput
               style={styles.input}
-              value={formData.businessLocation}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, businessLocation: text }))}
-              placeholder="Region, City (e.g., Kumasi, Ashanti)"
+              value={formData.residentialAddress}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, residentialAddress: text }))}
+              placeholder="Enter your residential address"
             />
           </View>
 
@@ -196,17 +274,28 @@ export default function RecyclerRegistrationScreen() {
             />
           </View>
 
-          {/* Available Resources */}
+          {/* Truck Number Plate */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Available Resources *</Text>
+            <Text style={styles.label}>Truck Number Plate *</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
-              value={formData.availableResources}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, availableResources: text }))}
-              placeholder="Describe your pickup resources (e.g., 2 trucks, 1 van, 5 staff)"
-              multiline
-              numberOfLines={3}
+              style={styles.input}
+              value={formData.truckNumberPlate}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, truckNumberPlate: text }))}
+              placeholder="Enter your truck number plate (e.g., GT-1234-21)"
             />
+          </View>
+
+          {/* Truck Size */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Truck Size *</Text>
+            <TouchableOpacity
+              style={styles.truckSizeButton}
+              onPress={() => setFormData(prev => ({ ...prev, truckSize: prev.truckSize === 'small' ? 'big' : 'small' }))}
+            >
+              <Text style={styles.truckSizeText}>
+                {formData.truckSize === 'small' ? 'Small Truck' : 'Big Truck'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Profile Photo */}
@@ -216,30 +305,12 @@ export default function RecyclerRegistrationScreen() {
               style={styles.uploadButton}
               onPress={() => pickImage('photo')}
             >
-              {formData.passportPhoto ? (
-                <Image source={{ uri: formData.passportPhoto.uri }} style={styles.uploadedImage} />
+              {formData.profilePhoto ? (
+                <Image source={{ uri: formData.profilePhoto.uri }} style={styles.uploadedImage} />
               ) : (
                 <View style={styles.uploadPlaceholder}>
-                  <MaterialIcons name="add-a-photo" size={32} color={COLORS.gray} />
-                  <Text style={styles.uploadText}>Upload Photo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Business Document */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Business Registration Document (Optional)</Text>
-            <TouchableOpacity
-              style={styles.uploadButton}
-              onPress={() => pickImage('document')}
-            >
-              {formData.businessDocument ? (
-                <Image source={{ uri: formData.businessDocument.uri }} style={styles.uploadedImage} />
-              ) : (
-                <View style={styles.uploadPlaceholder}>
-                  <MaterialIcons name="description" size={32} color={COLORS.gray} />
-                  <Text style={styles.uploadText}>Upload Document</Text>
+                  <MaterialIcons name="person" size={32} color={COLORS.gray} />
+                  <Text style={styles.uploadText}>Upload Profile Photo</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -341,6 +412,19 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 8,
   },
+  truckSizeButton: {
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+  },
+  truckSizeText: {
+    fontSize: 16,
+    color: COLORS.darkGreen,
+    fontWeight: '600',
+  },
   footer: {
     marginTop: 30,
     paddingBottom: 20,
@@ -372,5 +456,28 @@ const styles = StyleSheet.create({
     color: COLORS.orange,
     fontSize: 16,
     fontWeight: '600',
+  },
+  debugButton: {
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  debugButtonText: {
+    color: COLORS.darkGreen,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  debugInfo: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  debugText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginBottom: 2,
   },
 }); 

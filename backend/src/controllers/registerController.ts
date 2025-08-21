@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { supabase } from '../config/supabase';
+import { supabase, supabaseAdmin } from '../config/supabase';
 import { sendVerificationEmail } from '../services/emailService';
 import SMSService from '../services/smsService';
 
@@ -327,6 +327,10 @@ export class RegisterController {
     try {
       const { email, password, username, phone, role = 'customer', companyName, smsVerified } = req.body;
 
+      console.log('🔍 Registration with SMS verification - Input data:', {
+        email, username, phone, role, companyName, smsVerified
+      });
+
       if (!email || !username || !phone) {
         res.status(400).json({
           success: false,
@@ -349,10 +353,35 @@ export class RegisterController {
       const formattedPhone = SMSService['formatPhoneNumber'](phone);
       let isVerified = false;
 
+      console.log('🔍 Phone number formatting:', {
+        original: phone,
+        formatted: formattedPhone
+      });
+
+      // Check if supabaseAdmin is available
+      if (!supabaseAdmin) {
+        console.error('❌ supabaseAdmin not available - cannot check verification');
+        res.status(500).json({
+          success: false,
+          error: 'Database configuration error'
+        });
+        return;
+      }
+
+      // First, check if verification_attempts table exists
+      console.log('🔍 Checking if verification_attempts table exists...');
+      const { data: tableCheck, error: tableCheckError } = await supabaseAdmin
+        .from('verification_attempts')
+        .select('count')
+        .limit(1);
+
+      console.log('📊 Table check result:', tableCheck);
+      console.log('❌ Table check error:', tableCheckError);
+
       // Check in verification_attempts table for successful SMS verification
       console.log('🔍 Checking phone verification for:', formattedPhone);
       
-      const { data: verificationData, error: verificationError } = await supabase
+      const { data: verificationData, error: verificationError } = await supabaseAdmin
         .from('verification_attempts')
         .select('*')
         .eq('contact_info', formattedPhone)
@@ -384,7 +413,7 @@ export class RegisterController {
       } else {
         // Fallback check in email_verifications table
         console.log('🔄 Checking legacy email_verifications table...');
-        const { data: legacyVerificationData, error: legacyError } = await supabase
+        const { data: legacyVerificationData, error: legacyError } = await supabaseAdmin
           .from('email_verifications')
           .select('*')
           .eq('phone_number', formattedPhone)
@@ -405,6 +434,19 @@ export class RegisterController {
       
       if (!isVerified) {
         console.log('❌ Phone verification failed - sending error response');
+        
+        // Additional debugging: check what's actually in the verification_attempts table
+        console.log('🔍 Debugging: Checking all verification records for this phone...');
+        const { data: allVerifications, error: allVerificationsError } = await supabaseAdmin
+          .from('verification_attempts')
+          .select('*')
+          .eq('contact_info', formattedPhone)
+          .eq('verification_type', 'sms')
+          .order('created_at', { ascending: false });
+
+        console.log('📊 All verification records for this phone:', allVerifications);
+        console.log('❌ Error fetching all verifications:', allVerificationsError);
+        
         res.status(400).json({
           success: false,
           error: 'PHONE_NOT_VERIFIED',

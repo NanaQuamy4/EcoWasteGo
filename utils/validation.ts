@@ -200,24 +200,30 @@ export const validateSignup = (data: SignupValidationData): SignupValidationResu
 
 // Full login validation
 export interface LoginValidationData {
-  identifier: string; // email or phone
+  phone: string; // phone number
   password: string;
 }
 
 export interface LoginValidationResult {
   isValid: boolean;
   errors: string[];
-  isEmail: boolean;
-  formattedIdentifier?: string;
+  formattedPhone?: string;
 }
 
 export const validateLogin = (data: LoginValidationData): LoginValidationResult => {
   const errors: string[] = [];
 
-  // Validate identifier (email or phone)
-  const identifierValidation = validateLoginIdentifier(data.identifier);
-  if (!identifierValidation.isValid) {
-    errors.push(identifierValidation.error!);
+  // Validate phone number
+  if (!data.phone || data.phone.trim() === '') {
+    errors.push('Phone number is required');
+  } else {
+    // Clean and validate phone number format
+    const cleanedPhone = data.phone.replace(/\D/g, '');
+    if (cleanedPhone.length < 9) {
+      errors.push('Phone number must be at least 9 digits');
+    } else if (cleanedPhone.length > 15) {
+      errors.push('Phone number is too long');
+    }
   }
 
   // Validate password
@@ -227,26 +233,97 @@ export const validateLogin = (data: LoginValidationData): LoginValidationResult 
     errors.push('Password must be at least 6 characters');
   }
 
-  // Determine if identifier is email or phone
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const isEmail = emailRegex.test(data.identifier.trim());
-
-  // Format identifier if it's a phone number
-  let formattedIdentifier = data.identifier;
-  if (!isEmail) {
-    // If it's a phone number without country code, assume local format
-    const cleanedPhone = data.identifier.replace(/\D/g, '');
-    if (!data.identifier.startsWith('+') && cleanedPhone.length > 0) {
-      // This would need to be enhanced based on user's location or preference
-      // For now, we'll just clean the number
-      formattedIdentifier = cleanedPhone;
+  // Format phone number for consistency
+  let formattedPhone = data.phone;
+  if (data.phone && !data.phone.startsWith('+')) {
+    // If it's a local number, assume Ghana (+233)
+    const cleanedPhone = data.phone.replace(/\D/g, '');
+    if (cleanedPhone.startsWith('0')) {
+      formattedPhone = '+233' + cleanedPhone.substring(1);
+    } else if (cleanedPhone.length === 9) {
+      formattedPhone = '+233' + cleanedPhone;
+    } else {
+      formattedPhone = '+233' + cleanedPhone;
     }
   }
 
   return {
     isValid: errors.length === 0,
     errors,
-    isEmail,
-    formattedIdentifier
+    formattedPhone
+  };
+}; 
+
+// Registration error handling
+export interface RegistrationError {
+  code: string;
+  message: string;
+  userFriendlyMessage: string;
+}
+
+export const handleRegistrationError = (error: any): RegistrationError => {
+  // Check if it's a backend error with a specific code
+  if (error.code) {
+    switch (error.code) {
+      case 'EMAIL_EXISTS':
+        return {
+          code: 'EMAIL_EXISTS',
+          message: error.error || 'Email already exists',
+          userFriendlyMessage: 'This email is already registered. Please use a different email or try logging in instead.'
+        };
+      
+      case 'PHONE_EXISTS':
+        return {
+          code: 'PHONE_EXISTS',
+          message: error.error || 'Phone number already exists',
+          userFriendlyMessage: 'This phone number is already registered. Please use a different phone number or try logging in instead.'
+        };
+      
+      case 'USERNAME_EXISTS':
+        return {
+          code: 'USERNAME_EXISTS',
+          message: error.error || 'Username already taken',
+          userFriendlyMessage: 'This username is already taken. Please choose a different username.'
+        };
+      
+      case 'COMPANY_EXISTS':
+        return {
+          code: 'COMPANY_EXISTS',
+          message: error.error || 'Company name already exists',
+          userFriendlyMessage: 'A recycler with this company name already exists. Please use a different company name.'
+        };
+      
+      default:
+        return {
+          code: 'UNKNOWN_ERROR',
+          message: error.error || error.message || 'Unknown error occurred',
+          userFriendlyMessage: 'An unexpected error occurred. Please try again or contact support if the problem persists.'
+        };
+    }
+  }
+  
+  // Handle network or other errors
+  if (error.message?.includes('Network') || error.message?.includes('fetch')) {
+    return {
+      code: 'NETWORK_ERROR',
+      message: error.message,
+      userFriendlyMessage: 'Network error. Please check your internet connection and try again.'
+    };
+  }
+  
+  // Handle validation errors
+  if (error.message?.includes('validation') || error.message?.includes('required')) {
+    return {
+      code: 'VALIDATION_ERROR',
+      message: error.message,
+      userFriendlyMessage: 'Please check your input and ensure all required fields are filled correctly.'
+    };
+  }
+  
+  // Default error
+  return {
+    code: 'UNKNOWN_ERROR',
+    message: error.message || 'Unknown error occurred',
+    userFriendlyMessage: 'An unexpected error occurred. Please try again or contact support if the problem persists.'
   };
 }; 

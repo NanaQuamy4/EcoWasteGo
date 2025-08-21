@@ -56,37 +56,93 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Check if email exists in either customers or recyclers table
-    let existingUser = null;
+    // COMPREHENSIVE DUPLICATE CHECKING
+    // Check for existing users across both tables with multiple criteria
     
-    // Check customers table first
-    const { data: existingCustomer, error: customerError } = await supabaseAdmin
+    // 1. Check email in both tables
+    const { data: existingCustomerByEmail } = await supabaseAdmin
       .from('customers')
-      .select('*')
+      .select('id, email, username, phone')
       .eq('email', email.toLowerCase())
       .single();
 
-    if (existingCustomer) {
-      existingUser = existingCustomer;
-    } else {
-      // Check recyclers table
-      const { data: existingRecycler, error: recyclerError } = await supabaseAdmin
-        .from('recyclers')
-        .select('*')
-        .eq('email', email.toLowerCase())
+    const { data: existingRecyclerByEmail } = await supabaseAdmin
+      .from('recyclers')
+      .select('id, email, username, phone')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    if (existingCustomerByEmail || existingRecyclerByEmail) {
+      return res.status(400).json({
+        success: false,
+        error: 'An account with this email already exists',
+        code: 'EMAIL_EXISTS'
+      });
+    }
+
+    // 2. Check phone number in both tables (if phone is provided)
+    if (phone && phone.trim()) {
+      const { data: existingCustomerByPhone } = await supabaseAdmin
+        .from('customers')
+        .select('id, email, username, phone')
+        .eq('phone', phone.trim())
         .single();
 
-      if (existingRecycler) {
-        existingUser = existingRecycler;
+      const { data: existingRecyclerByPhone } = await supabaseAdmin
+        .from('recyclers')
+        .select('id, email, username, phone')
+        .eq('phone', phone.trim())
+        .single();
+
+      if (existingCustomerByPhone || existingRecyclerByPhone) {
+        return res.status(400).json({
+          success: false,
+          error: 'An account with this phone number already exists',
+          code: 'PHONE_EXISTS'
+        });
       }
     }
 
-    if (existingUser) {
+    // 3. Check username in both tables
+    const { data: existingCustomerByUsername } = await supabaseAdmin
+      .from('customers')
+      .select('id, email, username, phone')
+      .eq('username', username.trim())
+      .single();
+
+    const { data: existingRecyclerByUsername } = await supabaseAdmin
+      .from('recyclers')
+      .select('id, email, username, phone')
+      .eq('username', username.trim())
+      .single();
+
+    if (existingCustomerByUsername || existingRecyclerByUsername) {
       return res.status(400).json({
         success: false,
-        error: 'An account with this email already exists'
+        error: 'This username is already taken',
+        code: 'USERNAME_EXISTS'
       });
     }
+
+    // 4. Additional validation for recyclers
+    if (role === 'recycler' && companyName) {
+      // Check if company name already exists (optional, but good for business uniqueness)
+      const { data: existingCompany } = await supabaseAdmin
+        .from('recyclers')
+        .select('id, business_name')
+        .eq('business_name', companyName.trim())
+        .single();
+
+      if (existingCompany) {
+        return res.status(400).json({
+          success: false,
+          error: 'A recycler with this company name already exists',
+          code: 'COMPANY_EXISTS'
+        });
+      }
+    }
+
+    console.log('✅ All duplicate checks passed - proceeding with registration');
 
     // Create user with Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -212,18 +268,98 @@ router.post('/register', async (req, res) => {
  */
 router.post('/login', async (req, res) => {
   try {
-    const { email, password, role, rememberMe } = req.body;
+    const { phone, password, role, rememberMe } = req.body;
 
-    if (!email || !password) {
+    if (!phone || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Email and password are required'
+        error: 'Phone number and password are required'
       });
     }
 
-    // Login with Supabase Auth
+    // Format phone number to match the format used in registration
+    const formattedPhone = phone.startsWith('+') ? phone : `+233${phone.replace(/^0/, '')}`;
+    
+    console.log('Login attempt with phone:', { original: phone, formatted: formattedPhone, role });
+
+    // First, find the user by phone number in either customers or recyclers table
+    let userData = null;
+    let userRole = null;
+    
+    if (supabaseAdmin) {
+      // Check customers table first
+      const { data: customer, error: customerError } = await supabaseAdmin
+        .from('customers')
+        .select('id, email, username, phone, role, company_name, verification_status, created_at, updated_at')
+        .eq('phone', formattedPhone)
+        .single();
+
+      if (customer) {
+        userData = customer;
+        userRole = 'customer';
+      } else {
+        // Check recyclers table
+        const { data: recycler, error: recyclerError } = await supabaseAdmin
+          .from('recyclers')
+          .select('id, email, username, phone, role, company_name, verification_status, created_at, updated_at')
+          .eq('phone', formattedPhone)
+          .single();
+
+        if (recycler) {
+          userData = recycler;
+          userRole = 'recycler';
+        }
+      }
+    } else {
+      // Fallback to regular supabase client if admin is not available
+      console.log('supabaseAdmin not available, using regular supabase client');
+      
+      // Check customers table first
+      const { data: customer, error: customerError } = await supabase
+        .from('customers')
+        .select('id, email, username, phone, role, company_name, verification_status, created_at, updated_at')
+        .eq('phone', formattedPhone)
+        .single();
+
+      if (customer) {
+        userData = customer;
+        userRole = 'customer';
+      } else {
+        // Check recyclers table
+        const { data: recycler, error: recyclerError } = await supabase
+          .from('recyclers')
+          .select('id, email, username, phone, role, company_name, verification_status, created_at, updated_at')
+          .eq('phone', formattedPhone)
+          .single();
+
+        if (recycler) {
+          userData = recycler;
+          userRole = 'recycler';
+        }
+      }
+    }
+
+    if (!userData) {
+      return res.status(401).json({
+        success: false,
+        error: 'ACCOUNT_NOT_FOUND',
+        message: 'No account found with this phone number'
+      });
+    }
+
+    // Check if role matches (if specified)
+    if (role && userRole !== role) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        code: 'ROLE_MISMATCH',
+        message: `This account is registered as a ${userRole}. Please log in using the correct role.`
+      });
+    }
+
+    // Now authenticate with Supabase using the email from the user profile
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.toLowerCase(),
+      email: userData.email,
       password: password
     });
 
@@ -231,75 +367,15 @@ router.post('/login', async (req, res) => {
       console.error('Login error:', error);
       return res.status(401).json({
         success: false,
-        error: 'Invalid credentials',
-        code: 'INVALID_CREDENTIALS',
-        message: 'Invalid email or password. Please check your credentials and try again.'
-      });
-    }
-
-    if (!data.user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid credentials'
-      });
-    }
-
-    // Get user profile from database
-    let profile = null;
-    let profileError = null;
-
-    // Try to find user in customers table first
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
-
-    if (customer) {
-      profile = customer;
-      profile.role = 'customer';
-    } else {
-      // If not found in customers, check recyclers table
-      const { data: recycler, error: recyclerError } = await supabase
-        .from('recyclers')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-
-      if (recycler) {
-        profile = recycler;
-        profile.role = 'recycler';
-      } else {
-        profileError = new Error('User profile not found');
-      }
-    }
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError);
-      // Continue with auth data if profile fetch fails
-    }
-
-    const userData = profile || {
-      id: data.user.id,
-      email: data.user.email,
-      username: data.user.user_metadata?.username || data.user.email?.split('@')[0],
-      role: data.user.user_metadata?.role || 'customer',
-      email_verified: data.user.email_confirmed_at ? true : false,
-      onboarding_completed: false
-    };
-
-    // Validate role if specified
-    if (role && userData.role !== role) {
-      console.error('Role mismatch:', { requestedRole: role, userRole: userData.role });
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied',
-        code: 'ROLE_MISMATCH',
-        message: `This account is registered as a ${userData.role}. Please log in using the correct role.`
+        error: 'INVALID_PASSWORD',
+        message: 'Incorrect password'
       });
     }
 
     console.log('User logged in:', userData);
+    console.log('User data fields:', Object.keys(userData));
+    console.log('Company name from database:', userData.company_name);
+    console.log('User role from database:', userData.role);
 
     return res.json({
       success: true,
@@ -409,19 +485,24 @@ router.post('/logout', authenticateToken, async (req, res) => {
 
 /**
  * @route POST /api/auth/forgot-password
- * @desc Send 6-digit verification code to email
+ * @desc Send 6-digit verification code to phone via SMS
  * @access Public
  */
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { email } = req.body;
+    const { phone } = req.body;
 
-    if (!email) {
+    if (!phone) {
       return res.status(400).json({
         success: false,
-        error: 'Email is required'
+        error: 'Phone number is required'
       });
     }
+
+    // Format phone number to match the format used in registration
+    const formattedPhone = phone.startsWith('+') ? phone : `+233${phone.replace(/^0/, '')}`;
+    
+    console.log('Forgot password request for phone:', { original: phone, formatted: formattedPhone });
 
     // Check if user exists in database
     if (!supabaseAdmin) {
@@ -431,14 +512,14 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    // Check if email exists in either customers or recyclers table
+    // Check if phone exists in either customers or recyclers table
     let existingUser = null;
     
     // Check customers table first
     const { data: existingCustomer, error: customerError } = await supabaseAdmin
       .from('customers')
       .select('*')
-      .eq('email', email.toLowerCase())
+      .eq('phone', formattedPhone)
       .single();
 
     if (existingCustomer) {
@@ -448,7 +529,7 @@ router.post('/forgot-password', async (req, res) => {
       const { data: existingRecycler, error: recyclerError } = await supabaseAdmin
         .from('recyclers')
         .select('*')
-        .eq('email', email.toLowerCase())
+        .eq('phone', formattedPhone)
         .single();
 
       if (existingRecycler) {
@@ -459,24 +540,27 @@ router.post('/forgot-password', async (req, res) => {
     if (!existingUser) {
       return res.status(400).json({
         success: false,
-        error: 'EMAIL_NOT_FOUND'
+        error: 'PHONE_NOT_FOUND'
       });
     }
 
     // Generate 6-digit verification code
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     
-    // Store verification code in database with expiration (10 minutes)
+    // Store verification code in verification_attempts table with expiration (10 minutes)
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
     
-    const { error: insertError } = await supabaseAdmin!
-      .from('email_verifications')
-      .upsert({
+    const { error: insertError } = await supabaseAdmin
+      .from('verification_attempts')
+      .insert({
         user_id: existingUser.id,
-        email: email.toLowerCase(),
-        otp: verificationCode,
+        user_type: existingUser.role || 'customer',
+        verification_type: 'sms',
+        contact_info: formattedPhone,
+        verification_code: verificationCode,
         expires_at: expiresAt.toISOString(),
-        is_used: false
+        ip_address: req.ip || req.connection.remoteAddress,
+        user_agent: req.get('User-Agent')
       });
 
     if (insertError) {
@@ -487,28 +571,31 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    // Send email with verification code (using Supabase email service)
-    const { error: emailError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verification?email=${encodeURIComponent(email)}&code=${verificationCode}`
+    // Send SMS with verification code
+    const SMSService = require('../services/smsService').default;
+    const smsSent = await SMSService.sendSMS({
+      recipient: formattedPhone,
+      message: `Your EcoWasteGo password reset code is: ${verificationCode}. This code expires in 10 minutes.`
     });
 
-    if (emailError) {
-      console.error('Email sending error:', emailError);
+    if (!smsSent) {
+      console.error('Failed to send SMS verification code');
       return res.status(500).json({
         success: false,
-        error: 'Failed to send verification email'
+        error: 'Failed to send verification code via SMS'
       });
     }
 
     return res.json({
       success: true,
-      message: 'Verification code sent to email'
+      message: 'Verification code sent to phone via SMS'
     });
+
   } catch (error) {
     console.error('Forgot password error:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to send verification code'
+      error: 'Failed to process forgot password request'
     });
   }
 });
@@ -1032,11 +1119,11 @@ router.post('/complete-recycler-registration', async (req, res) => {
   try {
     const { 
       companyName, 
-      businessLocation, 
+      residentialAddress, 
       areasOfOperation, 
-      availableResources,
-      passportPhotoUrl,
-      businessDocumentUrl 
+      truckNumberPlate,
+      truckSize,
+      profilePhotoUrl
     } = req.body;
 
     // Get user from auth token
@@ -1059,7 +1146,7 @@ router.post('/complete-recycler-registration', async (req, res) => {
     }
 
     // Validate required fields
-    if (!companyName || !businessLocation || !areasOfOperation || !availableResources) {
+    if (!companyName || !residentialAddress || !areasOfOperation || !truckNumberPlate || !truckSize) {
       return res.status(400).json({
         success: false,
         error: 'All required fields must be provided'
@@ -1072,11 +1159,11 @@ router.post('/complete-recycler-registration', async (req, res) => {
         .from('recyclers')
         .update({
           company_name: companyName,
-          business_location: businessLocation,
+          residential_address: residentialAddress,
           areas_of_operation: areasOfOperation,
-          available_resources: availableResources,
-          passport_photo_url: passportPhotoUrl || null,
-          business_document_url: businessDocumentUrl || null,
+          truck_number_plate: truckNumberPlate,
+          truck_size: truckSize,
+          profile_photo_url: profilePhotoUrl || null,
           verification_status: 'verified',
           updated_at: new Date().toISOString()
         })

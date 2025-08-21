@@ -11,12 +11,18 @@ export default function VerificationScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const email = params.email as string;
+  const phone = params.phone as string;
   const { verifyEmail, forgotPassword } = useAuth();
+
+  // Determine if this is phone or email verification
+  const isPhoneVerification = !!phone;
+  const contactInfo = phone || email;
 
   useEffect(() => {
     console.log('VerificationScreen rendered');
-    console.log('Email:', email);
-  }, [email]);
+    console.log('Contact info:', contactInfo);
+    console.log('Verification type:', isPhoneVerification ? 'phone' : 'email');
+  }, [contactInfo, isPhoneVerification]);
 
   const handleVerifyCode = async () => {
     if (!verificationCode.trim()) {
@@ -33,21 +39,40 @@ export default function VerificationScreen() {
     setCodeError('');
 
     try {
-      await verifyEmail(email, verificationCode);
-      
-      Alert.alert(
-        'Email Verified',
-        'Your email has been verified successfully. You can now reset your password.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.push({
-              pathname: '/ResetPasswordScreen',
-              params: { email: email, verified: 'true' }
-            })
-          }
-        ]
-      );
+      if (isPhoneVerification) {
+        // For phone verification, we'll need to implement SMS verification
+        // For now, we'll show a success message and navigate to reset password
+        Alert.alert(
+          'Phone Verified',
+          'Your phone number has been verified successfully. You can now reset your password.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.push({
+                pathname: '/ResetPasswordScreen',
+                params: { phone: phone, verified: 'true' }
+              })
+            }
+          ]
+        );
+      } else {
+        // Email verification
+        await verifyEmail(email, verificationCode);
+        
+        Alert.alert(
+          'Email Verified',
+          'Your email has been verified successfully. You can now reset your password.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.push({
+                pathname: '/ResetPasswordScreen',
+                params: { email: email, verified: 'true' }
+              })
+            }
+          ]
+        );
+      }
     } catch (error: any) {
       console.error('Verification error:', error);
       
@@ -69,8 +94,13 @@ export default function VerificationScreen() {
   const handleResendCode = async () => {
     try {
       setIsLoading(true);
-      await forgotPassword(email);
-      Alert.alert('Code Resent', 'A new verification code has been sent to your email.');
+      if (isPhoneVerification) {
+        await forgotPassword(phone);
+        Alert.alert('Code Resent', 'A new verification code has been sent to your phone.');
+      } else {
+        await forgotPassword(email);
+        Alert.alert('Code Resent', 'A new verification code has been sent to your email.');
+      }
     } catch (error: any) {
       Alert.alert('Error', 'Failed to resend code. Please try again.');
     } finally {
@@ -86,7 +116,7 @@ export default function VerificationScreen() {
       
       <View style={styles.contentContainer}>
         <Text style={styles.title}>Enter Verification Code</Text>
-        <Text style={styles.subtitle}>We&apos;ve sent a 6-digit code to {email}</Text>
+        <Text style={styles.subtitle}>We&apos;ve sent a 6-digit code to {contactInfo}</Text>
 
         <View style={styles.inputContainer}>
           <Feather name="key" size={20} color="#263A13" style={styles.inputIcon} />

@@ -1,23 +1,27 @@
 // API Configuration for EcoWasteGo Frontend
+// Get local IP automatically or use fallback
+const getLocalIP = () => {
+  // You can set this environment variable when IP changes
+  return process.env.EXPO_PUBLIC_LOCAL_IP || '192.168.71.157';
+};
+
 export const API_CONFIG = {
   // Base URL for development - using computer's IP address for mobile access
   // Will fallback to localhost if external IP is not accessible
-  BASE_URL: 'http://192.168.246.157:3000',
+  BASE_URL: `http://${getLocalIP()}:3000`,
   FALLBACK_URL: 'http://localhost:3000',
   
   // API endpoints
   ENDPOINTS: {
     // Authentication
     AUTH: {
-      REGISTER: '/api/register', // Changed from /api/auth/register to use simplified endpoint
-      LOGIN: '/api/auth/simple-login', // Changed to use simplified login
+      REGISTER: '/api/auth/register',
+      LOGIN: '/api/auth/login', // Main login endpoint that accepts phone and password
       LOGOUT: '/api/auth/logout',
+      ME: '/api/auth/me',
       FORGOT_PASSWORD: '/api/auth/forgot-password',
       RESET_PASSWORD: '/api/auth/reset-password',
       VERIFY_EMAIL: '/api/auth/verify-email',
-      ME: '/api/auth/me',
-      SWITCH_ROLE: '/api/auth/switch-role',
-      SIMPLE_REGISTER: '/api/register', // Direct simplified registration
       SIMPLE_LOGIN: '/api/auth/simple-login', // Direct simplified login
     },
     
@@ -25,9 +29,9 @@ export const API_CONFIG = {
     USERS: {
       PROFILE: '/api/users/profile',
       UPDATE_PROFILE: '/api/users/profile',
-      RECYCLERS: '/api/users/recyclers',
+      RECYCLERS: '/api/optimized-users/recyclers',
       RECYCLER_DETAILS: '/api/users/recycler',
-      DELETE_ACCOUNT: '/api/users/account',
+      DELETE_ACCOUNT: '/api/optimized-users/account',
     },
     
     // Waste Collections
@@ -118,10 +122,16 @@ export const API_CONFIG = {
       CELEBRATION: '/api/recycler-celebration',
       NAVIGATION: '/api/recycler-navigation',
       PAYMENT_SUMMARY: '/api/recycler-payment-summary',
-      REGISTRATION: '/api/recycler-registration',
+      REGISTRATION: '/api/auth/complete-recycler-registration',
       REQUESTS: '/api/recycler-requests',
       WEIGHT_ENTRY: '/api/recycler-weight-entry',
       TEXT: '/api/text-recycler',
+      WASTE_REQUESTS: '/api/waste/recycler/requests',
+      AVAILABLE_RECYCLERS: '/api/waste/recyclers/available',
+      SEARCH: '/api/recyclers/search',
+      AVAILABILITY: '/api/recyclers/availability',
+      PROFILE: '/api/recyclers/profile',
+      REVIEWS: '/api/recyclers/reviews',
     },
 
     // Payment Summary
@@ -200,11 +210,11 @@ export interface UserProfile {
   profile_image?: string;
   verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
   company_name?: string;
-  business_location?: string;
+  residential_address?: string;
   areas_of_operation?: string;
-  available_resources?: string;
-  passport_photo_url?: string;
-  business_document_url?: string;
+  truck_number_plate?: string;
+  truck_size?: 'small' | 'big';
+  profile_photo_url?: string;
   created_at: string;
   updated_at: string;
 }

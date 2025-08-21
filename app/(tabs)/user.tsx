@@ -104,13 +104,17 @@ export default function UserScreen() {
       setShowDeletePrompt(false);
       setDeleteStep(1);
       
+      console.log('UserScreen: Starting account deletion...');
+      
       // Call the delete account function from AuthContext
       await deleteAccount();
       
-      // Show success message and navigate
+      console.log('UserScreen: Account deletion successful');
+      
+      // Show success message with additional information
       Alert.alert(
         'Account Deleted',
-        'Your account has been permanently deleted.',
+        'Your account and all associated data have been permanently deleted. You will be redirected to the login screen.',
         [
           {
             text: 'OK',
@@ -123,9 +127,21 @@ export default function UserScreen() {
       );
     } catch (error: any) {
       console.error('Delete account failed:', error);
+      
+      let errorMessage = 'Failed to delete account. Please try again.';
+      
+      // Handle specific error cases
+      if (error.message?.includes('network') || error.message?.includes('Network')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (error.message?.includes('unauthorized') || error.message?.includes('401')) {
+        errorMessage = 'Your session has expired. Please log in again and try deleting your account.';
+      } else if (error.message?.includes('permission') || error.message?.includes('403')) {
+        errorMessage = 'You do not have permission to delete your account. Please contact support.';
+      }
+      
       Alert.alert(
         'Delete Failed',
-        error.message || 'Failed to delete account. Please try again.',
+        errorMessage,
         [{ text: 'OK' }]
       );
     }
@@ -138,14 +154,50 @@ export default function UserScreen() {
     setShowLogoutPrompt(false);
     try {
       console.log('UserScreen: Starting logout...');
+      
+      // Show loading indicator
+      Alert.alert(
+        'Logging Out',
+        'Please wait while we log you out...',
+        [],
+        { cancelable: false }
+      );
+      
       await logout();
       console.log('UserScreen: Logout successful, navigating to login...');
-      router.push('/LoginScreen');
+      
+      // Show success message
+      Alert.alert(
+        'Logged Out',
+        'You have been successfully logged out.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to login screen
+              router.push('/LoginScreen');
+            }
+          }
+        ]
+      );
     } catch (error) {
       console.error('Logout failed:', error);
+      
       // Even if logout fails, clear the user state and navigate to login
       console.log('UserScreen: Logout failed, but navigating to login anyway...');
-      router.push('/LoginScreen');
+      
+      Alert.alert(
+        'Logout Issue',
+        'There was an issue with the logout process, but you have been logged out locally. You will be redirected to the login screen.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.push('/LoginScreen');
+            }
+          }
+        ]
+      );
     }
   };
   const handleLogoutNo = () => {

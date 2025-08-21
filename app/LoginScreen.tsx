@@ -2,17 +2,18 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import PhoneNumberInput from '../components/PhoneNumberInput';
 import { COLORS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 import { LoginValidationData, validateLogin } from '../utils/validation';
@@ -22,10 +23,13 @@ export default function LoginScreen() {
   const { selectedRole } = useLocalSearchParams<{ selectedRole?: string }>();
   const { login, user } = useAuth();
   
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [countryCode, setCountryCode] = useState('+233'); // Default to Ghana
+  const [phoneError, setPhoneError] = useState('');
+  const [isPhoneValid, setIsPhoneValid] = useState(false);
 
   // Navigate based on user role after login
   useEffect(() => {
@@ -44,10 +48,19 @@ export default function LoginScreen() {
     }
   }, [user, router]);
 
+  const handlePhoneChange = (phoneNumber: string) => {
+    setPhone(phoneNumber);
+  };
+
+  const handlePhoneValidation = (isValid: boolean, error?: string) => {
+    setIsPhoneValid(isValid);
+    setPhoneError(error || '');
+  };
+
   const handleLogin = async () => {
     // Prepare validation data
     const validationData: LoginValidationData = {
-      identifier: email,
+      phone: phone,
       password: password,
     };
 
@@ -64,25 +77,34 @@ export default function LoginScreen() {
     
     try {
       console.log('LoginScreen: Calling login function...');
-      await login(email, password, selectedRole as 'customer' | 'recycler' | undefined);
+      await login(phone, password, selectedRole as 'customer' | 'recycler' | undefined);
       console.log('LoginScreen: Login function completed successfully');
       // Navigation will be handled by useEffect when user state updates
     } catch (error: any) {
       console.error('LoginScreen: Login error occurred:', error);
       
       let message = 'Login failed. Please try again.';
+      let title = 'Login Error';
+      
       if (error.message === 'ACCOUNT_NOT_FOUND') {
-        message = 'No account found with this email. Please check your email or create a new account.';
+        message = 'No account found with this phone number. Please check your phone number or create a new account.';
       } else if (error.message === 'INVALID_PASSWORD') {
         message = 'Incorrect password. Please try again.';
       } else if (error.message === 'INVALID_CREDENTIALS') {
-        message = 'Invalid email or password. Please check your credentials.';
+        message = 'Invalid phone number or password. Please check your credentials.';
       } else if (error.message?.includes('Authentication failed')) {
         message = 'Session expired. Please log in again.';
       } else if (error.message?.includes('Network')) {
         message = 'Network error. Please check your internet connection.';
       } else if (error.message?.includes('Access denied') || error.message?.includes('ROLE_MISMATCH')) {
-        message = error.message || 'This account is registered with a different role. Please log in using the correct role.';
+        title = 'Role Mismatch';
+        if (error.message?.includes('customer')) {
+          message = 'This account is registered as a customer. Please select "Customer Login" instead of "Recycler Login".';
+        } else if (error.message?.includes('recycler')) {
+          message = 'This account is registered as a recycler. Please select "Recycler Login" instead of "Customer Login".';
+        } else {
+          message = 'This account is registered with a different role. Please log in using the correct role.';
+        }
       } else if (error.message?.includes('Request timed out')) {
         message = 'Request timed out. Please check your internet connection and try again.';
       } else if (error.message?.includes('Unable to connect to the server')) {
@@ -92,7 +114,7 @@ export default function LoginScreen() {
       }
       
       console.log('LoginScreen: Showing error alert with message:', message);
-      Alert.alert('Login Error', message);
+      Alert.alert(title, message);
     } finally {
       console.log('LoginScreen: Setting loading to false');
       setIsLoading(false);
@@ -144,19 +166,16 @@ export default function LoginScreen() {
           {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email Address</Text>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="email" size={20} color={COLORS.gray} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Enter your email"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
+              <Text style={styles.label}>Phone Number</Text>
+              <PhoneNumberInput
+                value={phone}
+                onChangeText={handlePhoneChange}
+                onCountryChange={setCountryCode}
+                selectedCountryCode={countryCode.replace('+', '')}
+                placeholder="Enter your phone number"
+                error={phoneError || (phone.trim() === '' ? 'Phone number is required' : undefined)}
+                onValidationChange={handlePhoneValidation}
+              />
             </View>
 
             <View style={styles.inputGroup}>

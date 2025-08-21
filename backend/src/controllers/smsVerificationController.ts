@@ -190,14 +190,29 @@ export class SMSVerificationController {
 
       // Mark verification as successful
       if (supabaseAdmin) {
-        await supabaseAdmin
+        console.log('✅ Marking verification as successful in verification_attempts table...');
+        console.log('📊 Verification record ID:', verificationData.id);
+        console.log('📊 Verification record before update:', verificationData);
+        
+        const { data: updateResult, error: updateError } = await supabaseAdmin
           .from('verification_attempts')
           .update({
             is_successful: true,
             verified_at: new Date().toISOString()
           })
-          .eq('id', verificationData.id);
+          .eq('id', verificationData.id)
+          .select();
+
+        console.log('📊 Update result:', updateResult);
+        console.log('❌ Update error:', updateError);
+        
+        if (updateError) {
+          console.error('❌ Failed to mark verification as successful:', updateError);
+        } else {
+          console.log('✅ Successfully marked verification as successful');
+        }
       } else {
+        console.log('🔄 Using legacy email_verifications table...');
         await supabase
           .from('email_verifications')
           .update({

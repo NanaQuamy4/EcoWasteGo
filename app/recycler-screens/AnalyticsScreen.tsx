@@ -9,7 +9,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import recyclerStats from '../utils/recyclerStats';
+import recyclerStats from '../../utils/recyclerStats';
 
 const COLORS = {
   primary: '#4CAF50',

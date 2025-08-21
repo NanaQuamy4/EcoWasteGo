@@ -7,7 +7,7 @@ interface AuthContextType {
   user: UserProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, role?: 'customer' | 'recycler', rememberMe?: boolean) => Promise<void>;
+  login: (phone: string, password: string, role?: 'customer' | 'recycler', rememberMe?: boolean) => Promise<void>;
   register: (userData: {
     email: string;
     password: string;
@@ -22,7 +22,7 @@ interface AuthContextType {
   verifyEmail: (email: string, token: string) => Promise<void>;
   updateProfile: (profileData: Partial<UserProfile>) => Promise<void>;
   refreshUser: () => Promise<void>;
-  switchRole: (newRole: 'customer' | 'recycler') => Promise<void>;
+  // switchRole: (newRole: 'customer' | 'recycler') => Promise<void>;
   deleteAccount: () => Promise<void>;
   handleAuthError: () => Promise<void>;
 }
@@ -88,11 +88,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Login function
-  const login = async (email: string, password: string, role?: 'customer' | 'recycler', rememberMe?: boolean) => {
+  const login = async (phone: string, password: string, role?: 'customer' | 'recycler', rememberMe?: boolean) => {
     try {
       setIsLoading(true);
       console.log('AuthContext: Starting login process...');
-      const authResponse = await apiService.login({ email, password, role, rememberMe });
+      const authResponse = await apiService.login({ phone, password, role, rememberMe });
       console.log('AuthContext: Login response received:', JSON.stringify(authResponse, null, 2));
       
       // Extract user data from the response - check all possible locations
@@ -127,9 +127,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           privacy_policy_accepted: userData.privacy_policy_accepted || (userData as any).user_metadata?.privacy_policy_accepted || false,
           profile_image: userData.profile_image || (userData as any).user_metadata?.profile_image,
           company_name: userData.company_name || (userData as any).user_metadata?.company_name || (userData as any).user_metadata?.company_name || '',
-          business_location: userData.business_location || (userData as any).user_metadata?.business_location || '',
+          residential_address: userData.residential_address || (userData as any).user_metadata?.residential_address || '',
           areas_of_operation: userData.areas_of_operation || (userData as any).user_metadata?.areas_of_operation || '',
-          available_resources: userData.available_resources || (userData as any).user_metadata?.available_resources || '',
+          truck_number_plate: userData.truck_number_plate || (userData as any).user_metadata?.truck_number_plate || '',
+          truck_size: userData.truck_size || (userData as any).user_metadata?.truck_size || 'small',
+          profile_photo_url: userData.profile_photo_url || (userData as any).user_metadata?.profile_photo_url,
           verification_status: userData.verification_status || 'unverified',
           created_at: userData.created_at,
           updated_at: userData.updated_at || userData.created_at
@@ -197,13 +199,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       console.log('AuthContext: Starting logout...');
+      
+      // Call the API service logout
       await apiService.logout();
       console.log('AuthContext: ApiService logout completed');
+      
     } catch (error) {
       console.error('Logout failed:', error);
-      // Don't throw the error, just log it
+      // Don't throw the error, just log it - we still want to clear local state
     } finally {
       console.log('AuthContext: Clearing user state...');
+      // Always clear user state regardless of API call success
       setUser(null);
       setIsLoading(false);
       console.log('AuthContext: Logout complete');
@@ -281,27 +287,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // Switch user role
-  const switchRole = async (newRole: 'customer' | 'recycler') => {
-    try {
-      setIsLoading(true);
-      const updatedUser = await apiService.switchRole(newRole);
-      setUser(updatedUser);
-    } catch (error) {
-      console.error('Role switch failed:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // const switchRole = async (newRole: 'customer' | 'recycler') => {
+  //   try {
+  //     const updatedUser = await apiService.switchRole(newRole);
+  //     setUser(updatedUser);
+  //   } catch (error) {
+  //     console.error('Failed to switch role:', error);
+  //     throw error;
+  //   }
+  // };
 
   const deleteAccount = async () => {
     try {
       setIsLoading(true);
-      await apiService.deleteAccount();
-      // Clear user data after successful deletion
-      setUser(null);
-      await apiService.logout();
+      console.log('AuthContext: Starting account deletion...');
+      
+      // Call the API to delete the account
+      const response = await apiService.deleteAccount();
+      
+      if (response.success) {
+        console.log('AuthContext: Account deletion successful, clearing user state...');
+        // Clear user data after successful deletion
+        setUser(null);
+        
+        // Also clear any local storage or tokens
+        await apiService.logout();
+        
+        console.log('AuthContext: Account deletion complete');
+      } else {
+        throw new Error(response.error || 'Failed to delete account');
+      }
     } catch (error) {
       console.error('Delete account failed:', error);
       throw error;
@@ -323,7 +338,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     verifyEmail,
     updateProfile,
     refreshUser,
-    switchRole,
+    // switchRole,
     deleteAccount,
     handleAuthError,
   };

@@ -8,7 +8,7 @@ import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/apiService';
-import recyclerStats from '../utils/recyclerStats';
+import recyclerStats from '../../utils/recyclerStats';
 
 export default function RecyclerHomeTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);

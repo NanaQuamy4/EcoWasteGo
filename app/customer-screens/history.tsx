@@ -3,8 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, DIMENSIONS, HISTORY_DATA } from '../../constants';
 import { getStatusColor, getStatusText } from '../../constants/helpers';
+import customerStats from '../../utils/customerStats';
 import CommonHeader from '../components/CommonHeader';
-import customerStats from '../utils/customerStats';
 
 interface HistoryItem {
   id: string;

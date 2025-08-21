@@ -16,9 +16,9 @@ import {
 import { COLORS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/apiService';
-import eventEmitter from '../utils/eventEmitter';
-import { emitPaymentReceived, emitPickupCompleted } from '../utils/paymentEvents';
-import recyclerStats from '../utils/recyclerStats';
+import eventEmitter from '../../utils/eventEmitter';
+import { emitPaymentReceived, emitPickupCompleted } from '../../utils/paymentEvents';
+import recyclerStats from '../../utils/recyclerStats';
 
 export default function EarningsScreen() {
   const { user } = useAuth();

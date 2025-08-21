@@ -6,7 +6,7 @@ import { Alert, Animated, Easing, Linking, StyleSheet, Text, TouchableOpacity, V
 import ConfettiCannon from 'react-native-confetti-cannon'; // Uncomment when implementing confetti
 import Modal from 'react-native-modal';
 import { useSharedValue, withTiming } from 'react-native-reanimated';
-import customerStats from '../utils/customerStats';
+import customerStats from '../../utils/customerStats';
 
 export const config = {
   headerShown: false,

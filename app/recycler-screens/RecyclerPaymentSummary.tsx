@@ -3,8 +3,8 @@ import React, { useState } from 'react';
 import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
 import { apiService } from '../../services/apiService';
+import recyclerStats from '../../utils/recyclerStats';
 import CommonHeader from '../components/CommonHeader';
-import recyclerStats from '../utils/recyclerStats';
 
 export default function RecyclerPaymentSummary() {
   const params = useLocalSearchParams();

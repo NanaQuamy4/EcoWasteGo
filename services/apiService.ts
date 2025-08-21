@@ -372,8 +372,11 @@ class ApiService {
     return response.data!;
   }
 
-  async login(credentials: { email: string; password: string; role?: 'customer' | 'recycler'; rememberMe?: boolean }): Promise<AuthResponse> {
-    console.log('Attempting login for:', credentials.email);
+  async login(credentials: { phone: string; password: string; role?: 'customer' | 'recycler'; rememberMe?: boolean }): Promise<AuthResponse> {
+    console.log('Attempting login for phone:', credentials.phone);
+    
+    // Clear any existing tokens before attempting login
+    await this.clearToken();
     
     // Test backend connectivity first
     try {
@@ -423,13 +426,19 @@ class ApiService {
   async logout(): Promise<void> {
     try {
       console.log('ApiService: Attempting logout...');
+      
       // Try to call the logout endpoint, but don't fail if it doesn't work
-      await this.request(API_CONFIG.ENDPOINTS.AUTH.LOGOUT, {
-        method: 'POST',
-      });
-      console.log('ApiService: Logout API call successful');
+      try {
+        await this.request(API_CONFIG.ENDPOINTS.AUTH.LOGOUT, {
+          method: 'POST',
+        });
+        console.log('ApiService: Logout API call successful');
+      } catch (apiError) {
+        console.log('ApiService: Logout API call failed, but continuing with local cleanup:', apiError);
+        // Don't throw the error, just log it
+      }
     } catch (error) {
-      console.log('ApiService: Logout API call failed, but continuing with local cleanup:', error);
+      console.error('ApiService: Unexpected error during logout:', error);
       // Don't throw the error, just log it
     } finally {
       console.log('ApiService: Clearing local token...');
@@ -438,10 +447,10 @@ class ApiService {
     }
   }
 
-  async forgotPassword(email: string): Promise<ApiResponse> {
+  async forgotPassword(phone: string): Promise<ApiResponse> {
     return this.request(API_CONFIG.ENDPOINTS.AUTH.FORGOT_PASSWORD, {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ phone }),
     });
   }
 
@@ -516,7 +525,7 @@ class ApiService {
       });
 
       const response = await this.request<{ data: RecyclerProfile[] }>(
-        `/api/recyclers/search?${params}`,
+        `${API_CONFIG.ENDPOINTS.RECYCLER.SEARCH}?${params}`,
         { method: 'GET' }
       );
 
@@ -534,9 +543,23 @@ class ApiService {
   }
 
   async deleteAccount(): Promise<ApiResponse> {
-    return this.request(API_CONFIG.ENDPOINTS.USERS.DELETE_ACCOUNT, {
-      method: 'DELETE',
-    });
+    try {
+      console.log('ApiService: Attempting to delete account...');
+      const response = await this.request(API_CONFIG.ENDPOINTS.USERS.DELETE_ACCOUNT, {
+        method: 'DELETE',
+      });
+      
+      if (response.success) {
+        console.log('ApiService: Account deletion successful, clearing local data...');
+        // Clear local token after successful account deletion
+        await this.clearToken();
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('ApiService: Account deletion failed:', error);
+      throw error;
+    }
   }
 
   // Waste Collection Methods
@@ -566,10 +589,10 @@ class ApiService {
         throw new Error('No authentication token available');
       }
 
-      console.log('Fetching waste collections for recycler from:', `${this.baseURL}/api/waste/recycler/requests`);
+      console.log('Fetching waste collections for recycler from:', `${this.baseURL}${API_CONFIG.ENDPOINTS.RECYCLER.WASTE_REQUESTS}`);
 
       // Fetch waste collections with customer information
-      const response = await this.request<any[]>('/api/waste/recycler/requests', {
+      const response = await this.request<any[]>(API_CONFIG.ENDPOINTS.RECYCLER.WASTE_REQUESTS, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -864,27 +887,27 @@ class ApiService {
   }
 
   // Role Management
-  async switchRole(newRole: 'customer' | 'recycler'): Promise<UserProfile> {
-    const response = await this.request<UserProfile>(API_CONFIG.ENDPOINTS.AUTH.SWITCH_ROLE, {
-      method: 'POST',
-      body: JSON.stringify({ role: newRole }),
-    });
-    if (!response.data) {
-      throw new Error('No user data returned from role switch');
-    }
-    return response.data;
-  }
+  // async switchRole(newRole: 'customer' | 'recycler'): Promise<UserProfile> {
+  //   const response = await this.request<UserProfile>(API_CONFIG.ENDPOINTS.AUTH.SWITCH_ROLE, {
+  //     method: 'POST',
+  //     body: JSON.stringify({ role: newRole }),
+  //   });
+  //   if (!response.data) {
+  //     throw new Error('No user data returned from role switch');
+  //   }
+  //   return response.data;
+  // }
 
   // Recycler Registration
   async completeRecyclerRegistration(registrationData: {
     companyName: string;
-    businessLocation: string;
+    residentialAddress: string;
     areasOfOperation: string;
-    availableResources: string;
-    passportPhotoUrl?: string;
-    businessDocumentUrl?: string;
+    truckNumberPlate: string;
+    truckSize: 'small' | 'big';
+    profilePhotoUrl?: string;
   }): Promise<UserProfile> {
-    const response = await this.request<UserProfile>('/api/recycler-registration/complete', {
+    const response = await this.request<UserProfile>('/api/auth/complete-recycler-registration', {
       method: 'POST',
       body: JSON.stringify(registrationData),
     });
@@ -903,7 +926,7 @@ class ApiService {
     try {
       console.log('Updating recycler availability:', isAvailable);
       
-      const response = await this.request<ApiResponse>('/api/recyclers/availability', {
+      const response = await this.request<ApiResponse>(API_CONFIG.ENDPOINTS.RECYCLER.AVAILABILITY, {
         method: 'PUT',
         body: JSON.stringify({
           is_available: isAvailable,
@@ -931,7 +954,7 @@ class ApiService {
         
         try {
           // Create a basic recycler profile first
-          await this.request('/api/recyclers/profile', {
+          await this.request(API_CONFIG.ENDPOINTS.RECYCLER.PROFILE, {
             method: 'POST',
             body: JSON.stringify({
               business_name: 'Recycler',
@@ -944,7 +967,7 @@ class ApiService {
 
           // Now try to update availability again
           console.log('Profile created, retrying availability update...');
-          return await this.request<ApiResponse>('/api/recyclers/availability', {
+          return await this.request<ApiResponse>(API_CONFIG.ENDPOINTS.RECYCLER.AVAILABILITY, {
             method: 'PUT',
             body: JSON.stringify({
               is_available: isAvailable,
@@ -1041,13 +1064,13 @@ class ApiService {
     return response.data;
   }
 
-  async addRecyclerReview(reviewData: {
+  async submitRecyclerReview(reviewData: {
     recycler_id: string;
     collection_id: string;
     rating: number;
     comment?: string;
   }): Promise<any> {
-    const response = await this.request('/api/recyclers/reviews', {
+    const response = await this.request(API_CONFIG.ENDPOINTS.RECYCLER.REVIEWS, {
       method: 'POST',
       body: JSON.stringify(reviewData),
     });
@@ -1433,7 +1456,7 @@ class ApiService {
     role: 'customer' | 'recycler';
     companyName?: string;
     smsVerified: boolean;
-  }): Promise<AuthResponse> {
+  }): Promise<ApiResponse> {
     console.log('Registering user with SMS verification:', userData.email);
     
     try {
@@ -1448,16 +1471,10 @@ class ApiService {
       
       // Handle the response data properly
       if (response.success && response.data) {
-        // Handle different token formats
-        const token = response.data.token || response.data.session?.access_token;
-        if (token) {
-          await this.saveToken(token);
-        }
-        
-        // Ensure the response matches AuthResponse structure
-        if (response.data.user && (response.data.token || response.data.session)) {
-          return response.data;
-        }
+        // The backend creates the user profile but doesn't provide a session
+        // User needs to log in separately to get authenticated
+        console.log('User registered successfully, redirecting to login');
+        return response;
       }
       
       throw new Error('Invalid response from SMS registration endpoint');

@@ -73,7 +73,7 @@ const corsOptions = {
           process.env.FRONTEND_URL || 'https://ecowastego.com',
           process.env.MOBILE_APP_URL || 'https://ecowastego.com'
         ]
-      : [
+              : [
           'http://localhost:3000', 'http://localhost:8081', 'http://localhost:19006',
           'exp://localhost:8081', 'exp://localhost:19006',
           'http://192.168.71.157:3000', 'http://192.168.71.157:8081', 'http://192.168.71.157:19006',
@@ -213,37 +213,81 @@ app.post('/test-db-insert', async (req, res) => {
 });
 
 // Simple registration endpoint (bypasses Supabase Auth)
-app.post('/simple-register', async (req, res) => {
+app.post('/simple-register', async (req, res): Promise<any> => {
   try {
     const { email, username, phone, role, password } = req.body;
     
     console.log('Simple registration for:', { email, username, phone, role });
     
-    // Check if user already exists
-    let existingUser;
-    if (role === 'customer') {
-      const { data } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('email', email)
-        .single();
-      existingUser = data;
-    } else {
-      const { data } = await supabase
-        .from('recyclers')
-        .select('id')
-        .eq('email', email)
-        .single();
-      existingUser = data;
-    }
+    // COMPREHENSIVE DUPLICATE CHECKING
+    // Check for existing users across both tables with multiple criteria
     
-    if (existingUser) {
-      res.status(400).json({
+    // 1. Check email in both tables
+    const { data: existingCustomerByEmail } = await supabase
+      .from('customers')
+      .select('id, email, username, phone')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    const { data: existingRecyclerByEmail } = await supabase
+      .from('recyclers')
+      .select('id, email, username, phone')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    if (existingCustomerByEmail || existingRecyclerByEmail) {
+      return res.status(400).json({
         success: false,
-        error: 'User with this email already exists'
+        error: 'An account with this email already exists',
+        code: 'EMAIL_EXISTS'
       });
-      return;
     }
+
+    // 2. Check phone number in both tables (if phone is provided)
+    if (phone && phone.trim()) {
+      const { data: existingCustomerByPhone } = await supabase
+        .from('customers')
+        .select('id, email, username, phone')
+        .eq('phone', phone.trim())
+        .single();
+
+      const { data: existingRecyclerByPhone } = await supabase
+        .from('recyclers')
+        .select('id, email, username, phone')
+        .eq('phone', phone.trim())
+        .single();
+
+      if (existingCustomerByPhone || existingRecyclerByPhone) {
+        return res.status(400).json({
+          success: false,
+          error: 'An account with this phone number already exists',
+          code: 'PHONE_EXISTS'
+        });
+      }
+    }
+
+    // 3. Check username in both tables
+    const { data: existingCustomerByUsername } = await supabase
+      .from('customers')
+      .select('id, email, username, phone')
+      .eq('username', username.trim())
+      .single();
+
+    const { data: existingRecyclerByUsername } = await supabase
+      .from('recyclers')
+      .select('id, email, username, phone')
+      .eq('username', username.trim())
+      .single();
+
+    if (existingCustomerByUsername || existingRecyclerByUsername) {
+      return res.status(400).json({
+        success: false,
+        error: 'This username is already taken',
+        code: 'USERNAME_EXISTS'
+      });
+    }
+
+    console.log('✅ All duplicate checks passed - proceeding with simple registration');
     
     // Create user profile directly in database
     let result;
@@ -251,9 +295,9 @@ app.post('/simple-register', async (req, res) => {
       result = await supabase
         .from('customers')
         .insert({
-          email,
-          username,
-          phone,
+          email: email.toLowerCase(),
+          username: username.trim(),
+          phone: phone ? phone.trim() : null,
           privacy_policy_accepted: true,
           privacy_policy_version: '1.0',
           privacy_policy_accepted_at: new Date().toISOString()
@@ -264,9 +308,9 @@ app.post('/simple-register', async (req, res) => {
       result = await supabase
         .from('recyclers')
         .insert({
-          email,
-          username,
-          phone,
+          email: email.toLowerCase(),
+          username: username.trim(),
+          phone: phone ? phone.trim() : null,
           privacy_policy_accepted: true,
           privacy_policy_version: '1.0',
           privacy_policy_accepted_at: new Date().toISOString()
@@ -306,41 +350,86 @@ app.post('/simple-register', async (req, res) => {
       error: 'Registration failed',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
+    return;
   }
 });
 
 // API registration endpoint (bypasses Supabase Auth)
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', async (req, res): Promise<any> => {
   try {
     const { email, username, phone, role, password } = req.body;
     
     console.log('API registration for:', { email, username, phone, role });
     
-    // Check if user already exists
-    let existingUser;
-    if (role === 'customer') {
-      const { data } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('email', email)
-        .single();
-      existingUser = data;
-    } else {
-      const { data } = await supabase
-        .from('recyclers')
-        .select('id')
-        .eq('email', email)
-        .single();
-      existingUser = data;
-    }
+    // COMPREHENSIVE DUPLICATE CHECKING
+    // Check for existing users across both tables with multiple criteria
     
-    if (existingUser) {
-      res.status(400).json({
+    // 1. Check email in both tables
+    const { data: existingCustomerByEmail } = await supabase
+      .from('customers')
+      .select('id, email, username, phone')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    const { data: existingRecyclerByEmail } = await supabase
+      .from('recyclers')
+      .select('id, email, username, phone')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    if (existingCustomerByEmail || existingRecyclerByEmail) {
+      return res.status(400).json({
         success: false,
-        error: 'User with this email already exists'
+        error: 'An account with this email already exists',
+        code: 'EMAIL_EXISTS'
       });
-      return;
     }
+
+    // 2. Check phone number in both tables (if phone is provided)
+    if (phone && phone.trim()) {
+      const { data: existingCustomerByPhone } = await supabase
+        .from('customers')
+        .select('id, email, username, phone')
+        .eq('phone', phone.trim())
+        .single();
+
+      const { data: existingRecyclerByPhone } = await supabase
+        .from('recyclers')
+        .select('id, email, username, phone')
+        .eq('phone', phone.trim())
+        .single();
+
+      if (existingCustomerByPhone || existingRecyclerByPhone) {
+        return res.status(400).json({
+          success: false,
+          error: 'An account with this phone number already exists',
+          code: 'PHONE_EXISTS'
+        });
+      }
+    }
+
+    // 3. Check username in both tables
+    const { data: existingCustomerByUsername } = await supabase
+      .from('customers')
+      .select('id, email, username, phone')
+      .eq('username', username.trim())
+      .single();
+
+    const { data: existingRecyclerByUsername } = await supabase
+      .from('recyclers')
+      .select('id, email, username, phone')
+      .eq('username', username.trim())
+      .single();
+
+    if (existingCustomerByUsername || existingRecyclerByUsername) {
+      return res.status(400).json({
+        success: false,
+        error: 'This username is already taken',
+        code: 'USERNAME_EXISTS'
+      });
+    }
+
+    console.log('✅ All duplicate checks passed - proceeding with API registration');
     
     // Create user profile directly in database with auto-verification
     let result;
@@ -348,9 +437,9 @@ app.post('/api/register', async (req, res) => {
       result = await supabase
         .from('customers')
         .insert({
-          email,
-          username,
-          phone,
+          email: email.toLowerCase(),
+          username: username.trim(),
+          phone: phone ? phone.trim() : null,
           email_verified: true, // Auto-verify the user
           privacy_policy_accepted: true,
           privacy_policy_version: '1.0',
@@ -363,9 +452,9 @@ app.post('/api/register', async (req, res) => {
       result = await supabase
         .from('recyclers')
         .insert({
-          email,
-          username,
-          phone,
+          email: email.toLowerCase(),
+          username: username.trim(),
+          phone: phone ? phone.trim() : null,
           email_verified: true, // Auto-verify the user
           privacy_policy_accepted: true,
           privacy_policy_version: '1.0',
@@ -408,108 +497,7 @@ app.post('/api/register', async (req, res) => {
       error: 'Registration failed',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
-  }
-});
-
-// API registration endpoint (bypasses Supabase Auth)
-app.post('/api/register', async (req, res) => {
-  try {
-    const { email, username, phone, role, password } = req.body;
-    
-    console.log('API registration for:', { email, username, phone, role });
-    
-    // Check if user already exists
-    let existingUser;
-    if (role === 'customer') {
-      const { data } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('email', email)
-        .single();
-      existingUser = data;
-    } else {
-      const { data } = await supabase
-        .from('recyclers')
-        .select('id')
-        .eq('email', email)
-        .single();
-      existingUser = data;
-    }
-    
-    if (existingUser) {
-      res.status(400).json({
-        success: false,
-        error: 'User with this email already exists'
-      });
-      return;
-    }
-    
-    // Create user profile directly in database with auto-verification
-    let result;
-    if (role === 'customer') {
-      result = await supabase
-        .from('customers')
-        .insert({
-          email,
-          username,
-          phone,
-          email_verified: true, // Auto-verify the user
-          privacy_policy_accepted: true,
-          privacy_policy_version: '1.0',
-          privacy_policy_accepted_at: new Date().toISOString(),
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-    } else {
-      result = await supabase
-        .from('recyclers')
-        .insert({
-          email,
-          username,
-          phone,
-          email_verified: true, // Auto-verify the user
-          privacy_policy_accepted: true,
-          privacy_policy_version: '1.0',
-          privacy_policy_accepted_at: new Date().toISOString(),
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-    }
-    
-    if (result.error) {
-      console.error('API registration failed:', result.error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to create user profile',
-        details: result.error
-      });
-      return;
-    }
-    
-    res.json({
-      success: true,
-      message: 'User registered successfully (auto-verified)',
-      data: {
-        user: {
-          id: result.data.id,
-          email: result.data.email,
-          username: result.data.username,
-          phone: result.data.phone,
-          role: role,
-          emailVerified: true
-        }
-      }
-    });
-    
-  } catch (error) {
-    console.error('API registration error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Registration failed',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+    return;
   }
 });
 

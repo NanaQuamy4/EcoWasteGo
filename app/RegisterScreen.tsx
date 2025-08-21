@@ -17,21 +17,19 @@ import PhoneNumberInput from '../components/PhoneNumberInput';
 import { COLORS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/apiService';
-import { SignupValidationData, validateSignup } from '../utils/validation';
+import { handleRegistrationError, SignupValidationData, validateSignup } from '../utils/validation';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { selectedRole, smsVerified, verifiedPhone } = useLocalSearchParams<{ 
+  const { selectedRole } = useLocalSearchParams<{ 
     selectedRole?: string;
-    smsVerified?: string;
-    verifiedPhone?: string;
   }>();
   const { register, user } = useAuth();
   
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
-    phone: verifiedPhone || '',
+    phone: '',
     password: '',
     confirmPassword: '',
     companyName: '', // For recyclers
@@ -43,16 +41,26 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [isPhoneValid, setIsPhoneValid] = useState(false);
+  
+  // Field-specific error states for duplicate checking
+  const [fieldErrors, setFieldErrors] = useState({
+    email: '',
+    phone: '',
+    username: '',
+    companyName: ''
+  });
   
   // Privacy policy agreement states
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [disagreeToTerms, setDisagreeToTerms] = useState(true);
 
-  // SMS verification states
-  const [phoneVerified, setPhoneVerified] = useState(smsVerified === 'true');
-  const [isVerifyingPhone, setIsVerifyingPhone] = useState(false);
+
 
   const isRecycler = selectedRole === 'recycler';
+
+
 
   // Navigate based on user role after registration
   useEffect(() => {
@@ -100,15 +108,43 @@ export default function RegisterScreen() {
 
   const handleFullNameChange = (fullName: string) => {
     setFormData(prev => ({ ...prev, fullName }));
+    // Clear username error when user starts typing
+    if (fieldErrors.username) {
+      setFieldErrors(prev => ({ ...prev, username: '' }));
+    }
+  };
+
+  const handleEmailChange = (email: string) => {
+    setFormData(prev => ({ ...prev, email }));
+    // Clear email error when user starts typing
+    if (fieldErrors.email) {
+      setFieldErrors(prev => ({ ...prev, email: '' }));
+    }
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email && !emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  const handlePhoneChange = (phone: string) => {
+    setFormData(prev => ({ ...prev, phone }));
+    // Clear phone error when user starts typing
+    if (fieldErrors.phone) {
+      setFieldErrors(prev => ({ ...prev, phone: '' }));
+    }
   };
 
   const handleCompanyNameChange = (companyName: string) => {
     setFormData(prev => ({ ...prev, companyName }));
+    // Clear company name error when user starts typing
+    if (fieldErrors.companyName) {
+      setFieldErrors(prev => ({ ...prev, companyName: '' }));
+    }
   };
-
-  const [phoneError, setPhoneError] = useState('');
-  const [isPhoneValid, setIsPhoneValid] = useState(false);
-  const [emailExistsError, setEmailExistsError] = useState(false);
 
   // Helper function to suggest email corrections
   const suggestEmailCorrection = (email: string): string | null => {
@@ -133,10 +169,6 @@ export default function RegisterScreen() {
     return null;
   };
 
-  const handlePhoneChange = (phone: string) => {
-    setFormData(prev => ({ ...prev, phone }));
-  };
-
   const handlePhoneValidation = (isValid: boolean, error?: string) => {
     setIsPhoneValid(isValid);
     setPhoneError(error || '');
@@ -152,57 +184,11 @@ export default function RegisterScreen() {
     setAgreeToTerms(false);
   };
 
-  const handleVerifyPhone = async () => {
-    // Validate phone number first
-    if (!isPhoneValid || !formData.phone.trim()) {
-      Alert.alert('Invalid Phone', 'Please enter a valid phone number before verification.');
-      return;
-    }
 
-    setIsVerifyingPhone(true);
-    try {
-      const response = await apiService.sendSMSVerificationCode(
-        formData.phone, 
-        selectedRole as 'customer' | 'recycler'
-      );
-
-      if (response.success) {
-        // Navigate to SMS verification screen
-        router.push({
-          pathname: '/SMSVerificationScreen',
-          params: {
-            phoneNumber: formData.phone,
-            userType: selectedRole,
-            formData: JSON.stringify(formData)
-          }
-        });
-      } else {
-        Alert.alert('Verification Failed', response.message || 'Failed to send verification code');
-      }
-    } catch (error: any) {
-      console.error('SMS verification error:', error);
-      Alert.alert('Verification Failed', 'Failed to send SMS verification code. Please try again.');
-    } finally {
-      setIsVerifyingPhone(false);
-    }
-  };
 
   const handleRegister = async () => {
     // Clear previous validation errors
     setValidationErrors([]);
-
-    // Check if phone is verified
-    if (!phoneVerified) {
-      Alert.alert(
-        'Phone Verification Required', 
-        'Please verify your phone number before registering.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Verify Now', onPress: handleVerifyPhone }
-        ]
-      );
-      return;
-    }
 
     // Check terms agreement
     if (!agreeToTerms) {
@@ -243,35 +229,42 @@ export default function RegisterScreen() {
       return;
     }
 
+    // Validate phone number
+    if (!isPhoneValid) {
+      Alert.alert('Invalid Phone', phoneError || 'Please enter a valid phone number.');
+      return;
+    }
+
     setIsLoading(true);
-    console.log('Starting SMS-verified registration process...');
+    console.log('Starting registration process...');
     
     try {
-      // Use SMS-verified registration endpoint
-      const response = await apiService.registerWithSMSVerification({
-        email: formData.email,
-        password: formData.password,
-        username: formData.fullName,
-        phone: validation.formattedPhone || formData.phone,
-        role: selectedRole as 'customer' | 'recycler',
-        companyName: isRecycler ? formData.companyName : undefined,
-        smsVerified: phoneVerified
-      });
+      // Send SMS verification code first
+      const response = await apiService.sendSMSVerificationCode(
+        formData.phone, 
+        selectedRole as 'customer' | 'recycler'
+      );
 
       if (response.success) {
-        console.log('SMS-verified registration successful!');
-        Alert.alert(
-          'Registration Successful!',
-          'Your account has been created with verified phone number. You can now login.',
-          [
-            {
-              text: 'Login Now',
-              onPress: () => router.push('/LoginScreen')
-            }
-          ]
-        );
+        // Navigate to verification screen with form data
+        router.push({
+          pathname: '/SMSVerificationScreen',
+          params: {
+            phoneNumber: formData.phone,
+            userType: selectedRole,
+            formData: JSON.stringify({
+              email: formData.email,
+              password: formData.password,
+              username: formData.fullName,
+              phone: validation.formattedPhone || formData.phone,
+              role: selectedRole,
+              companyName: isRecycler ? formData.companyName : undefined,
+            }),
+            isRegistration: 'true' // Flag to indicate this is for registration
+          }
+        });
       } else {
-        throw new Error(response.message || 'Registration failed');
+        throw new Error(response.message || 'Failed to send verification code');
       }
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -281,39 +274,38 @@ export default function RegisterScreen() {
         name: error.name
       });
       
-      let message = 'Registration failed. Please try again.';
-      if (error.message === 'EMAIL_EXISTS' || error.message?.includes('already exists')) {
-        message = 'An account with this email already exists. Please try logging in instead.';
-      } else if (error.message === 'INVALID_EMAIL') {
-        message = 'Please enter a valid email address.';
-      } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
-        message = 'Network error. Please check your internet connection and try again.';
-      } else if (error.message?.includes('invalid')) {
-        message = 'Please check your email format and try again.';
+      // Use enhanced error handling
+      const registrationError = handleRegistrationError(error);
+      
+      // Set field-specific errors for better user feedback
+      if (registrationError.code === 'EMAIL_EXISTS') {
+        setFieldErrors(prev => ({ ...prev, email: 'This email is already registered' }));
+      } else if (registrationError.code === 'PHONE_EXISTS') {
+        setFieldErrors(prev => ({ ...prev, phone: 'This phone number is already registered' }));
+      } else if (registrationError.code === 'USERNAME_EXISTS') {
+        setFieldErrors(prev => ({ ...prev, username: 'This username is already taken' }));
+      } else if (registrationError.code === 'COMPANY_EXISTS') {
+        setFieldErrors(prev => ({ ...prev, companyName: 'This company name already exists' }));
       }
       
-      if (error.message === 'EMAIL_EXISTS' || error.message?.includes('already exists')) {
-        setEmailExistsError(true);
+      // Show appropriate alert based on error type
+      if (registrationError.code === 'EMAIL_EXISTS' || 
+          registrationError.code === 'PHONE_EXISTS' || 
+          registrationError.code === 'USERNAME_EXISTS' ||
+          registrationError.code === 'COMPANY_EXISTS') {
+        
         Alert.alert(
-          'Account Already Exists',
-          'An account with this email already exists. What would you like to do?',
+          'Account Already Exists', 
+          registrationError.userFriendlyMessage,
           [
-            {
-              text: 'Try Different Email',
-              style: 'cancel',
-            },
-            {
-              text: 'Forgot Password?',
-              onPress: () => router.push('/ForgotPasswordScreen'),
-            },
-            {
-              text: 'Go to Login',
-              onPress: () => router.push('/LoginScreen'),
-            },
+            { text: 'Try Again', style: 'default' },
+            { text: 'Go to Login', style: 'default', onPress: () => router.push('/LoginScreen') }
           ]
         );
+      } else if (registrationError.code === 'NETWORK_ERROR') {
+        Alert.alert('Network Error', registrationError.userFriendlyMessage);
       } else {
-        Alert.alert('Registration Failed', message);
+        Alert.alert('Registration Failed', registrationError.userFriendlyMessage);
       }
     } finally {
       console.log('Registration process completed');
@@ -344,7 +336,6 @@ export default function RegisterScreen() {
     !emailError &&
     !passwordError &&
     isPhoneValid &&
-    phoneVerified && // Must verify phone number
     (isRecycler ? formData.companyName.trim() !== '' : true);
 
   return (
@@ -380,39 +371,55 @@ export default function RegisterScreen() {
                   <MaterialIcons 
                     name="business" 
                     size={20} 
-                    color={COLORS.gray} 
+                    color={formData.companyName.trim() !== '' && !fieldErrors.companyName ? COLORS.green : COLORS.gray} 
                     style={styles.inputIcon}
                   />
                   <TextInput
-                    style={[styles.input, formData.companyName.trim() === '' && styles.inputError]}
+                    style={[
+                      styles.input, 
+                      (formData.companyName.trim() === '' || fieldErrors.companyName) && styles.inputError,
+                      formData.companyName.trim() !== '' && !fieldErrors.companyName && { borderColor: COLORS.green }
+                    ]}
                     value={formData.companyName}
                     onChangeText={handleCompanyNameChange}
                     placeholder="Enter company name"
                     autoCapitalize="words"
                   />
                 </View>
+                {fieldErrors.companyName ? (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{fieldErrors.companyName}</Text>
+                  </View>
+                ) : null}
               </View>
             )}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                {isRecycler ? 'Your Full Name' : 'Full Name'} *
-              </Text>
+              <Text style={styles.label}>Full Name *</Text>
               <View style={styles.inputContainer}>
                 <MaterialIcons 
                   name="person" 
                   size={20} 
-                  color={COLORS.gray} 
-                  style={styles.inputIcon}
+                  color={formData.fullName.trim() !== '' && !fieldErrors.username ? COLORS.green : COLORS.gray} 
+                  style={styles.inputIcon} 
                 />
                 <TextInput
-                  style={[styles.input, formData.fullName.trim() === '' && styles.inputError]}
+                  style={[
+                    styles.input, 
+                    (formData.fullName.trim() === '' || fieldErrors.username) && styles.inputError,
+                    formData.fullName.trim() !== '' && !fieldErrors.username && { borderColor: COLORS.green }
+                  ]}
                   value={formData.fullName}
                   onChangeText={handleFullNameChange}
                   placeholder={isRecycler ? "Enter your full name" : "Enter your full name"}
                   autoCapitalize="words"
                 />
               </View>
+              {fieldErrors.username ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{fieldErrors.username}</Text>
+                </View>
+              ) : null}
             </View>
 
             <View style={styles.inputGroup}>
@@ -421,49 +428,17 @@ export default function RegisterScreen() {
                 <MaterialIcons 
                   name="email" 
                   size={20} 
-                  color={formData.email.trim() !== '' && !emailError ? COLORS.green : COLORS.gray} 
+                  color={formData.email.trim() !== '' && !emailError && !fieldErrors.email ? COLORS.green : COLORS.gray} 
                   style={styles.inputIcon} 
                 />
                 <TextInput
                   style={[
                     styles.input, 
-                    (formData.email.trim() === '' || emailError || emailExistsError) && styles.inputError,
-                    formData.email.trim() !== '' && !emailError && !emailExistsError && { borderColor: COLORS.green }
+                    (formData.email.trim() === '' || emailError || fieldErrors.email) && styles.inputError,
+                    formData.email.trim() !== '' && !emailError && !fieldErrors.email && { borderColor: COLORS.green }
                   ]}
                   value={formData.email}
-                  onChangeText={(text) => {
-                    // Trim whitespace and remove any extra characters
-                    const cleanEmail = text.trim().toLowerCase();
-                    setFormData(prev => ({ ...prev, email: cleanEmail }));
-                    
-                    // Clear email error when user types
-                    setEmailError('');
-                    setEmailExistsError(false);
-                    
-                    // Enhanced email validation
-                    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-                    
-                    if (cleanEmail) {
-                      // Check for common email mistakes
-                      if (cleanEmail.includes(' ')) {
-                        setEmailError('Email address cannot contain spaces');
-                      } else if (!cleanEmail.includes('@')) {
-                        setEmailError('Email address must contain @ symbol');
-                      } else if (!cleanEmail.includes('.')) {
-                        setEmailError('Email address must contain a domain (e.g., .com, .org)');
-                      } else if (cleanEmail.startsWith('@') || cleanEmail.endsWith('@')) {
-                        setEmailError('Email address cannot start or end with @');
-                      } else if (!emailRegex.test(cleanEmail)) {
-                        // Check for common email mistakes and suggest corrections
-                        const suggestion = suggestEmailCorrection(cleanEmail);
-                        if (suggestion) {
-                          setEmailError(suggestion);
-                        } else {
-                          setEmailError('Please enter a valid email address (e.g., user@example.com)');
-                        }
-                      }
-                    }
-                  }}
+                  onChangeText={handleEmailChange}
                   placeholder="Enter your email address"
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -474,34 +449,16 @@ export default function RegisterScreen() {
               {emailError ? (
                 <View style={styles.errorContainer}>
                   <Text style={styles.errorText}>{emailError}</Text>
-                  {emailError.includes('Did you mean') && (
-                    <TouchableOpacity
-                      style={styles.quickFixButton}
-                      onPress={() => {
-                        const suggestion = suggestEmailCorrection(formData.email);
-                        if (suggestion) {
-                          // Extract the suggested email from the error message
-                          const match = suggestion.match(/Did you mean "([^"]+)"/);
-                          if (match) {
-                            setFormData(prev => ({ ...prev, email: match[1] }));
-                            setEmailError('');
-                          }
-                        }
-                      }}
-                    >
-                      <Text style={styles.quickFixText}>Quick Fix</Text>
-                    </TouchableOpacity>
-                  )}
                 </View>
               ) : null}
-              {emailExistsError ? (
+              {fieldErrors.email ? (
                 <View style={styles.errorContainer}>
-                  <Text style={styles.errorText}>This email is already registered. Try a different email or log in.</Text>
+                  <Text style={styles.errorText}>{fieldErrors.email}</Text>
                   <TouchableOpacity
                     style={styles.quickFixButton}
                     onPress={() => router.push('/LoginScreen')}
                   >
-                    <Text style={styles.quickFixText}>Login</Text>
+                    <Text style={styles.quickFixText}>Login Instead</Text>
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -515,41 +472,25 @@ export default function RegisterScreen() {
                 onCountryChange={setCountryCode}
                 selectedCountryCode={countryCode.replace('+', '')}
                 placeholder="Enter your phone number"
-                error={phoneError || (formData.phone.trim() === '' ? 'Phone number is required' : undefined)}
+                error={phoneError || fieldErrors.phone || (formData.phone.trim() === '' ? 'Phone number is required' : undefined)}
                 onValidationChange={handlePhoneValidation}
               />
-              
-              {/* Phone Verification Section */}
-              <View style={styles.phoneVerificationSection}>
-                {phoneVerified ? (
-                  <View style={styles.verifiedContainer}>
-                    <MaterialIcons name="verified" size={20} color={COLORS.green} />
-                    <Text style={styles.verifiedText}>Phone number verified ✓</Text>
-                  </View>
-                ) : (
+              {fieldErrors.phone ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{fieldErrors.phone}</Text>
                   <TouchableOpacity
-                    style={[
-                      styles.verifyPhoneButton,
-                      (!isPhoneValid || isVerifyingPhone) && styles.verifyPhoneButtonDisabled
-                    ]}
-                    onPress={handleVerifyPhone}
-                    disabled={!isPhoneValid || isVerifyingPhone}
+                    style={styles.quickFixButton}
+                    onPress={() => router.push('/LoginScreen')}
                   >
-                    <MaterialIcons 
-                      name="sms" 
-                      size={16} 
-                      color={isPhoneValid && !isVerifyingPhone ? COLORS.white : COLORS.gray} 
-                    />
-                    <Text style={[
-                      styles.verifyPhoneButtonText,
-                      (!isPhoneValid || isVerifyingPhone) && styles.verifyPhoneButtonTextDisabled
-                    ]}>
-                      {isVerifyingPhone ? 'Sending...' : 'Verify via SMS'}
-                    </Text>
+                    <Text style={styles.quickFixText}>Login Instead</Text>
                   </TouchableOpacity>
-                )}
-              </View>
+                </View>
+              ) : null}
             </View>
+
+
+
+
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Password *</Text>
@@ -849,40 +790,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  phoneVerificationSection: {
-    marginTop: 12,
-  },
-  verifiedContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.green + '20',
-    padding: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  verifiedText: {
-    color: COLORS.green,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  verifyPhoneButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.orange,
-    padding: 12,
-    borderRadius: 8,
-    gap: 8,
-    justifyContent: 'center',
-  },
-  verifyPhoneButtonDisabled: {
-    backgroundColor: COLORS.lightGray,
-  },
-  verifyPhoneButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  verifyPhoneButtonTextDisabled: {
-    color: COLORS.gray,
-  },
+
 }); 

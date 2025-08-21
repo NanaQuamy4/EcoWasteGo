@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Animated, Easing, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import { DIMENSIONS } from '../../constants';
-import customerStats from '../utils/customerStats';
+import customerStats from '../../utils/customerStats';
 
 export default function EcoImpactCelebrationScreen() {
   const params = useLocalSearchParams();
