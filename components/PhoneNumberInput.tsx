@@ -424,7 +424,10 @@ export default function PhoneNumberInput({
   const handlePhoneNumberChange = (text: string) => {
     // Remove any non-digit characters except the country code
     const cleanedText = text.replace(/[^\d]/g, '');
-    onChangeText(cleanedText);
+    
+    // Send the full phone number (with country code) to the parent
+    const fullPhoneNumber = `${selectedCountry.dialCode}${cleanedText}`;
+    onChangeText(fullPhoneNumber);
     
     // Validate phone number and notify parent
     if (onValidationChange) {
