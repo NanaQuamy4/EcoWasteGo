@@ -15,7 +15,7 @@ $envIP = $env:EXPO_PUBLIC_LOCAL_IP
 if ($envIP) {
     Write-Host "Environment IP: $envIP" -ForegroundColor Green
 } else {
-    Write-Host "Environment IP: Not set - using default 10.132.254.147" -ForegroundColor Yellow
+    Write-Host "Environment IP: Not set - using default 10.30.23.237" -ForegroundColor Yellow
 }
 
 Write-Host ""

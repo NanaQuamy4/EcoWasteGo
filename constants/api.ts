@@ -2,7 +2,7 @@
 // Get local IP automatically or use fallback
 const getLocalIP = () => {
   // You can set this environment variable when IP changes
-  return process.env.EXPO_PUBLIC_LOCAL_IP || '192.168.71.157';
+  return process.env.EXPO_PUBLIC_LOCAL_IP || '10.30.23.237';
 };
 
 export const API_CONFIG = {
