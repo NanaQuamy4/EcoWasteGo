@@ -1,14 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { COLORS, DIMENSIONS } from '../../constants';
 import { RecyclerProfile } from '../../constants/api';
@@ -386,8 +386,54 @@ export default function SelectTruckScreen() {
       <ScrollView style={styles.scrollArea} contentContainerStyle={{ paddingBottom: 32 }}>
         {filteredRecyclers.length === 0 ? (
           <View style={styles.noResultsContainer}>
-            <Text style={styles.noResultsText}>No recyclers available in this area</Text>
-            <Text style={styles.noResultsSubtext}>Try changing your location or filters</Text>
+            <Text style={styles.noResultsText}>🚛 No Recyclers Found</Text>
+            <Text style={styles.noResultsSubtext}>
+              {loading ? 'Searching for recyclers...' : 
+               selectedFilter !== 'all' ? 
+               `No ${selectedFilter.toLowerCase()}s available in this area` :
+               'No recyclers are currently available in this area'}
+            </Text>
+            
+            {!loading && (
+              <>
+                <Text style={styles.suggestionText}>
+                  💡 What you can try:
+                </Text>
+                <View style={styles.suggestionsContainer}>
+                  <Text style={styles.suggestionItem}>• Try again in a few minutes</Text>
+                  <Text style={styles.suggestionItem}>• Change your pickup location</Text>
+                  {selectedFilter !== 'all' && (
+                    <Text style={styles.suggestionItem}>• Try "All" filter for more options</Text>
+                  )}
+                  <Text style={styles.suggestionItem}>• Contact support if issue persists</Text>
+                </View>
+                
+                <View style={styles.actionButtonsContainer}>
+                  <TouchableOpacity 
+                    style={styles.tryAgainButton}
+                    onPress={handleRefresh}
+                  >
+                    <Text style={styles.tryAgainButtonText}>🔄 Try Again</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.changeLocationButton}
+                    onPress={() => router.back()}
+                  >
+                    <Text style={styles.changeLocationButtonText}>📍 Change Location</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                {selectedFilter !== 'all' && (
+                  <TouchableOpacity 
+                    style={styles.showAllButton}
+                    onPress={() => handleFilterPress('all')}
+                  >
+                    <Text style={styles.showAllButtonText}>Show All Recyclers</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
           </View>
         ) : (
           filteredRecyclers.map((recycler, index) => (
@@ -697,6 +743,11 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: 'bold',
   },
+  changeLocationButtonText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
   coordinatesText: {
     fontSize: 14,
     color: COLORS.gray,
@@ -742,7 +793,7 @@ const styles = StyleSheet.create({
   noResultsContainer: {
     marginHorizontal: DIMENSIONS.padding,
     marginTop: 20,
-    padding: 20,
+    padding: 24,
     backgroundColor: COLORS.white,
     borderRadius: DIMENSIONS.borderRadius,
     shadowColor: COLORS.black,
@@ -752,16 +803,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   noResultsText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.primary,
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   noResultsSubtext: {
-    fontSize: 14,
+    fontSize: 16,
     color: COLORS.gray,
     textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  suggestionText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  suggestionsContainer: {
+    alignSelf: 'stretch',
+    marginBottom: 24,
+    paddingHorizontal: 16,
+  },
+  suggestionItem: {
+    fontSize: 14,
+    color: COLORS.gray,
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    marginBottom: 16,
+    gap: 12,
+  },
+  tryAgainButton: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: DIMENSIONS.borderRadius,
+    alignItems: 'center',
+  },
+  tryAgainButtonText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  showAllButton: {
+    backgroundColor: COLORS.lightGray,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: DIMENSIONS.borderRadius,
+    alignItems: 'center',
+    alignSelf: 'stretch',
+  },
+  showAllButtonText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   distanceContainer: {
     flexDirection: 'row',

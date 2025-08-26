@@ -76,8 +76,8 @@ const corsOptions = {
               : [
           'http://localhost:3000', 'http://localhost:8081', 'http://localhost:19006',
           'exp://localhost:8081', 'exp://localhost:19006',
-          'http://10.30.23.237:3000', 'http://10.30.23.237:8081', 'http://10.30.23.237:19006',
-          'exp://10.30.23.237:8081', 'exp://10.30.23.237:19006'
+          'http://10.132.254.147:3000', 'http://10.132.254.147:8081', 'http://10.132.254.147:19006',
+          'exp://10.132.254.147:8081', 'exp://10.132.254.147:19006'
         ];
     
     if (allowedOrigins.includes(origin)) {
@@ -563,11 +563,11 @@ app.use('*', (req, res) => {
 app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`🚀 EcoWasteGo Backend Server is running!`);
   console.log(`📍 Local: http://localhost:${PORT}`);
-  console.log(`🌐 Network: http://10.30.23.237:${PORT}`);
-  console.log(`📱 Mobile App can connect to: http://10.30.23.237:${PORT}`);
+  console.log(`🌐 Network: http://10.132.254.147:${PORT}`);
+  console.log(`📱 Mobile App can connect to: http://10.132.254.147:${PORT}`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 Health Check: http://10.30.23.237:${PORT}/health`);
+  console.log(`📊 Health Check: http://10.132.254.147:${PORT}/health`);
 });
 
 export default app; 

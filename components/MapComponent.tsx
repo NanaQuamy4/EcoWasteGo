@@ -5,10 +5,11 @@ import {
     Alert,
     Dimensions,
     StyleSheet,
+    Text,
     TouchableOpacity,
     View
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from 'react-native-maps';
 import { COLORS } from '../constants';
 
 interface MapComponentProps {
@@ -153,68 +154,44 @@ export default function MapComponent({
         provider={PROVIDER_GOOGLE}
         initialRegion={mapRegion}
         showsUserLocation={showUserLocation && hasLocationPermission}
-        showsMyLocationButton={showUserLocation && hasLocationPermission}
-        showsCompass={true}
-        showsScale={true}
+        showsMyLocationButton={false}
         onPress={handleMapPress}
-        mapType="standard"
-        loadingEnabled={true}
-        loadingIndicatorColor={COLORS.darkGreen}
-        loadingBackgroundColor={COLORS.white}
-        toolbarEnabled={false}
         zoomEnabled={true}
-        rotateEnabled={true}
         scrollEnabled={true}
         pitchEnabled={true}
-
-
-
+        rotateEnabled={true}
+        showsCompass={true}
+        showsScale={true}
+        loadingEnabled={true}
+        loadingIndicatorColor={COLORS.darkGreen}
+        loadingBackgroundColor={COLORS.lightGreen}
       >
-        {/* User Location Marker */}
-        {userLocation && showUserLocation && (
+        {/* Render markers */}
+        {markers.map((marker) => (
           <Marker
-            coordinate={{
-              latitude: userLocation.coords.latitude,
-              longitude: userLocation.coords.longitude,
-            }}
-            title="Your Location"
-            description="You are here"
+            key={marker.id}
+            coordinate={marker.coordinate}
+            title={marker.title}
+            description={marker.description}
+            onPress={() => onMarkerPress && onMarkerPress(marker.id)}
           >
-            <View style={styles.userLocationMarker}>
-              <MaterialIcons name="my-location" size={20} color={COLORS.blue} />
+            <View style={[styles.marker, { backgroundColor: getMarkerColor(marker.type) }]}>
+              <MaterialIcons
+                name={getMarkerIcon(marker.type)}
+                size={20}
+                color={COLORS.white}
+              />
             </View>
           </Marker>
-        )}
+        ))}
 
-        {/* Custom Markers */}
-        {markers.map((marker) => {
-          console.log('Rendering marker:', marker.id, marker.coordinate);
-          return (
-            <Marker
-              key={marker.id}
-              coordinate={marker.coordinate}
-              title={marker.title}
-              description={marker.description}
-              onPress={() => onMarkerPress?.(marker.id)}
-            >
-              <View style={[styles.marker, { backgroundColor: getMarkerColor(marker.type) }]}>
-                               <MaterialIcons 
-                 name={getMarkerIcon(marker.type) as any} 
-                 size={20} 
-                 color={COLORS.white} 
-               />
-              </View>
-            </Marker>
-          );
-        })}
-
-        {/* Route Polyline */}
-        {route && route.coordinates.length > 1 && (
+        {/* Render route if provided */}
+        {route && route.coordinates && route.coordinates.length > 1 && (
           <Polyline
             coordinates={route.coordinates}
             strokeColor={route.color || COLORS.darkGreen}
             strokeWidth={4}
-            lineDashPattern={[10, 5]}
+            lineDashPattern={[5, 5]}
           />
         )}
       </MapView>

@@ -19,6 +19,13 @@ EcoWasteGo is a comprehensive mobile waste management platform built with Expo a
 - **Real-Time Form Validation**: Instant feedback with visual indicators (red/green borders)
 - **Terms & Conditions**: Mandatory agreement with "I Disagree" default state
 
+### 🧮 **Smart Distance & Pricing System**
+- **Haversine Distance Calculation**: Precise geographic distance using Earth's spherical geometry
+- **Intelligent ETA Estimation**: Traffic-aware arrival time with urban condition modeling
+- **Dynamic Pricing Algorithm**: Distance-based pricing with vehicle type optimization
+- **Golden Angle Distribution**: Optimal recycler positioning for balanced coverage
+- **Real-Time Route Optimization**: Live distance updates and closest recycler prioritization
+
 ### 🏢 Dual-Role System
 
 #### Customer Features
@@ -42,27 +49,30 @@ EcoWasteGo is a comprehensive mobile waste management platform built with Expo a
 - **Live Navigation**: Real-time GPS tracking and route optimization
 - **Customer Communication**: Intelligent messaging system with smart suggestions
 
-### 💬 **Intelligent Messaging System** 🧠
-- **AI-Powered Message Analysis**: Analyzes incoming messages for intent, urgency, and emotion
-- **Context-Aware Suggestions**: Provides smart response suggestions based on message content
+### 💬 **Smart Messaging System** 💬
+- **Intelligent Response Suggestions**: Context-aware message suggestions for common scenarios
 - **Real-Time Communication**: Instant messaging between recyclers and customers
 - **Message Persistence**: All conversations stored in database with conversation history
 - **Smart Response Templates**: Contextual responses based on pickup stage and message type
-- **Emotion Detection**: Recognizes positive, negative, and neutral emotional tones
-- **Urgency Assessment**: Identifies high, medium, and low priority messages
-- **Intent Recognition**: Automatically categorizes messages (greeting, question, concern, arrival, etc.)
-- **Stage-Based Suggestions**: Different responses for different pickup stages
 - **Professional Communication**: Ensures high-quality, appropriate responses
+- **Quick Response Buttons**: Pre-written messages for common situations
 
-### 🗺️ **Real-Time Navigation & Tracking** 🚗
-- **Live GPS Tracking**: Real-time location updates for recyclers and customers
-- **Route Optimization**: Intelligent route planning and ETA calculations
-- **Distance Monitoring**: Live distance and time-to-arrival updates
-- **Arrival Detection**: Automatic detection when recycler reaches customer location
-- **Status Synchronization**: Real-time status updates across both user types
+### 🗺️ **Location & Navigation System** 🚗
+- **GPS Location Services**: Current location detection and address search
+- **Location-Based Search**: Find recyclers and services near specific addresses
+- **Distance Calculation**: Precise distance measurement using GPS coordinates
 - **Location Permissions**: Secure handling of location access
-- **Map Integration**: Interactive maps showing current positions and routes
-- **Progress Updates**: Continuous tracking updates during pickup process
+- **Address Validation**: Location search and reverse geocoding
+- **Route Information**: Basic navigation between pickup and delivery points
+
+### 📏 **Distance Calculation & ETA System** 🧮
+- **Haversine Formula**: Precise distance calculation using Earth's spherical geometry
+- **Realistic ETA Calculation**: Traffic-aware arrival time estimates with city conditions
+- **Smart Speed Adjustments**: Dynamic speed calculations based on distance and urban factors
+- **Traffic Delay Modeling**: 20% extra time factor for city traffic conditions
+- **Golden Angle Distribution**: Optimal recycler positioning simulation around customers
+- **Distance-Based Pricing**: Dynamic rate calculation with 8% increase per kilometer
+- **Vehicle Type Optimization**: Different pricing models for Big vs Small trucks
 
 ### ✅ **Request Approval Workflow** 📋
 - **Customer Request Submission**: Submit waste pickup requests with details
@@ -74,14 +84,14 @@ EcoWasteGo is a comprehensive mobile waste management platform built with Expo a
 - **Database Persistence**: All workflow data stored securely in database
 
 ### 💳 Payment & Financial System
-- **Environmental Tax**: Automatic 5% environmental tax calculation
-- **Payment Summaries**: Detailed breakdown of base amount, tax, and total
+- **Payment Summaries**: Detailed breakdown of service costs and totals
 - **Payment Approval Flow**: Accept/reject payment summaries with confirmation
 - **Secure Transactions**: HTTPS transmission with Supabase backend security
+- **Environmental Impact Tracking**: Basic CO2 savings calculation framework
 
 ### 🌍 Environmental Impact
-- **CO2 Savings Calculation**: Track environmental impact of recycling
-- **Eco Impact Celebration**: Post-payment environmental statistics
+- **CO2 Savings Calculation**: Basic framework for tracking recycling impact
+- **Eco Impact Celebration**: Post-payment environmental statistics display
 - **Rewards System**: Achievement tracking for environmental contributions
 - **Educational Content**: Recycling education and best practices
 
@@ -92,6 +102,107 @@ EcoWasteGo is a comprehensive mobile waste management platform built with Expo a
 - **Real-Time Statistics**: Live updates of user activity and impact
 
 ## 🛠️ Technical Architecture
+
+### 📏 **Distance Calculation Algorithms**
+
+#### **Haversine Formula Implementation**
+```typescript
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+};
+```
+
+#### **Intelligent ETA Calculation**
+```typescript
+const calculateETA = (distance: number): string => {
+  let avgSpeed = 25; // km/h - conservative city speed
+  
+  // Adjust speed based on distance
+  if (distance > 5) {
+    avgSpeed = 35; // km/h for longer distances (highways)
+  } else if (distance < 1) {
+    avgSpeed = 15; // km/h for very short distances (more traffic lights)
+  }
+  
+  // Add traffic delay factor (20% extra time for city conditions)
+  const trafficDelay = 1.2;
+  const timeInHours = (distance / avgSpeed) * trafficDelay;
+  const timeInMinutes = Math.round(timeInHours * 60);
+  
+  return formatTime(timeInMinutes);
+};
+```
+
+#### **Smart Recycler Positioning**
+```typescript
+// Generate realistic recycler positions around the customer
+const angle = (index * 137.5) % 360; // Golden angle for better distribution
+const radius = 0.3 + (index % 5) * 0.4; // 0.3 to 2.3 km radius
+
+const recyclerLat = customerLocation.latitude + (radius * Math.cos(angle * Math.PI / 180)) / 111;
+const recyclerLon = customerLocation.longitude + (radius * Math.sin(angle * Math.PI / 180)) / (111 * Math.cos(customerLocation.latitude * Math.PI / 180));
+```
+
+#### **Dynamic Pricing Algorithm**
+```typescript
+// Generate realistic rates based on distance and vehicle type
+let baseRate = 1.0;
+if (recycler.vehicle_type === 'Big Truck') {
+  baseRate = 0.8; // Big trucks are more efficient, cheaper per kg
+} else if (recycler.vehicle_type === 'Small Truck') {
+  baseRate = 1.2; // Small trucks are more expensive per kg
+}
+
+const distanceMultiplier = 1 + (distance * 0.08); // 8% increase per km
+const rate = baseRate * distanceMultiplier;
+```
+
+#### **Mathematical Principles & Optimization**
+
+**Golden Angle Distribution (137.5°)**
+- Uses the golden angle to distribute recyclers evenly around customers
+- Prevents clustering and ensures optimal coverage
+- Formula: `angle = (index * 137.5) % 360`
+
+**Earth's Curvature Compensation**
+- Accounts for Earth's spherical shape in coordinate calculations
+- Uses 111 km per degree latitude (approximate at equator)
+- Longitude adjustment: `111 * cos(latitude)` for accurate distance
+
+**Traffic-Aware Speed Modeling**
+- **Short Distance (< 1 km)**: 15 km/h (heavy traffic, many stops)
+- **Medium Distance (1-5 km)**: 25 km/h (city traffic average)
+- **Long Distance (> 5 km)**: 35 km/h (highway speeds possible)
+
+**Dynamic Pricing Factors**
+- **Base Rate**: Vehicle type efficiency (Big Truck: 0.8x, Small Truck: 1.2x)
+- **Distance Multiplier**: 8% increase per kilometer
+- **Traffic Factor**: 20% additional time for urban conditions
+
+#### **Real-World Application Benefits**
+
+**Customer Experience**
+- **Accurate ETA**: Traffic-aware arrival time estimates
+- **Fair Pricing**: Distance-based transparent pricing
+- **Optimal Selection**: Closest recyclers prioritized automatically
+
+**Operational Efficiency**
+- **Route Optimization**: Minimizes travel time and fuel consumption
+- **Load Balancing**: Even distribution prevents recycler clustering
+- **Cost Transparency**: Clear pricing based on actual distance and conditions
+
+**Environmental Impact**
+- **Reduced Carbon Footprint**: Shorter routes mean less emissions
+- **Efficient Resource Use**: Optimal vehicle selection based on distance
+- **Sustainable Operations**: Data-driven decision making for green logistics
 
 ### Frontend (React Native + Expo)
 ```
@@ -301,53 +412,55 @@ backend/
 
 ## 📊 Current Implementation Status
 
-### ✅ **Completed Features**
-- **User Authentication**: Registration, login, password reset
-- **Role-Based System**: Customer and recycler experiences
-- **Form Validation**: Email, phone, password validation
-- **Security**: Supabase Auth, HTTPS, input validation
-- **Navigation**: File-based routing with role separation
-- **UI Components**: Reusable components with consistent design
-- **Backend API**: Complete REST API with authentication
-- **Database**: Supabase integration with proper schema
+### ✅ **Fully Implemented Features**
+- **User Authentication**: Registration, login, password reset with Supabase
+- **Role-Based System**: Complete customer and recycler experience separation
+- **Form Validation**: Comprehensive email, phone, password validation
+- **Security**: Supabase Auth, HTTPS, input validation, rate limiting
+- **Navigation**: File-based routing with role-based navigation
+- **UI Components**: Consistent design system with reusable components
+- **Backend API**: Complete REST API with authentication and middleware
+- **Database**: Supabase integration with proper schema and RLS policies
 - **Request Approval Workflow**: Complete customer-recycler approval system
-- **Real-Time Messaging**: AI-powered intelligent messaging system
-- **Live Navigation Tracking**: GPS-based real-time tracking
-- **Arrival Notifications**: Automatic arrival detection and alerts
-- **Intelligent Suggestions**: Context-aware response suggestions
+- **Smart Messaging**: Context-aware message suggestions and templates
+- **Location Services**: GPS location detection and address search
+- **Distance Calculation**: Haversine formula with ETA and pricing
+- **Payment System**: Payment summaries and approval workflow
+- **Environmental Tracking**: Basic CO2 savings calculation framework
 
 ### 🚧 In Progress
-- **Payment Processing**: Integration with payment gateways
-- **Push Notifications**: Real-time notifications
-- **Offline Support**: Offline data synchronization
+- **Payment Processing**: Basic structure exists, needs payment gateway integration
+- **Real-Time Updates**: Polling-based updates, needs WebSocket implementation
+- **Advanced Analytics**: Basic stats exist, needs enhanced reporting
 
 ### 📋 Planned Features
-- **Multi-Language Support**: Internationalization
-- **Advanced Analytics**: Machine learning insights
-- **Social Features**: Community and sharing
-- **IoT Integration**: Smart waste bin integration
-- **Voice Messaging**: Audio message support
-- **Advanced AI**: Machine learning for better suggestions
+- **Push Notifications**: Real-time push notifications for status updates
+- **WebSocket Integration**: Real-time bidirectional communication
+- **Advanced AI**: Machine learning for message analysis and suggestions
+- **Multi-Language Support**: Internationalization for global markets
+- **Social Features**: Community features and user sharing
+- **IoT Integration**: Smart waste bin integration for automated collection
+- **Voice Messaging**: Audio message support for hands-free communication
 
-## 🧠 **AI System Capabilities**
+## 🧠 **Smart System Capabilities**
 
 ### **Message Understanding**
-- **10 Intent Types**: Greeting, question, concern, arrival, pickup_ready, etc.
-- **3 Urgency Levels**: High, medium, low priority detection
-- **3 Emotion States**: Positive, negative, neutral tone recognition
-- **6 Pickup Stages**: Context-aware responses for each stage
+- **Context-Aware Suggestions**: Provides relevant response options based on pickup stage
+- **Smart Templates**: Pre-written messages for common scenarios
+- **Stage-Based Responses**: Different suggestions for different pickup phases
+- **Professional Communication**: Ensures appropriate and helpful responses
 
-### **Smart Response Generation**
-- **Context-Aware Templates**: Adapts based on message content and situation
-- **Dynamic Content**: Automatic time and action placeholder filling
-- **Relevance Scoring**: 0-1 scoring system for suggestion quality
-- **Category Classification**: Immediate, helpful, and alternative responses
+### **Response Generation**
+- **Quick Response Buttons**: Easy access to common messages
+- **Contextual Suggestions**: Relevant responses based on current situation
+- **Template System**: Structured messages for consistency
+- **User Experience**: Reduces typing time and improves communication quality
 
-### **Real-Time Adaptation**
-- **Live Analysis**: Analyzes messages as they arrive
-- **Context Switching**: Adapts to different pickup stages
-- **Conversation History**: Learns from previous messages
-- **Performance Optimization**: Efficient suggestion generation
+### **System Intelligence**
+- **Real-Time Updates**: Live status monitoring and updates
+- **Smart Routing**: Efficient recycler-customer matching
+- **Performance Tracking**: Monitor system usage and optimize performance
+- **User Behavior**: Learn from user interactions to improve suggestions
 
 ## 🤝 Contributing
 

@@ -41,12 +41,22 @@ class LocationSearchService {
               ...(location?.longitude && { longitude: location.longitude.toString() }),
             });
 
-            const response = await apiService.request<SearchResult>(`/api/locations/search?${params}`, {
+            const response = await apiService.request<any>(`/api/locations/search?${params}`, {
               method: 'GET',
             });
 
-            if (response.success && response.data) {
-              resolve(response.data.predictions || []);
+            console.log('API Response:', response);
+
+            // Handle both API response formats
+            if (response.success && response.data && response.data.predictions) {
+              // New format: { success: true, data: { predictions: [...] } }
+              resolve(response.data.predictions);
+            } else if (response.status === 'OK' && response.predictions) {
+              // Backend format: { status: 'OK', predictions: [...] }
+              resolve(response.predictions);
+            } else if (response.data && Array.isArray(response.data)) {
+              // Direct array format
+              resolve(response.data);
             } else {
               console.warn('Location search failed:', response);
               resolve([]);
@@ -90,11 +100,20 @@ class LocationSearchService {
         longitude: coordinate.longitude.toString(),
       });
 
-      const response = await apiService.request<{ address: string }>(`/api/locations/reverse-geocode?${params}`, {
+      const response = await apiService.request<any>(`/api/locations/reverse-geocode?${params}`, {
         method: 'GET',
       });
 
-      return response.success && response.data ? response.data.address : 'Unknown Location';
+      console.log('Reverse geocoding response:', response);
+
+      // Handle both response formats
+      if (response.success && response.data && response.data.address) {
+        return response.data.address;
+      } else if (response.status === 'OK' && response.address) {
+        return response.address;
+      } else {
+        return 'Unknown Location';
+      }
     } catch (error) {
       console.error('Error reverse geocoding:', error);
       return 'Unknown Location';
@@ -102,10 +121,11 @@ class LocationSearchService {
   }
 
   /**
-   * Mock suggestions for development/testing
+   * Mock suggestions for development/testing with more Ghana locations
    */
   private getMockSuggestions(query: string): LocationSuggestion[] {
     const mockLocations = [
+      // Kumasi locations
       {
         id: '1',
         name: 'Gold Hostel, Komfo Anokye',
@@ -162,6 +182,78 @@ class LocationSearchService {
         coordinate: { latitude: 6.7134, longitude: -1.6114 },
         type: 'establishment' as const,
       },
+      // Accra locations
+      {
+        id: '9',
+        name: 'Accra Mall',
+        address: 'Accra Mall, East Legon, Accra, Ghana',
+        coordinate: { latitude: 5.6037, longitude: -0.1870 },
+        type: 'establishment' as const,
+      },
+      {
+        id: '10',
+        name: 'Makola Market',
+        address: 'Makola Market, Accra Central, Ghana',
+        coordinate: { latitude: 5.5560, longitude: -0.1969 },
+        type: 'establishment' as const,
+      },
+      {
+        id: '11',
+        name: 'University of Ghana',
+        address: 'University of Ghana, Legon, Accra',
+        coordinate: { latitude: 5.6515, longitude: -0.1870 },
+        type: 'establishment' as const,
+      },
+      {
+        id: '12',
+        name: 'Kotoka International Airport',
+        address: 'Kotoka International Airport, Accra, Ghana',
+        coordinate: { latitude: 5.6052, longitude: -0.1668 },
+        type: 'establishment' as const,
+      },
+      // More towns and cities
+      {
+        id: '13',
+        name: 'Cape Coast Castle',
+        address: 'Cape Coast Castle, Cape Coast, Ghana',
+        coordinate: { latitude: 5.1053, longitude: -1.2466 },
+        type: 'establishment' as const,
+      },
+      {
+        id: '14',
+        name: 'Takoradi Market Circle',
+        address: 'Market Circle, Takoradi, Ghana',
+        coordinate: { latitude: 4.8845, longitude: -1.7554 },
+        type: 'establishment' as const,
+      },
+      {
+        id: '15',
+        name: 'Tamale Central Market',
+        address: 'Central Market, Tamale, Ghana',
+        coordinate: { latitude: 9.4034, longitude: -0.8424 },
+        type: 'establishment' as const,
+      },
+      {
+        id: '16',
+        name: 'Ho Municipal Assembly',
+        address: 'Ho Municipal Assembly, Ho, Ghana',
+        coordinate: { latitude: 6.6116, longitude: 0.4693 },
+        type: 'establishment' as const,
+      },
+      {
+        id: '17',
+        name: 'Sunyani Central Market',
+        address: 'Central Market, Sunyani, Ghana',
+        coordinate: { latitude: 7.3394, longitude: -2.3265 },
+        type: 'establishment' as const,
+      },
+      {
+        id: '18',
+        name: 'Koforidua Jackson Park',
+        address: 'Jackson Park, Koforidua, Ghana',
+        coordinate: { latitude: 6.0940, longitude: -0.2638 },
+        type: 'establishment' as const,
+      },
     ];
 
     const filtered = mockLocations.filter(location =>
@@ -169,7 +261,8 @@ class LocationSearchService {
       location.address.toLowerCase().includes(query.toLowerCase())
     );
 
-    return filtered.slice(0, 5); // Limit to 5 suggestions
+    console.log(`Mock search for "${query}" found ${filtered.length} results`);
+    return filtered.slice(0, 8); // Increased to 8 suggestions
   }
 }
 

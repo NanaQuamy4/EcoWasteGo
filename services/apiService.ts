@@ -1149,7 +1149,7 @@ class ApiService {
   // Try alternative IP addresses if primary fails
   private async tryAlternativeIPs(): Promise<string | null> {
     const alternativeIPs = [
-      'http://10.36.50.88:3000',  // Current configured IP
+      'http://10.132.254.147:3000',  // Current configured IP
       'http://localhost:3000',      // Local development
       'http://127.0.0.1:3000'      // Local development alternative
     ];
@@ -1222,7 +1222,7 @@ class ApiService {
 
       // Test all alternative IPs
       const alternativeIPs = [
-        'http://10.36.50.88:3000',
+        'http://10.132.254.147:3000',
         'http://localhost:3000',
         'http://127.0.0.1:3000'
       ];

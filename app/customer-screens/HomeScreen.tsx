@@ -1,7 +1,7 @@
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
@@ -82,23 +82,98 @@ export default function HomeScreen() {
   ];
 
   useEffect(() => {
-    setNearbyRecyclers(mockRecyclers);
-    console.log('HomeScreen: Setting up recyclers', mockRecyclers);
-    console.log('HomeScreen: Recyclers count:', mockRecyclers.length);
+    fetchNearbyRecyclers();
     getCurrentLocation();
   }, []);
 
+  const fetchNearbyRecyclers = async () => {
+    try {
+      console.log('HomeScreen: Fetching nearby recyclers...');
+      const response = await fetch('http://10.132.254.147:3000/api/optimized-users/recyclers');
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        console.log('HomeScreen: Received recyclers from API:', data.data);
+        setNearbyRecyclers(data.data);
+      } else {
+        console.log('HomeScreen: Using fallback mock recyclers');
+        setNearbyRecyclers(mockRecyclers);
+      }
+    } catch (error) {
+      console.error('HomeScreen: Error fetching recyclers:', error);
+      console.log('HomeScreen: Using fallback mock recyclers');
+      setNearbyRecyclers(mockRecyclers);
+    }
+  };
+
   const getCurrentLocation = async () => {
     try {
+      console.log('Getting current location...');
       const { status } = await Location.requestForegroundPermissionsAsync();
+      
       if (status === 'granted') {
         const location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
+        
+        console.log('Location obtained:', location.coords);
         setUserLocation(location);
+        
+        // Update search bar and selected location
+        const currentLocationSuggestion: LocationSuggestion = {
+          id: 'current-location',
+          name: 'My Current Location',
+          address: `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`,
+          coordinate: {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          },
+          type: 'geocode',
+        };
+        
+        setSelectedLocation(currentLocationSuggestion);
+        setSearch('My Current Location');
+        setShowSuggestions(false);
+        
+        // Optional: Try to get a readable address
+        try {
+          const address = await locationSearchService.reverseGeocode({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
+          console.log('Reverse geocoded address:', address);
+          
+          const betterLocationSuggestion: LocationSuggestion = {
+            id: 'current-location',
+            name: address || 'My Current Location',
+            address: address || `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`,
+            coordinate: {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            },
+            type: 'geocode',
+          };
+          
+          setSelectedLocation(betterLocationSuggestion);
+          setSearch(address || 'My Current Location');
+        } catch (reverseError) {
+          console.log('Reverse geocoding failed, using coordinates');
+        }
+        
+      } else {
+        Alert.alert(
+          'Location Permission Required',
+          'Please enable location services to use this feature.',
+          [{ text: 'OK' }]
+        );
       }
     } catch (error) {
       console.error('Error getting current location:', error);
+      Alert.alert(
+        'Location Error',
+        'Unable to get your current location. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -106,9 +181,10 @@ export default function HomeScreen() {
     setSearch(text);
     setShowSuggestions(true);
     
-    if (text.length > 2) {
+    if (text.length > 1) { // Changed from > 2 to > 1 for faster results
       setIsSearching(true);
       try {
+        console.log('Searching for:', text);
         const suggestions = await locationSearchService.searchLocations(
           text,
           userLocation ? {
@@ -116,10 +192,21 @@ export default function HomeScreen() {
             longitude: userLocation.coords.longitude,
           } : undefined
         );
+        console.log('Search results:', suggestions);
         setLocationSuggestions(suggestions);
       } catch (error) {
         console.error('Search error:', error);
-        setLocationSuggestions([]);
+        // Fallback to local filtering of SUGGESTIONS if API fails
+        const filteredSuggestions = SUGGESTIONS.filter(s =>
+          s.toLowerCase().includes(text.toLowerCase())
+        ).map((suggestion, index) => ({
+          id: `suggestion-${index}`,
+          name: suggestion,
+          address: suggestion + ', Ghana',
+          coordinate: { latitude: 6.6734 + (index * 0.01), longitude: -1.5714 + (index * 0.01) },
+          type: 'establishment' as const,
+        }));
+        setLocationSuggestions(filteredSuggestions);
       } finally {
         setIsSearching(false);
       }
@@ -211,6 +298,17 @@ export default function HomeScreen() {
         status: user?.role === 'recycler' ? 'recycler' : 'user'
       }} />
       
+      {/* Use My Location Button */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+        <TouchableOpacity
+          style={styles.useLocationButton}
+          onPress={getCurrentLocation}
+        >
+          <MaterialIcons name="my-location" size={20} color={COLORS.white} style={{ marginRight: 8 }} />
+          <Text style={styles.useLocationText}>Use My Location</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Search Section */}
       <View style={styles.searchSection}>
         <ImageBackground
@@ -242,7 +340,35 @@ export default function HomeScreen() {
               disabled={search.length === 0}
               onPress={() => {
                 if (search.length > 0) {
-                  router.push({ pathname: '/customer-screens/SelectTruck', params: { pickup: search } } as any);
+                  // Prepare parameters for SelectTruck screen
+                  const params: any = { pickup: search };
+                  
+                  // Add coordinates if we have a selected location with coordinates
+                  if (selectedLocation && selectedLocation.coordinate) {
+                    params.latitude = selectedLocation.coordinate.latitude.toString();
+                    params.longitude = selectedLocation.coordinate.longitude.toString();
+                    console.log('Navigating to SelectTruck with location:', {
+                      pickup: search,
+                      latitude: selectedLocation.coordinate.latitude,
+                      longitude: selectedLocation.coordinate.longitude
+                    });
+                  } else if (userLocation) {
+                    // Fallback to user's current location if no specific location selected
+                    params.latitude = userLocation.coords.latitude.toString();
+                    params.longitude = userLocation.coords.longitude.toString();
+                    console.log('Navigating to SelectTruck with user location:', {
+                      pickup: search,
+                      latitude: userLocation.coords.latitude,
+                      longitude: userLocation.coords.longitude
+                    });
+                  } else {
+                    console.log('Navigating to SelectTruck without coordinates:', { pickup: search });
+                  }
+                  
+                  router.push({ 
+                    pathname: '/customer-screens/SelectTruck', 
+                    params: params 
+                  } as any);
                 }
               }}
             >
@@ -323,6 +449,15 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.legendText}>Recycling Centers</Text>
             </View>
+            
+            {/* Refresh Button */}
+            <TouchableOpacity 
+              style={styles.refreshButton} 
+              onPress={fetchNearbyRecyclers}
+            >
+              <MaterialIcons name="refresh" size={16} color={COLORS.darkGreen} />
+              <Text style={styles.refreshText}>Refresh</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -448,6 +583,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray,
   },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.lightGreen,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  refreshText: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: COLORS.darkGreen,
+    fontWeight: '600',
+  },
   suggestionContent: {
     flex: 1,
   },
@@ -455,5 +606,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray,
     marginTop: 2,
+  },
+  useLocationButton: {
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  useLocationText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

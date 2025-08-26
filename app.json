@@ -25,7 +25,13 @@
         "googleMaps": {
           "apiKey": "AIzaSyBUNUKncuC9GT6h4U-nDdjOea4-P7F_w4E"
         }
-      }
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -48,7 +54,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow EcoWasteGo to use your location to find nearby recyclers and provide accurate pickup services."
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "permissions": [
       "ACCESS_FINE_LOCATION",
@@ -57,6 +64,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1c4c7a98-5df7-40f7-a9b2-7673d32266ac"
+      }
     }
   }
 }

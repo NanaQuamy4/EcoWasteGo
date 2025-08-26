@@ -132,8 +132,22 @@ export class OptimizedUsersController {
           180 // 3 minutes cache for search results
         );
       } else {
-        // Use optimized recycler query
+        // Use optimized recycler query with location data
         recyclers = await databaseService.getRecyclers(page, limit);
+        
+        // Add mock coordinates for now (replace with real coordinates later)
+        recyclers = recyclers.map((recycler: any, index: number) => ({
+          ...recycler,
+          coordinate: {
+            latitude: 6.6734 + (index * 0.01), // Ghana coordinates with offset
+            longitude: -1.5714 + (index * 0.01),
+          },
+          rating: 4.0 + (Math.random() * 0.8), // Random rating
+          distance: `${(Math.random() * 2).toFixed(1)} km`,
+          status: ['Available', 'On Route', 'Nearby'][Math.floor(Math.random() * 3)],
+          type: 'recycler',
+          truckType: 'Recycling Truck',
+        }));
       }
 
       res.json({
