@@ -1,8 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Image, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
 interface AdminNotification {
@@ -234,7 +234,11 @@ export default function AdminNotificationsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <View style={styles.loadingCard}>
-          <MaterialIcons name="notifications" size={64} color="#207E06" />
+          <Image 
+            source={require('../../assets/images/logo landscape.png')} 
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.loadingText}>Loading Notifications...</Text>
         </View>
       </View>
