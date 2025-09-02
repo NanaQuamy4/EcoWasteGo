@@ -4,12 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
-const DUMMY_RESPONSES = [
-  "Thanks for reaching out! We'll get back to you soon.",
-  "Can you please provide more details?",
-  "We're here to help!",
-  "Our team will respond as soon as possible."
-];
+
 
 const FAQ_SUGGESTION_SETS = [
   [
@@ -53,6 +48,7 @@ export default function HelpScreen() {
   // Fetch user data
   const fetchUserData = useCallback(async () => {
     try {
+      console.log('HelpScreen: Fetching user data...');
       const { data: { user: currentUser }, error } = await supabase.auth.getUser();
       
       if (error) {
@@ -61,12 +57,16 @@ export default function HelpScreen() {
       }
 
       if (currentUser) {
-        setUser({
+        const userData = {
           id: currentUser.id,
           email: currentUser.email,
           name: currentUser.user_metadata?.full_name || 'User',
           role: currentUser.user_metadata?.role || 'customer'
-        });
+        };
+        console.log('HelpScreen: User data fetched:', userData);
+        setUser(userData);
+      } else {
+        console.log('HelpScreen: No current user found');
       }
     } catch (error) {
       console.error('HelpScreen: Unexpected error:', error);
@@ -112,14 +112,43 @@ export default function HelpScreen() {
     setIsLoading(true);
 
     try {
+      // Check if user data is available
+      if (!user?.id) {
+        console.error('HelpScreen: User data not available:', user);
+        Alert.alert('Error', 'User information not available. Please try logging in again.');
+        return;
+      }
+
+      console.log('HelpScreen: Sending message with user data:', {
+        user_id: user.id,
+        user_email: user.email,
+        user_name: user.name,
+        user_role: user.role,
+        message: messageText
+      });
+
+      // First, let's test if the table exists by trying to query it
+      const { data: testData, error: testError } = await supabase
+        .from('help_messages')
+        .select('id')
+        .limit(1);
+
+      if (testError) {
+        console.error('HelpScreen: Table test failed:', testError);
+        Alert.alert('Error', `Database table not found: ${testError.message}. Please run the database setup script first.`);
+        return;
+      }
+
+      console.log('HelpScreen: Table exists, proceeding with insert...');
+
       // Send message to admin
       const { error } = await supabase
         .from('help_messages')
         .insert({
-          user_id: user?.id,
-          user_email: user?.email || '',
-          user_name: user?.name || 'User',
-          user_role: user?.role || 'customer',
+          user_id: user.id,
+          user_email: user.email || '',
+          user_name: user.name || 'User',
+          user_role: user.role || 'customer',
           message: messageText,
           status: 'pending',
           priority: 'medium'
@@ -127,9 +156,11 @@ export default function HelpScreen() {
 
       if (error) {
         console.error('HelpScreen: Error sending message:', error);
-        Alert.alert('Error', 'Failed to send message. Please try again.');
+        Alert.alert('Error', `Failed to send message: ${error.message}`);
         return;
       }
+
+      console.log('HelpScreen: Message sent successfully to database');
 
       // Show confirmation message
       const confirmationMsg = { 
