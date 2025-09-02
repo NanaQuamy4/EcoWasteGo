@@ -135,7 +135,7 @@ export default function AdminPortal() {
     return (
       <View style={styles.loadingContainer}>
         <View style={styles.loadingCard}>
-          <MaterialIcons name="admin-panel-settings" size={48} color="#207E06" />
+          <MaterialIcons name="admin-panel-settings" size={64} color="#207E06" />
           <Text style={styles.loadingText}>Loading Admin Portal...</Text>
         </View>
       </View>
@@ -148,7 +148,7 @@ export default function AdminPortal() {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerIconContainer}>
-            <MaterialIcons name="admin-panel-settings" size={32} color="#FFFFFF" />
+            <MaterialIcons name="admin-panel-settings" size={40} color="#FFFFFF" />
           </View>
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerTitle}>Admin Portal</Text>
@@ -174,7 +174,7 @@ export default function AdminPortal() {
           <Text style={styles.subtitleText}>Manage your EcoWasteGo platform efficiently</Text>
         </View>
         <View style={styles.welcomeIcon}>
-          <MaterialIcons name="dashboard" size={32} color="#207E06" />
+          <MaterialIcons name="dashboard" size={40} color="#207E06" />
         </View>
       </View>
 

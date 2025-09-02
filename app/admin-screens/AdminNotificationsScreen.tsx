@@ -192,7 +192,7 @@ export default function AdminNotificationsScreen() {
         <View style={styles.notificationIcon}>
           <MaterialIcons 
             name={getNotificationIcon(item.type) as any} 
-            size={24} 
+            size={28} 
             color={getNotificationIconColor(item.type, item.priority)} 
           />
           {!item.is_read && <View style={styles.unreadDot} />}
@@ -234,7 +234,7 @@ export default function AdminNotificationsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <View style={styles.loadingCard}>
-          <MaterialIcons name="notifications" size={48} color="#207E06" />
+          <MaterialIcons name="notifications" size={64} color="#207E06" />
           <Text style={styles.loadingText}>Loading Notifications...</Text>
         </View>
       </View>
@@ -264,7 +264,7 @@ export default function AdminNotificationsScreen() {
       {/* Notifications List */}
       {notifications.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <MaterialIcons name="notifications-none" size={64} color="#CCCCCC" />
+          <MaterialIcons name="notifications-none" size={80} color="#CCCCCC" />
           <Text style={styles.emptyTitle}>No Notifications</Text>
           <Text style={styles.emptySubtitle}>You're all caught up! New notifications will appear here.</Text>
         </View>
