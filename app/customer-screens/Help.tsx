@@ -231,18 +231,19 @@ export default function HelpScreen() {
           // Add admin response if it exists
           if (msg.admin_response) {
             allMessages.push({
-              id: `${msg.id}_response`,
+              id: msg.id * 1000000 + 1, // Ensure a unique numeric id for admin response
               text: msg.admin_response,
               sender: 'support',
               timestamp: new Date(msg.admin_responded_at)
             });
           }
+          }
         });
       }
 
       console.log('HelpScreen: Setting messages:', allMessages.length);
-      setMessages(allMessages);
-    } catch (error) {
+      setMessages(allMessages)
+i    } catch (error) {
       console.error('HelpScreen: Error fetching help messages:', error);
     }
   }, [user]);
@@ -289,13 +290,18 @@ export default function HelpScreen() {
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'help_messages',
-          filter: `user_id=eq.${user.id}`
+          table: 'help_messages'
         },
         (payload) => {
           console.log('Help message updated:', payload);
+          // Only process updates for the current user's messages
+          if (payload.new.user_id !== user.id) {
+            return;
+          }
+          
           // Check if admin responded
           if (payload.new.admin_response && !payload.old.admin_response) {
+            console.log('Admin response received for user:', user.id);
             const adminResponse = {
               id: `${payload.new.id}_response`,
               text: payload.new.admin_response,
