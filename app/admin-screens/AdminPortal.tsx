@@ -82,7 +82,18 @@ export default function AdminPortal() {
         return;
       }
 
-      const helpMessages = notifications?.filter(n => n.type === 'help_message' && !n.is_read).length || 0;
+      // Count actual help messages that need responses (from help_messages table)
+      const { data: helpMessagesData, error: helpMessagesError } = await supabase
+        .from('help_messages')
+        .select('id, status')
+        .in('status', ['pending', 'in_progress']);
+
+      if (helpMessagesError) {
+        console.error('Error fetching help messages count:', helpMessagesError);
+        return;
+      }
+
+      const helpMessages = helpMessagesData?.length || 0;
       const verifications = notifications?.filter(n => n.type === 'verification_request' && !n.is_read).length || 0;
 
       setNotificationCounts({
