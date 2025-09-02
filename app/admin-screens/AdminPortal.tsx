@@ -1,18 +1,38 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { isAdminUser } from '../../lib/adminConfig';
 import { supabase } from '../../lib/supabase';
+
+interface NotificationCounts {
+  helpMessages: number;
+  verifications: number;
+  total: number;
+}
 
 export default function AdminPortal() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [notificationCounts, setNotificationCounts] = useState<NotificationCounts>({
+    helpMessages: 0,
+    verifications: 0,
+    total: 0
+  });
 
   useEffect(() => {
     checkAdminAccess();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        fetchNotificationCounts();
+      }
+    }, [user])
+  );
 
   const checkAdminAccess = async () => {
     try {
@@ -37,6 +57,41 @@ export default function AdminPortal() {
       router.replace('/LoginScreen');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchNotificationCounts = async () => {
+    if (!user) return;
+
+    try {
+      // Get unread notification count
+      const { data: unreadCount, error: countError } = await supabase
+        .rpc('get_admin_unread_count', { p_admin_id: user.id });
+
+      if (countError) {
+        console.error('Error fetching notification count:', countError);
+        return;
+      }
+
+      // Get specific counts for help messages and verifications
+      const { data: notifications, error: notificationsError } = await supabase
+        .rpc('get_admin_notifications', { p_admin_id: user.id });
+
+      if (notificationsError) {
+        console.error('Error fetching notifications:', notificationsError);
+        return;
+      }
+
+      const helpMessages = notifications?.filter(n => n.type === 'help_message' && !n.is_read).length || 0;
+      const verifications = notifications?.filter(n => n.type === 'verification_request' && !n.is_read).length || 0;
+
+      setNotificationCounts({
+        helpMessages,
+        verifications,
+        total: unreadCount || 0
+      });
+    } catch (error) {
+      console.error('Error fetching notification counts:', error);
     }
   };
 
@@ -68,6 +123,9 @@ export default function AdminPortal() {
       case 'help':
         router.push('/admin-screens/AdminHelpScreen');
         break;
+      case 'notifications':
+        router.push('/admin-screens/AdminNotificationsScreen');
+        break;
       default:
         Alert.alert('Coming Soon', 'This section is under development.');
     }
@@ -97,9 +155,16 @@ export default function AdminPortal() {
             <Text style={styles.headerSubtitle}>EcoWasteGo Management</Text>
           </View>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <MaterialIcons name="logout" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {notificationCounts.total > 0 && (
+            <View style={styles.headerNotificationBadge}>
+              <Text style={styles.headerNotificationText}>{notificationCounts.total}</Text>
+            </View>
+          )}
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <MaterialIcons name="logout" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Welcome Section */}
@@ -123,6 +188,11 @@ export default function AdminPortal() {
         >
           <View style={styles.menuItemIcon}>
             <MaterialIcons name="verified-user" size={28} color="#207E06" />
+            {notificationCounts.verifications > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{notificationCounts.verifications}</Text>
+              </View>
+            )}
           </View>
           <View style={styles.menuItemText}>
             <Text style={styles.menuItemTitle}>Recycler Verifications</Text>
@@ -163,6 +233,27 @@ export default function AdminPortal() {
           <MaterialIcons name="chevron-right" size={24} color="#207E06" />
         </TouchableOpacity>
 
+        {/* Notifications */}
+        <TouchableOpacity 
+          style={styles.menuItem} 
+          onPress={() => navigateToSection('notifications')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.menuItemIcon}>
+            <MaterialIcons name="notifications" size={28} color="#207E06" />
+            {notificationCounts.total > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{notificationCounts.total}</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.menuItemText}>
+            <Text style={styles.menuItemTitle}>Notifications</Text>
+            <Text style={styles.menuItemSubtitle}>View all admin notifications</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="#207E06" />
+        </TouchableOpacity>
+
         {/* Help & Support */}
         <TouchableOpacity 
           style={styles.menuItem} 
@@ -171,6 +262,11 @@ export default function AdminPortal() {
         >
           <View style={styles.menuItemIcon}>
             <MaterialIcons name="support-agent" size={28} color="#207E06" />
+            {notificationCounts.helpMessages > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{notificationCounts.helpMessages}</Text>
+              </View>
+            )}
           </View>
           <View style={styles.menuItemText}>
             <Text style={styles.menuItemTitle}>Help & Support</Text>
@@ -201,7 +297,7 @@ export default function AdminPortal() {
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <MaterialIcons name="verified-user" size={24} color="#207E06" />
-              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statNumber}>{notificationCounts.verifications}</Text>
               <Text style={styles.statLabel}>Pending</Text>
             </View>
             <View style={styles.statCard}>
@@ -210,9 +306,9 @@ export default function AdminPortal() {
               <Text style={styles.statLabel}>Total Users</Text>
             </View>
             <View style={styles.statCard}>
-              <MaterialIcons name="trending-up" size={24} color="#207E06" />
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>This Week</Text>
+              <MaterialIcons name="support-agent" size={24} color="#207E06" />
+              <Text style={styles.statNumber}>{notificationCounts.helpMessages}</Text>
+              <Text style={styles.statLabel}>Help Messages</Text>
             </View>
           </View>
         </View>
@@ -282,6 +378,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerNotificationBadge: {
+    backgroundColor: '#FF4444',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    paddingHorizontal: 8,
+  },
+  headerNotificationText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   logoutButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 8,
@@ -343,6 +458,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     marginRight: 16,
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   menuItemText: {
     flex: 1,
