@@ -1,0 +1,209 @@
+import { useCallback, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
+
+interface OnlineStatus {
+  isOnline: boolean;
+  isAvailable: boolean;
+  lastSeenAt: string | null;
+  heartbeatAt: string | null;
+  sessionId: string | null;
+}
+
+interface OnlineRecycler {
+  id: string;
+  fullName: string;
+  phone: string;
+  truckSize: string;
+  rating: number;
+  isAvailable: boolean;
+  isOnline: boolean;
+  lastSeenAt: string;
+  heartbeatAt: string;
+  status: 'Active' | 'Online' | 'Offline';
+}
+
+export function useRecyclerOnlineStatus(recyclerId?: string) {
+  const [status, setStatus] = useState<OnlineStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch current online status
+  const fetchStatus = useCallback(async () => {
+    try {
+      if (!recyclerId) return;
+
+      const { data, error } = await supabase.rpc('get_recycler_online_status', {
+        p_recycler_id: recyclerId
+      });
+
+      if (error) {
+        console.error('Error fetching online status:', error);
+        setError(error.message);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const statusData = data[0];
+        setStatus({
+          isOnline: statusData.is_online,
+          isAvailable: statusData.is_available,
+          lastSeenAt: statusData.last_seen_at,
+          heartbeatAt: statusData.heartbeat_at,
+          sessionId: statusData.session_id
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching online status:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  }, [recyclerId]);
+
+  // Set up real-time subscription
+  useEffect(() => {
+    if (!recyclerId) return;
+
+    // Initial fetch
+    fetchStatus();
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('recycler-online-status')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'recyclers',
+          filter: `id=eq.${recyclerId}`
+        },
+        (payload) => {
+          console.log('Real-time status update:', payload);
+          const newData = payload.new as any;
+          setStatus({
+            isOnline: newData.is_online,
+            isAvailable: newData.is_available,
+            lastSeenAt: newData.last_seen_at,
+            heartbeatAt: newData.heartbeat_at,
+            sessionId: newData.session_id
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [recyclerId, fetchStatus]);
+
+  return {
+    status,
+    loading,
+    error,
+    refetch: fetchStatus
+  };
+}
+
+export function useOnlineRecyclers() {
+  const [recyclers, setRecyclers] = useState<OnlineRecycler[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch online recyclers
+  const fetchOnlineRecyclers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.rpc('get_online_recyclers');
+
+      if (error) {
+        console.error('Error fetching online recyclers:', error);
+        setError(error.message);
+        return;
+      }
+
+      if (data) {
+        const formattedRecyclers: OnlineRecycler[] = data.map((recycler: any) => ({
+          id: recycler.id,
+          fullName: recycler.full_name,
+          phone: recycler.phone,
+          truckSize: recycler.truck_size,
+          rating: recycler.rating || 4.5, // Default rating if not set
+          isAvailable: recycler.is_available,
+          isOnline: recycler.is_online,
+          lastSeenAt: recycler.last_seen_at,
+          heartbeatAt: recycler.heartbeat_at,
+          status: getStatusFromHeartbeat(recycler.heartbeat_at)
+        }));
+
+        setRecyclers(formattedRecyclers);
+      }
+    } catch (err) {
+      console.error('Error fetching online recyclers:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Helper function to determine status from heartbeat
+  const getStatusFromHeartbeat = (heartbeatAt: string): 'Active' | 'Online' | 'Offline' => {
+    const heartbeat = new Date(heartbeatAt);
+    const now = new Date();
+    const diffMs = now.getTime() - heartbeat.getTime();
+    const diffMinutes = diffMs / (1000 * 60);
+
+    if (diffMinutes <= 1) return 'Active';
+    if (diffMinutes <= 5) return 'Online';
+    return 'Offline';
+  };
+
+  // Set up real-time subscription for online recyclers
+  useEffect(() => {
+    // Initial fetch
+    fetchOnlineRecyclers();
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('online-recyclers')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'recyclers'
+        },
+        () => {
+          // Refetch when any recycler status changes
+          fetchOnlineRecyclers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchOnlineRecyclers]);
+
+  return {
+    recyclers,
+    loading,
+    error,
+    refetch: fetchOnlineRecyclers
+  };
+}
+
+// Hook for getting current user's online status
+export function useCurrentRecyclerStatus() {
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+    };
+    getUser();
+  }, []);
+
+  return useRecyclerOnlineStatus(userId || undefined);
+}

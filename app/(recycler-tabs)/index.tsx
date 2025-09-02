@@ -6,51 +6,42 @@ import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
+import { useAutoOfflineManager } from '../../hooks/useAutoOfflineManager';
+import { useNotificationCount } from '../../hooks/useNotificationCount';
+import { useRecyclerHeartbeat } from '../../hooks/useRecyclerHeartbeat';
+import { useCurrentRecyclerStatus } from '../../hooks/useRecyclerOnlineStatus';
+import { useRecyclerVerification } from '../../hooks/useRecyclerVerification';
+import { supabase } from '../../lib/supabase';
 
-// ===== MOCK DATA FOR RECYCLER HOME TAB =====
-// This replaces all backend API calls with local mock data
-// In a real app, this would come from a database or real-time service
+// ===== REAL DATA INTERFACES =====
+interface PickupRequest {
+  id: string;
+  customer_id: string;
+  recycler_id: string | null;
+  pickup_address: string;
+  waste_type: string;
+  weight: number;
+  status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
+  created_at: string;
+  special_instructions?: string;
+}
 
-// Mock recycler profile data
-const mockRecyclerProfile = {
-  id: 'recycler_001',
-  is_available: true,
-  business_name: 'Green Team Recycling',
-  vehicle_type: 'Waste Collection Truck',
-  rating: 4.8,
-  total_collections: 156,
-  service_areas: ['Accra Central', 'Kumasi', 'Tema'],
-  city: 'Kumasi',
-  state: 'Ashanti'
-};
-
-// Mock user data (replacing useAuth)
-const mockUser = {
-  id: 'recycler_001',
-  username: 'Recycler',
-  email: 'recycler@example.com',
-  phone: '+233 24 123 4567',
-  verification_status: 'approved',
-  role: 'recycler',
-  created_at: '2024-01-15T10:30:00Z',
-  profile_image: null,
-  company_name: 'Green Team Recycling'
-};
-
-// Mock recycler stats (replacing utils/recyclerStats)
-const mockRecyclerStats = {
-  getTotalAvailableRequestsCount: () => 5,
-  isPaymentRequired: () => false,
-  getSubscriptionFeeString: () => '₵0.00',
-  getActivePickupsCount: () => 3,
-  getTodayEarnings: () => 45.80
-};
+interface RecyclerStats {
+  totalRequests: number;
+  activePickups: number;
+  todayEarnings: number;
+  totalEarnings: number;
+}
 
 export default function RecyclerHomeTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
   const [requests, setRequests] = useState(0);
-  const [notificationCount, setNotificationCount] = useState(2); // Mock notification count
+  const [recyclerStats, setRecyclerStats] = useState<RecyclerStats>({
+    totalRequests: 0,
+    activePickups: 0,
+    todayEarnings: 0,
+    totalEarnings: 0
+  });
   const [mapMarkers, setMapMarkers] = useState<Array<{
     id: string;
     coordinate: { latitude: number; longitude: number };
@@ -59,98 +50,131 @@ export default function RecyclerHomeTab() {
     type: 'pickup' | 'recycler' | 'destination';
   }>>([]);
 
-  // Use mock user data instead of useAuth
-  const user = mockUser;
-  const isVerified = user?.verification_status === 'approved';
+  // Use real data hooks
+  const {
+    verificationData,
+    isLoading: isLoadingVerification,
+    error: verificationError,
+    isVerified,
+    verificationStatus,
+    refreshVerification
+  } = useRecyclerVerification();
+
+  const { notificationCount, loading: notificationLoading } = useNotificationCount();
+  
+  // New online status tracking
+  const { status: onlineStatus, loading: statusLoading } = useCurrentRecyclerStatus();
+  const { startHeartbeat, stopHeartbeat, setOffline, getStatus } = useRecyclerHeartbeat();
+  
+  // Auto-offline manager (runs the auto-offline check periodically)
+  useAutoOfflineManager();
+
+  // Create recycler object from real data
   const recycler = {
-    name: user?.username || 'Recycler',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    status: user?.verification_status || 'unverified',
+    name: verificationData?.full_name || 'Recycler',
+    email: verificationData?.email || '',
+    phone: verificationData?.phone || '',
+    status: verificationStatus || 'unverified',
     type: 'recycler' as const,
-    totalPickups: isVerified ? 156 : 0,
-    totalEarnings: isVerified ? '₵2,450.80' : '₵0.00',
-    memberSince: 'Mar 2023',
+    totalPickups: isVerified ? 156 : 0, // TODO: Fetch real pickup count
+    totalEarnings: isVerified ? '₵2,450.80' : '₵0.00', // TODO: Fetch real earnings
+    memberSince: verificationData?.created_at ? new Date(verificationData.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown',
   };
 
-  // Update counts from mock stats
-  useEffect(() => {
-    const updateCounts = () => {
-      // Show total available requests (pending + active) to match RecyclerRequests screen
-      const newCount = mockRecyclerStats.getTotalAvailableRequestsCount();
-      setRequests(newCount);
-    };
-    
-    updateCounts();
-    // Update counts every time the component mounts or when stats change
-    const interval = setInterval(updateCounts, 1000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  // Check for subscription payment requirement
-  useEffect(() => {
-    if (mockRecyclerStats.isPaymentRequired()) {
-      Alert.alert(
-        'Payment Required',
-        `You have outstanding subscription fees of ${mockRecyclerStats.getSubscriptionFeeString()}. You must pay these fees before continuing to use the app.`,
-        [
-          {
-            text: 'Pay Now',
-            onPress: () => router.push('/recycler-screens/SubscriptionScreen')
-          },
-          {
-            text: 'Later',
-            style: 'cancel'
-          }
-        ]
-      );
-    }
-  }, []);
-
-  // ===== MOCK DATA LOADING FUNCTION =====
-  // This replaces the backend API call to load availability status
-  // It loads data from our mock data arrays
-  const loadMockAvailabilityStatus = async () => {
+  // Fetch real pickup requests and stats
+  const fetchRecyclerData = async () => {
     try {
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Use mock recycler profile data
-      if (mockRecyclerProfile && mockRecyclerProfile.is_available !== undefined) {
-        setIsOffline(!mockRecyclerProfile.is_available);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Fetch pickup requests
+      const { data: pickupRequests, error: requestsError } = await supabase
+        .from('pickup_requests')
+        .select('*')
+        .in('status', ['pending', 'accepted', 'in_progress'])
+        .order('created_at', { ascending: false });
+
+      if (requestsError) {
+        console.error('Error fetching pickup requests:', requestsError);
+      } else {
+        setRequests(pickupRequests?.length || 0);
       }
+
+      // Fetch recycler stats (mock for now - would need actual tables)
+      const stats: RecyclerStats = {
+        totalRequests: pickupRequests?.length || 0,
+        activePickups: pickupRequests?.filter(r => r.status === 'in_progress').length || 0,
+        todayEarnings: 45.80, // TODO: Calculate from actual earnings
+        totalEarnings: 2450.80 // TODO: Calculate from actual earnings
+      };
+      setRecyclerStats(stats);
+
     } catch (error) {
-      console.error('Error loading mock availability status:', error);
-      // Default to online if we can't load the status
-      setIsOffline(false);
+      console.error('Error fetching recycler data:', error);
     }
   };
 
-  // Load current availability status
+  // Update counts from real data
   useEffect(() => {
-    if (isVerified && user?.id) {
-      loadMockAvailabilityStatus();
+    if (isVerified && verificationData?.id) {
+      fetchRecyclerData();
+      
+      // Update counts every 30 seconds
+      const interval = setInterval(fetchRecyclerData, 30000);
+      
+      return () => clearInterval(interval);
     }
-  }, [isVerified, user?.id]);
+  }, [isVerified, verificationData?.id]);
+
+  // Check for subscription payment requirement (disabled for now)
+  // useEffect(() => {
+  //   // TODO: Implement subscription check when subscription system is ready
+  // }, []);
+
+  // Start heartbeat when verified
+  useEffect(() => {
+    if (isVerified && verificationData?.id) {
+      startHeartbeat();
+    } else {
+      stopHeartbeat();
+    }
+  }, [isVerified, verificationData?.id, startHeartbeat, stopHeartbeat]);
 
   const handleOfflineToggle = async () => {
-    const newStatus = !isOffline;
+    // Don't allow toggle if not verified
+    if (!isVerified) {
+      Alert.alert(
+        'Verification Required',
+        'You need to complete your registration before you can change your availability status.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (!onlineStatus) return;
+
+    const newAvailability = !onlineStatus.isAvailable;
     
     try {
-      // Mock API call to update availability
-      console.log('Updating recycler availability to:', !newStatus);
-      
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Update local state
-      setIsOffline(newStatus);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Update availability in database
+      const { error } = await supabase
+        .from('recyclers')
+        .update({ is_available: newAvailability })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error updating availability status:', error);
+        Alert.alert('Error', 'Failed to update availability status. Please try again.');
+        return;
+      }
       
       // Show success message
       Alert.alert(
         'Status Updated',
-        `You are now ${newStatus ? 'offline' : 'online'} and ${newStatus ? 'will not' : 'will'} receive new pickup requests.`,
+        `You are now ${newAvailability ? 'available' : 'unavailable'} and ${newAvailability ? 'will' : 'will not'} receive new pickup requests.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
@@ -164,10 +188,8 @@ export default function RecyclerHomeTab() {
   };
 
   const handleNotificationPress = () => {
-    // Navigate to notifications screen or show notification panel
+    // Navigate to notifications screen
     router.push('/recycler-screens/RecyclerNotificationScreen' as any);
-    // Clear notification count when opened
-    setNotificationCount(0);
   };
 
   // Generate mock pickup requests for map
@@ -197,6 +219,41 @@ export default function RecyclerHomeTab() {
     generateMockPickups();
   }, [requests, isVerified]);
 
+  // Show loading state while fetching verification data
+  if (isLoadingVerification) {
+    return (
+      <View style={styles.container}>
+        <AppHeader 
+          onMenuPress={() => setDrawerOpen(true)} 
+          onNotificationPress={handleNotificationPress}
+          notificationCount={0}
+        />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading recycler data...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Show error state if verification failed
+  if (verificationError) {
+    return (
+      <View style={styles.container}>
+        <AppHeader 
+          onMenuPress={() => setDrawerOpen(true)} 
+          onNotificationPress={handleNotificationPress}
+          notificationCount={0}
+        />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Error loading data: {verificationError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={refreshVerification}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <AppHeader 
@@ -204,7 +261,7 @@ export default function RecyclerHomeTab() {
         onNotificationPress={handleNotificationPress}
         notificationCount={notificationCount}
       />
-              <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       
       {/* Verification Prompt for Unverified Recyclers */}
       {!isVerified && (
@@ -242,14 +299,33 @@ export default function RecyclerHomeTab() {
 
         <View style={styles.offlineContainer}>
           <View style={styles.statusIndicatorRow}>
-            <View style={[styles.statusDot, isOffline && styles.statusDotOffline]} />
-            <Text style={[styles.offlineText, isOffline && styles.offlineTextActive]}>{isOffline ? 'Offline' : 'Online'}</Text>
+            <View style={[
+              styles.statusDot, 
+              !onlineStatus?.isOnline && styles.statusDotOffline, 
+              !isVerified && styles.statusDotDisabled
+            ]} />
+            <Text style={[
+              styles.offlineText, 
+              !onlineStatus?.isOnline && styles.offlineTextActive, 
+              !isVerified && styles.offlineTextDisabled
+            ]}>
+              {!onlineStatus ? 'Loading...' : onlineStatus.isOnline ? 'Online' : 'Offline'}
+            </Text>
           </View>
           <TouchableOpacity 
-            style={[styles.toggle, isOffline && styles.toggleActive]} 
-            onPress={handleOfflineToggle}
+            style={[
+              styles.toggle, 
+              onlineStatus?.isAvailable && styles.toggleActive, 
+              !isVerified && styles.toggleDisabled
+            ]} 
+            onPress={isVerified ? handleOfflineToggle : undefined}
+            disabled={!isVerified || !onlineStatus}
           >
-            <View style={[styles.toggleThumb, isOffline && styles.toggleThumbActive]} />
+            <View style={[
+              styles.toggleThumb, 
+              onlineStatus?.isAvailable && styles.toggleThumbActive, 
+              !isVerified && styles.toggleThumbDisabled
+            ]} />
           </TouchableOpacity>
         </View>
       </View>
@@ -261,6 +337,15 @@ export default function RecyclerHomeTab() {
           <Text style={styles.mapSubtitle}>
             {isVerified ? `Track your ${requests} pickup requests` : 'Complete registration to see pickup requests'}
           </Text>
+          {onlineStatus && (
+            <View style={styles.statusInfo}>
+              <Text style={styles.statusInfoText}>
+                {onlineStatus.isOnline ? '🟢 Connected' : '🔴 Disconnected'} • 
+                {onlineStatus.isAvailable ? ' Available' : ' Busy'} • 
+                Last seen: {onlineStatus.lastSeenAt ? new Date(onlineStatus.lastSeenAt).toLocaleTimeString() : 'Never'}
+              </Text>
+            </View>
+          )}
         </View>
         
         <MapComponent
@@ -287,11 +372,11 @@ export default function RecyclerHomeTab() {
           <Text style={styles.statLabel}>Available Requests</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{mockRecyclerStats.getActivePickupsCount()}</Text>
+          <Text style={styles.statNumber}>{recyclerStats.activePickups}</Text>
           <Text style={styles.statLabel}>Active Pickups</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>₵{mockRecyclerStats.getTodayEarnings().toFixed(2)}</Text>
+          <Text style={styles.statNumber}>₵{recyclerStats.todayEarnings.toFixed(2)}</Text>
           <Text style={styles.statLabel}>Today&apos;s Earnings</Text>
         </View>
       </View>
@@ -357,6 +442,9 @@ const styles = StyleSheet.create({
   offlineTextActive: {
     color: COLORS.gray,
   },
+  offlineTextDisabled: {
+    color: '#b0b0b0',
+  },
   toggle: {
     width: 40,
     height: 20,
@@ -367,6 +455,10 @@ const styles = StyleSheet.create({
   toggleActive: {
     backgroundColor: COLORS.darkGreen,
   },
+  toggleDisabled: {
+    backgroundColor: '#e0e0e0',
+    opacity: 0.6,
+  },
   toggleThumb: {
     width: 16,
     height: 16,
@@ -375,6 +467,9 @@ const styles = StyleSheet.create({
   },
   toggleThumbActive: {
     transform: [{ translateX: 20 }],
+  },
+  toggleThumbDisabled: {
+    backgroundColor: '#f0f0f0',
   },
   mapContainer: {
     flex: 1,
@@ -449,6 +544,9 @@ const styles = StyleSheet.create({
   statusDotOffline: {
     backgroundColor: COLORS.gray,
   },
+  statusDotDisabled: {
+    backgroundColor: '#e0e0e0',
+  },
   verificationPrompt: {
     backgroundColor: COLORS.white,
     borderRadius: 12,
@@ -492,5 +590,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    fontSize: 18,
+    color: COLORS.darkGreen,
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: COLORS.orange,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: COLORS.darkGreen,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  statusInfo: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 6,
+  },
+  statusInfoText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    textAlign: 'center',
   },
 });
