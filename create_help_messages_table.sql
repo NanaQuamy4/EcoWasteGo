@@ -54,7 +54,7 @@ CREATE POLICY "Admins can view all help messages" ON help_messages
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM auth.users 
-            WHERE id = auth.uid() 
+            WHERE auth.users.id = auth.uid() 
             AND raw_user_meta_data->>'role' = 'admin'
         )
     );
@@ -63,7 +63,7 @@ CREATE POLICY "Admins can update help messages" ON help_messages
     FOR UPDATE USING (
         EXISTS (
             SELECT 1 FROM auth.users 
-            WHERE id = auth.uid() 
+            WHERE auth.users.id = auth.uid() 
             AND raw_user_meta_data->>'role' = 'admin'
         )
     );
@@ -94,7 +94,7 @@ BEGIN
     -- Check if user is admin
     IF NOT EXISTS (
         SELECT 1 FROM auth.users 
-        WHERE id = auth.uid() 
+        WHERE auth.users.id = auth.uid() 
         AND raw_user_meta_data->>'role' = 'admin'
     ) THEN
         RAISE EXCEPTION 'Access denied. Admin privileges required.';
@@ -138,7 +138,7 @@ BEGIN
     -- Check if user is admin
     IF NOT EXISTS (
         SELECT 1 FROM auth.users 
-        WHERE id = auth.uid() 
+        WHERE auth.users.id = auth.uid() 
         AND raw_user_meta_data->>'role' = 'admin'
     ) THEN
         RAISE EXCEPTION 'Access denied. Admin privileges required.';
