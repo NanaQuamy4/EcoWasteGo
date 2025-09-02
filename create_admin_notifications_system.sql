@@ -41,6 +41,7 @@ CREATE TRIGGER trigger_update_admin_notifications_updated_at
     EXECUTE FUNCTION update_admin_notifications_updated_at();
 
 -- Function to create admin notification
+DROP FUNCTION IF EXISTS create_admin_notification(UUID, TEXT, TEXT, TEXT, UUID, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION create_admin_notification(
     p_admin_id UUID,
     p_type TEXT,
@@ -65,6 +66,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to get admin notifications
+DROP FUNCTION IF EXISTS get_admin_notifications(UUID);
 CREATE OR REPLACE FUNCTION get_admin_notifications(p_admin_id UUID)
 RETURNS TABLE (
     id UUID,
@@ -98,6 +100,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to mark notification as read
+DROP FUNCTION IF EXISTS mark_admin_notification_read(UUID, UUID);
 CREATE OR REPLACE FUNCTION mark_admin_notification_read(p_notification_id UUID, p_admin_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -110,6 +113,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to get unread notification count
+DROP FUNCTION IF EXISTS get_admin_unread_count(UUID);
 CREATE OR REPLACE FUNCTION get_admin_unread_count(p_admin_id UUID)
 RETURNS INTEGER AS $$
 DECLARE
@@ -207,6 +211,10 @@ CREATE TRIGGER trigger_notify_admin_verification_request
 
 -- RLS Policies for admin_notifications
 ALTER TABLE admin_notifications ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Admins can view own notifications" ON admin_notifications;
+DROP POLICY IF EXISTS "Admins can update own notifications" ON admin_notifications;
 
 -- Policy for admins to view their own notifications
 CREATE POLICY "Admins can view own notifications" ON admin_notifications
