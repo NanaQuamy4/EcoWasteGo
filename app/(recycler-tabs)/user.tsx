@@ -115,7 +115,7 @@ export default function RecyclerUserTab() {
     }
   };
 
-  const isVerified = user?.is_verified || user?.verification_status === 'verified';
+  const isVerified = user?.is_verified || user?.verification_status === 'approved';
 
   const recycler = {
     name: user?.username || 'Recycler',
@@ -137,6 +137,15 @@ export default function RecyclerUserTab() {
   const [notificationCount, setNotificationCount] = useState(3);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const router = useRouter();
+
+  // Update currentStatus when user data changes
+  useEffect(() => {
+    if (user) {
+      const newStatus = user.verification_status === 'approved' ? 'verified' : user.verification_status || 'unverified';
+      setCurrentStatus(newStatus);
+      console.log('RecyclerUserTab: Updated currentStatus to:', newStatus);
+    }
+  }, [user]);
 
   // Mock functions (replacing useAuth)
   const deleteAccount = async () => {
@@ -299,6 +308,11 @@ export default function RecyclerUserTab() {
     setNotificationCount(0);
   };
 
+  const handleRefreshProfile = () => {
+    console.log('RecyclerUserTab: Manual refresh triggered');
+    fetchUserData();
+  };
+
   if (isLoadingUser) {
     return (
       <View style={styles.container}>
@@ -386,6 +400,9 @@ export default function RecyclerUserTab() {
           <View style={styles.statusContainer}>
             <MaterialIcons name={getStatusIcon(currentStatus)} size={16} color={getStatusColor(currentStatus)} />
             <Text style={[styles.statusText, { color: getStatusColor(currentStatus) }]}>{currentStatus}</Text>
+            <TouchableOpacity onPress={handleRefreshProfile} style={styles.refreshButton}>
+              <MaterialIcons name="refresh" size={16} color={COLORS.darkGreen} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -852,5 +869,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.darkGreen,
     fontWeight: 'bold',
+  },
+  refreshButton: {
+    marginLeft: 8,
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(34, 51, 11, 0.1)',
   },
 }); 

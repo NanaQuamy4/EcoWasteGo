@@ -1,0 +1,20 @@
+[33mbb2f5e0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix: Correct help message count in Admin Portal
+[33maf9bd4a[m fix: Create comprehensive admin notification system
+[33ma9408d4[m fix: Resolve TypeScript errors in Help.tsx
+[33mc407626[m fix: Ensure admin responses are visible to specific users
+[33m558b1a8[m fix: Persist help conversation history across app sessions
+[33mbef5fb6[m feat: Implement real-time messaging for help system
+[33mcf4d194[m feat: Increase landscape logo size in Admin Help Screen
+[33mc83624d[m feat: Increase logo and icon sizes in admin notification UI
+[33m7d090db[m fix: Resolve function name ambiguity in respond_to_help_message
+[33m9258b4a[m fix: Resolve all database schema and function issues
+[33mcb6f384[m fix: Add DROP statements to prevent policy and function conflicts
+[33mf7aa587[m fix: Remove action_required column from admin notifications
+[33m187a9ca[m feat: Add comprehensive admin notification system
+[33mc152e9f[m fix: Add debugging and error handling for help message system
+[33m340efc9[m feat: Enhanced timestamp display in help/support system
+[33mfb8da02[m feat: Implement admin help/support system
+[33md52f6ce[m feat: Complete EcoWasteGo app with admin portal and verification system
+[33m4971131[m Major Update: Connection Issues Resolution & Thesis Preparation
+[33maa6f97d[m Revert PhoneNumberInput change - keep original behavior for user input
+[33mee5ada7[m Fix PhoneNumberInput to send full phone number with country code

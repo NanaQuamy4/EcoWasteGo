@@ -30,7 +30,7 @@ const mockUser = {
   username: 'Recycler',
   email: 'recycler@example.com',
   phone: '+233 24 123 4567',
-  verification_status: 'verified',
+  verification_status: 'approved',
   role: 'recycler',
   created_at: '2024-01-15T10:30:00Z',
   profile_image: null,
@@ -61,7 +61,7 @@ export default function RecyclerHomeTab() {
 
   // Use mock user data instead of useAuth
   const user = mockUser;
-  const isVerified = user?.verification_status === 'verified';
+  const isVerified = user?.verification_status === 'approved';
   const recycler = {
     name: user?.username || 'Recycler',
     email: user?.email || '',
