@@ -65,6 +65,9 @@ export default function AdminPortal() {
       case 'analytics':
         router.push('/admin-screens/AdminAnalyticsScreen');
         break;
+      case 'help':
+        router.push('/admin-screens/AdminHelpScreen');
+        break;
       default:
         Alert.alert('Coming Soon', 'This section is under development.');
     }
@@ -156,6 +159,22 @@ export default function AdminPortal() {
           <View style={styles.menuItemText}>
             <Text style={styles.menuItemTitle}>Analytics</Text>
             <Text style={styles.menuItemSubtitle}>View platform statistics and reports</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="#207E06" />
+        </TouchableOpacity>
+
+        {/* Help & Support */}
+        <TouchableOpacity 
+          style={styles.menuItem} 
+          onPress={() => navigateToSection('help')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.menuItemIcon}>
+            <MaterialIcons name="support-agent" size={28} color="#207E06" />
+          </View>
+          <View style={styles.menuItemText}>
+            <Text style={styles.menuItemTitle}>Help & Support</Text>
+            <Text style={styles.menuItemSubtitle}>Respond to user help messages</Text>
           </View>
           <MaterialIcons name="chevron-right" size={24} color="#207E06" />
         </TouchableOpacity>

@@ -1,7 +1,8 @@
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { Image, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Image, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../../lib/supabase';
 
 const DUMMY_RESPONSES = [
   "Thanks for reaching out! We'll get back to you soon.",
@@ -45,18 +46,76 @@ export default function HelpScreen() {
     { id: 1, text: "Hi! How can we help you today?", sender: "support" },
   ]);
   const [faqSetIndex, setFaqSetIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const sendMessage = (text?: string) => {
+  // Fetch user data
+  const fetchUserData = useCallback(async () => {
+    try {
+      const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+      
+      if (error) {
+        console.error('HelpScreen: Error fetching user:', error);
+        return;
+      }
+
+      if (currentUser) {
+        setUser({
+          id: currentUser.id,
+          email: currentUser.email,
+          name: currentUser.user_metadata?.full_name || 'User',
+          role: currentUser.user_metadata?.role || 'customer'
+        });
+      }
+    } catch (error) {
+      console.error('HelpScreen: Unexpected error:', error);
+    }
+  }, []);
+
+  const sendMessage = async (text?: string) => {
     const messageText = text !== undefined ? text : input;
     if (!messageText.trim()) return;
+
     const userMsg = { id: Date.now(), text: messageText, sender: "user" };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
-    setTimeout(() => {
-      const dummy = DUMMY_RESPONSES[Math.floor(Math.random() * DUMMY_RESPONSES.length)];
-      setMessages(prev => [...prev, { id: Date.now() + 1, text: dummy, sender: "support" }]);
-    }, 1200);
+    setIsLoading(true);
+
+    try {
+      // Send message to admin
+      const { error } = await supabase
+        .from('help_messages')
+        .insert({
+          user_id: user?.id,
+          user_email: user?.email || '',
+          user_name: user?.name || 'User',
+          user_role: user?.role || 'customer',
+          message: messageText,
+          status: 'pending',
+          priority: 'medium'
+        });
+
+      if (error) {
+        console.error('HelpScreen: Error sending message:', error);
+        Alert.alert('Error', 'Failed to send message. Please try again.');
+        return;
+      }
+
+      // Show confirmation message
+      const confirmationMsg = { 
+        id: Date.now() + 1, 
+        text: "Your message has been sent to our support team. We'll get back to you soon!", 
+        sender: "support" 
+      };
+      setMessages(prev => [...prev, confirmationMsg]);
+
+    } catch (error) {
+      console.error('HelpScreen: Unexpected error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -64,6 +123,11 @@ export default function HelpScreen() {
       scrollViewRef.current.scrollToEnd({ animated: true });
     }
   }, [messages]);
+
+  // Fetch user data on component mount
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
 
   // Rotate FAQ suggestions every 15 seconds
   useEffect(() => {
@@ -174,8 +238,12 @@ export default function HelpScreen() {
           onSubmitEditing={() => sendMessage()}
           returnKeyType="send"
         />
-        <TouchableOpacity style={styles.inputSendBtn} onPress={() => sendMessage()}>
-          <Feather name="send" size={22} color="#263A13" />
+        <TouchableOpacity 
+          style={[styles.inputSendBtn, isLoading && styles.inputSendBtnDisabled]} 
+          onPress={() => sendMessage()}
+          disabled={isLoading}
+        >
+          <Feather name={isLoading ? "loader" : "send"} size={22} color="#263A13" />
         </TouchableOpacity>
       </View>
       {/* Bottom Navigation */}
@@ -342,6 +410,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#E3F0D5',
     borderRadius: 16,
     padding: 8,
+  },
+  inputSendBtnDisabled: {
+    backgroundColor: '#F0F0F0',
+    opacity: 0.6,
   },
   bottomNav: {
     flexDirection: 'row',

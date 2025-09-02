@@ -53,6 +53,7 @@ export default function RootLayout() {
       {/* Role-Specific Screen Groups */}
       <Stack.Screen name="customer-screens" options={{ headerShown: false }} />
       <Stack.Screen name="recycler-screens" options={{ headerShown: false }} />
+      <Stack.Screen name="admin-screens" options={{ headerShown: false }} />
       
       {/* Shared Screens (accessible by both roles) */}
       <Stack.Screen name="PrivacyScreen" options={{ headerShown: false }} />
