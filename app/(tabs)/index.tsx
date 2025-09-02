@@ -1,7 +1,7 @@
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
@@ -10,6 +10,7 @@ import { COLORS } from '../../constants';
 import { useNotificationCount } from '../../hooks/useNotificationCount';
 import { useOnlineRecyclers } from '../../hooks/useRecyclerOnlineStatus';
 import { supabase } from '../../lib/supabase';
+import { googlePlacesService, PlacePrediction, PlaceDetails } from '../../lib/googlePlaces';
 // ===== REAL DATA INTERFACES =====
 interface Recycler {
   id: string;
@@ -35,7 +36,8 @@ interface LocationSuggestion {
   name: string;
   address: string;
   coordinate?: { latitude: number; longitude: number };
-  type: 'geocode' | 'suggestion';
+  type: 'geocode' | 'suggestion' | 'google_place';
+  placeId?: string;
 }
 
 interface UserStats {
@@ -44,13 +46,7 @@ interface UserStats {
   environmentalImpact: number;
 }
 
-// Memoized suggestion item component
-const SuggestionItem = React.memo(({ item, onPress }: { item: string; onPress: (text: string) => void }) => (
-  <TouchableOpacity style={styles.suggestionItem} onPress={() => onPress(item)}>
-    <Text style={styles.suggestionText}>{item}</Text>
-  </TouchableOpacity>
-));
-SuggestionItem.displayName = 'SuggestionItem';
+
 
 // Memoized recycler item component
 const RecyclerItem = React.memo(({ recycler, onPress }: { recycler: any; onPress: (id: string) => void }) => (
@@ -76,7 +72,21 @@ export default function HomeScreen() {
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [searchMarkers, setSearchMarkers] = useState<Array<{
+    id: string;
+    coordinate: { latitude: number; longitude: number };
+    title: string;
+    description: string;
+    type: 'search' | 'pickup';
+  }>>([]);
+  const [mapRegion, setMapRegion] = useState<{
+    latitude: number;
+    longitude: number;
+    latitudeDelta: number;
+    longitudeDelta: number;
+  } | null>(null);
   const [user, setUser] = useState<any>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [userStats, setUserStats] = useState<UserStats>({
     totalPickups: 0,
     totalSavings: 0,
@@ -171,65 +181,155 @@ export default function HomeScreen() {
     }
   }, [onlineRecyclers, fetchAvailableRecyclers]);
 
-  // Memoized filtered suggestions (using static suggestions for now)
-  const staticLocationSuggestions = [
-    'Gold Hostel, komfo anokye',
-    'Atonsu unity oil',
-    'Kumasi Central Market',
-    'KNUST Campus',
-    'Adum Business District',
-    'Kejetia Market',
-    'Manhyia Palace',
-    'Kumasi Airport'
-  ];
+  // Google Places predictions state
+  const [googlePredictions, setGooglePredictions] = useState<PlacePrediction[]>([]);
 
-  const filteredSuggestions = useMemo(() => {
-    if (!search.trim()) return staticLocationSuggestions;
-    return staticLocationSuggestions.filter(suggestion => 
-      suggestion.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [search]);
-
-  // Memoized search handler
+  // Memoized search handler with debouncing
   const handleSearch = useCallback((text: string) => {
     setSearch(text);
     setShowSuggestions(text.length > 0);
+    
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
     if (text.length > 0) {
-      handleLocationSearch(text);
+      // Debounce the search to avoid too many API calls
+      searchTimeoutRef.current = setTimeout(() => {
+        handleLocationSearch(text);
+      }, 500); // 500ms delay
     } else {
       setLocationSuggestions([]);
+      setSearchMarkers([]); // Clear search markers when search is cleared
     }
   }, []);
 
-  // Memoized location search handler
+  // Geocoding service using Google Places API
+  const geocodeAddress = useCallback(async (address: string): Promise<{ latitude: number; longitude: number } | null> => {
+    try {
+      const result = await googlePlacesService.geocodeAddress(address);
+      if (result) {
+        return {
+          latitude: result.geometry.location.lat,
+          longitude: result.geometry.location.lng
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      return null;
+    }
+  }, []);
+
+  // Get place details from Google Places API
+  const getPlaceDetails = useCallback(async (placeId: string): Promise<PlaceDetails | null> => {
+    try {
+      return await googlePlacesService.getPlaceDetails(placeId);
+    } catch (error) {
+      console.error('Error getting place details:', error);
+      return null;
+    }
+  }, []);
+
+  // Memoized location search handler using Google Places API
   const handleLocationSearch = useCallback(async (query: string) => {
     if (query.length < 3) return;
     
     setIsSearching(true);
     try {
-      // Filter static suggestions for now
-      const suggestions = staticLocationSuggestions
-        .filter(s => s.toLowerCase().includes(query.toLowerCase()))
-        .map(suggestion => ({
-          id: suggestion,
-          name: suggestion,
-          address: suggestion,
-          type: 'suggestion' as const
-        }));
+      // Get Google Places predictions
+      const predictions = await googlePlacesService.getPlacePredictions(
+        query,
+        userLocation ? {
+          lat: userLocation.coords.latitude,
+          lng: userLocation.coords.longitude
+        } : undefined
+      );
+      
+      setGooglePredictions(predictions);
+
+      // Convert predictions to location suggestions
+      const suggestions: LocationSuggestion[] = predictions.map(prediction => ({
+        id: prediction.place_id,
+        name: prediction.structured_formatting.main_text,
+        address: prediction.structured_formatting.secondary_text,
+        type: 'google_place' as const,
+        placeId: prediction.place_id
+      }));
+      
       setLocationSuggestions(suggestions);
+
+      // Try to geocode the search query and update map
+      const coordinates = await geocodeAddress(query);
+      if (coordinates) {
+        // Add search marker
+        const searchMarker = {
+          id: `search-${Date.now()}`,
+          coordinate: coordinates,
+          title: query,
+          description: 'Search Result',
+          type: 'search' as const
+        };
+        setSearchMarkers([searchMarker]);
+
+        // Update map region to center on search result
+        setMapRegion({
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01
+        });
+      }
     } catch (error) {
       console.error('Location search error:', error);
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [geocodeAddress, userLocation]);
 
   // Memoized suggestion selection handler
-  const handleSuggestionSelect = useCallback((text: string) => {
-    setSearch(text);
+  const handleSuggestionSelect = useCallback(async (suggestion: LocationSuggestion) => {
+    setSearch(suggestion.name);
     setShowSuggestions(false);
     setLocationSuggestions([]);
-  }, []);
+    
+    let coordinates: { latitude: number; longitude: number } | null = null;
+    
+    // If it's a Google Place, get details from place_id
+    if (suggestion.placeId) {
+      const placeDetails = await getPlaceDetails(suggestion.placeId);
+      if (placeDetails) {
+        coordinates = {
+          latitude: placeDetails.geometry.location.lat,
+          longitude: placeDetails.geometry.location.lng
+        };
+      }
+    }
+    
+    // Fallback to geocoding if no place details
+    if (!coordinates) {
+      coordinates = await geocodeAddress(suggestion.name);
+    }
+    
+    if (coordinates) {
+      const searchMarker = {
+        id: `suggestion-${Date.now()}`,
+        coordinate: coordinates,
+        title: suggestion.name,
+        description: suggestion.address,
+        type: 'search' as const
+      };
+      setSearchMarkers([searchMarker]);
+      
+      setMapRegion({
+        latitude: coordinates.latitude,
+        longitude: coordinates.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01
+      });
+    }
+  }, [geocodeAddress, getPlaceDetails]);
 
   // Memoized location selection handler
   const handleLocationSelect = useCallback(async (suggestion: LocationSuggestion) => {
@@ -397,8 +497,14 @@ export default function HomeScreen() {
   }, []);
 
   // Memoized render item for FlatList
-  const renderSuggestionItem = useCallback(({ item }: { item: string }) => (
-    <SuggestionItem item={item} onPress={handleSuggestionSelect} />
+  const renderSuggestionItem = useCallback(({ item }: { item: LocationSuggestion }) => (
+    <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSuggestionSelect(item)}>
+      <MaterialIcons name="location-on" size={20} color={COLORS.primary} />
+      <View style={styles.suggestionTextContainer}>
+        <Text style={styles.suggestionText}>{item.name}</Text>
+        <Text style={styles.suggestionAddress}>{item.address}</Text>
+      </View>
+    </TouchableOpacity>
   ), [handleSuggestionSelect]);
 
   const renderLocationItem = useCallback(({ item }: { item: LocationSuggestion }) => (
@@ -450,6 +556,15 @@ export default function HomeScreen() {
     };
 
     loadInitialData();
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Show loading state
@@ -545,7 +660,7 @@ export default function HomeScreen() {
                 <FlatList
                   data={locationSuggestions}
                   keyExtractor={keyExtractor}
-                  renderItem={renderLocationItem}
+                  renderItem={renderSuggestionItem}
                   getItemLayout={getItemLayout}
                   initialNumToRender={initialNumToRender}
                   maxToRenderPerBatch={maxToRenderPerBatch}
@@ -567,13 +682,25 @@ export default function HomeScreen() {
         <View style={styles.mapContainer}>
           {/* Interactive Map */}
           <MapComponent
-            markers={nearbyRecyclers.map(recycler => ({
-              id: recycler.id,
-              coordinate: recycler.coordinate!,
-              title: recycler.full_name || recycler.company_name,
-              description: `${recycler.rating?.toFixed(1) || 'N/A'} ⭐ • ${recycler.distance} • ${recycler.is_available ? '🟢 Available' : '🔴 Busy'}`,
-              type: 'recycler' as const,
-            }))}
+            initialRegion={mapRegion || undefined}
+            markers={[
+              // Recycler markers
+              ...nearbyRecyclers.map(recycler => ({
+                id: recycler.id,
+                coordinate: recycler.coordinate!,
+                title: recycler.full_name || recycler.company_name,
+                description: `${recycler.rating?.toFixed(1) || 'N/A'} ⭐ • ${recycler.distance} • ${recycler.is_available ? '🟢 Available' : '🔴 Busy'}`,
+                type: 'recycler' as const,
+              })),
+              // Search markers
+              ...searchMarkers.map(marker => ({
+                id: marker.id,
+                coordinate: marker.coordinate,
+                title: marker.title,
+                description: marker.description,
+                type: marker.type === 'search' ? 'pickup' as const : 'pickup' as const,
+              }))
+            ]}
             onMarkerPress={handleRecyclerPress}
             onMapPress={handleMapPress}
             style={{ flex: 1 }}
@@ -581,12 +708,18 @@ export default function HomeScreen() {
           
           {/* Map Legend */}
           <View style={styles.mapLegend}>
-            <Text style={styles.legendTitle}>Recycling Services</Text>
+            <Text style={styles.legendTitle}>Map Legend</Text>
             <View style={styles.legendItem}>
               <View style={[styles.legendMarker, { backgroundColor: COLORS.orange }]}>
                 <MaterialIcons name="local-shipping" size={12} color={COLORS.white} />
               </View>
               <Text style={styles.legendText}>Recycling Trucks</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendMarker, { backgroundColor: COLORS.darkGreen }]}>
+                <MaterialIcons name="location-on" size={12} color={COLORS.white} />
+              </View>
+              <Text style={styles.legendText}>Search Results</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendMarker, { backgroundColor: COLORS.red }]}>
@@ -752,6 +885,16 @@ const styles = StyleSheet.create({
   suggestionText: {
     fontSize: 16,
     color: '#263A13',
+    fontWeight: '500',
+  },
+  suggestionTextContainer: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  suggestionAddress: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
   mapSection: {
     flex: 1,
@@ -853,11 +996,6 @@ const styles = StyleSheet.create({
   },
   suggestionContent: {
     flex: 1,
-  },
-  suggestionAddress: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 2,
   },
   useMyLocationButton: {
     flexDirection: 'row',
