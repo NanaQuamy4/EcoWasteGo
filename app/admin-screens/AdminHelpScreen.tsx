@@ -161,6 +161,70 @@ export default function AdminHelpScreen() {
     fetchHelpMessages();
   }, [fetchHelpMessages]);
 
+  // Set up real-time subscription for help messages
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin_help_messages_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'help_messages'
+        },
+        (payload) => {
+          console.log('New help message received by admin:', payload);
+          // Add new help message to the list
+          const newMessage = {
+            id: payload.new.id,
+            user_id: payload.new.user_id,
+            user_email: payload.new.user_email,
+            user_name: payload.new.user_name,
+            user_role: payload.new.user_role,
+            subject: payload.new.subject,
+            message: payload.new.message,
+            status: payload.new.status,
+            priority: payload.new.priority,
+            admin_response: payload.new.admin_response,
+            admin_responded_by: payload.new.admin_responded_by,
+            admin_responded_at: payload.new.admin_responded_at,
+            created_at: payload.new.created_at,
+            updated_at: payload.new.updated_at
+          };
+          setHelpMessages(prev => [newMessage, ...prev]);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'help_messages'
+        },
+        (payload) => {
+          console.log('Help message updated:', payload);
+          // Update existing message in the list
+          setHelpMessages(prev => 
+            prev.map(msg => 
+              msg.id === payload.new.id ? {
+                ...msg,
+                status: payload.new.status,
+                admin_response: payload.new.admin_response,
+                admin_responded_by: payload.new.admin_responded_by,
+                admin_responded_at: payload.new.admin_responded_at,
+                updated_at: payload.new.updated_at
+              } : msg
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (scrollViewRef.current && selectedMessage) {

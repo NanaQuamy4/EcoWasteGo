@@ -1,6 +1,6 @@
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
@@ -189,6 +189,119 @@ export default function HelpScreen() {
   useEffect(() => {
     fetchUserData();
   }, [fetchUserData]);
+
+  // Fetch existing help messages
+  const fetchHelpMessages = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('help_messages')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching help messages:', error);
+        return;
+      }
+
+      // Convert database messages to UI format
+      const formattedMessages = data.map(msg => ({
+        id: msg.id,
+        text: msg.message,
+        sender: 'user',
+        timestamp: new Date(msg.created_at)
+      }));
+
+      // Add admin responses if they exist
+      const messagesWithResponses = [];
+      formattedMessages.forEach(msg => {
+        messagesWithResponses.push(msg);
+        // Find corresponding admin response
+        const adminResponse = data.find(m => m.id === msg.id && m.admin_response);
+        if (adminResponse) {
+          messagesWithResponses.push({
+            id: `${msg.id}_response`,
+            text: adminResponse.admin_response,
+            sender: 'support',
+            timestamp: new Date(adminResponse.admin_responded_at)
+          });
+        }
+      });
+
+      setMessages(prev => {
+        // Keep the initial welcome message if no messages exist
+        if (messagesWithResponses.length === 0) {
+          return [{ id: 1, text: "Hi! How can we help you today?", sender: "support", timestamp: new Date() }];
+        }
+        return messagesWithResponses;
+      });
+    } catch (error) {
+      console.error('Error fetching help messages:', error);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchHelpMessages();
+    }
+  }, [user, fetchHelpMessages]);
+
+  // Set up real-time subscription for help messages
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('help_messages_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'help_messages',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('New help message received:', payload);
+          // Add new user message
+          const newMessage = {
+            id: payload.new.id,
+            text: payload.new.message,
+            sender: 'user',
+            timestamp: new Date(payload.new.created_at)
+          };
+          setMessages(prev => [...prev, newMessage]);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'help_messages',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Help message updated:', payload);
+          // Check if admin responded
+          if (payload.new.admin_response && !payload.old.admin_response) {
+            const adminResponse = {
+              id: `${payload.new.id}_response`,
+              text: payload.new.admin_response,
+              sender: 'support',
+              timestamp: new Date(payload.new.admin_responded_at)
+            };
+            setMessages(prev => [...prev, adminResponse]);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   // Rotate FAQ suggestions every 15 seconds
   useEffect(() => {

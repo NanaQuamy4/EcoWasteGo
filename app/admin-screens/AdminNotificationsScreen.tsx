@@ -310,6 +310,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
+  logoImage: {
+    width: 160,
+    height: 60,
+  },
   loadingText: {
     fontSize: 18,
     color: '#207E06',
