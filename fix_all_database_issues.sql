@@ -188,7 +188,20 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Fix the respond_to_help_message function
-DROP FUNCTION IF EXISTS respond_to_help_message(UUID, TEXT, TEXT);
+-- Drop all possible variations of the function
+DO $$ 
+DECLARE
+    func_record RECORD;
+BEGIN
+    -- Find and drop all respond_to_help_message functions
+    FOR func_record IN 
+        SELECT proname, oidvectortypes(proargtypes) as argtypes
+        FROM pg_proc 
+        WHERE proname = 'respond_to_help_message'
+    LOOP
+        EXECUTE 'DROP FUNCTION IF EXISTS ' || func_record.proname || '(' || func_record.argtypes || ') CASCADE';
+    END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION respond_to_help_message(
     p_message_id UUID,
     p_response TEXT,
