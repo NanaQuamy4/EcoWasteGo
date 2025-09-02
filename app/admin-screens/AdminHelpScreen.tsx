@@ -130,15 +130,31 @@ export default function AdminHelpScreen() {
     }
   };
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (error) {
-      return 'Invalid Date';
-    }
-  };
+     // Format date
+   const formatDate = (dateString: string) => {
+     try {
+       const date = new Date(dateString);
+       const now = new Date();
+       const diffInHours = Math.abs(now.getTime() - date.getTime()) / (1000 * 60 * 60);
+       
+       // If less than 24 hours, show relative time
+       if (diffInHours < 24) {
+         const diffInMinutes = Math.abs(now.getTime() - date.getTime()) / (1000 * 60);
+         if (diffInMinutes < 1) {
+           return 'Just now';
+         } else if (diffInMinutes < 60) {
+           return `${Math.floor(diffInMinutes)}m ago`;
+         } else {
+           return `${Math.floor(diffInHours)}h ago`;
+         }
+       }
+       
+       // If more than 24 hours, show date and time
+       return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+     } catch (error) {
+       return 'Invalid Date';
+     }
+   };
 
   // Load data on component mount
   useEffect(() => {
@@ -246,11 +262,16 @@ export default function AdminHelpScreen() {
                     <Text style={styles.messageSubject}>{message.subject}</Text>
                   )}
                   
-                  <Text style={styles.messagePreview} numberOfLines={2}>
-                    {message.message}
-                  </Text>
-                  
-                  <Text style={styles.messageDate}>{formatDate(message.created_at)}</Text>
+                                     <Text style={styles.messagePreview} numberOfLines={2}>
+                     {message.message}
+                   </Text>
+                   
+                   <View style={styles.messageFooter}>
+                     <Text style={styles.messageDate}>Sent: {formatDate(message.created_at)}</Text>
+                     {message.admin_responded_at && (
+                       <Text style={styles.responseDate}>Replied: {formatDate(message.admin_responded_at)}</Text>
+                     )}
+                   </View>
                   
                   {message.admin_response && (
                     <View style={styles.responseIndicator}>
@@ -296,23 +317,30 @@ export default function AdminHelpScreen() {
               </View>
             </View>
 
-            {/* Message Content */}
-            <ScrollView style={styles.messageContent} ref={scrollViewRef}>
-              <View style={styles.messageBubble}>
-                <Text style={styles.messageText}>{selectedMessage.message}</Text>
-                <Text style={styles.messageTime}>{formatDate(selectedMessage.created_at)}</Text>
-              </View>
+                         {/* Message Content */}
+             <ScrollView style={styles.messageContent} ref={scrollViewRef}>
+               {/* User Message */}
+               <View style={styles.messageBubble}>
+                 <View style={styles.messageHeader}>
+                   <Text style={styles.messageSender}>User Message</Text>
+                   <Text style={styles.messageTime}>{formatDate(selectedMessage.created_at)}</Text>
+                 </View>
+                 <Text style={styles.messageText}>{selectedMessage.message}</Text>
+               </View>
 
-              {/* Admin Response */}
-              {selectedMessage.admin_response && (
-                <View style={styles.adminResponseBubble}>
-                  <Text style={styles.adminResponseText}>{selectedMessage.admin_response}</Text>
-                  <Text style={styles.adminResponseTime}>
-                    Admin response - {formatDate(selectedMessage.admin_responded_at || '')}
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
+               {/* Admin Response */}
+               {selectedMessage.admin_response && (
+                 <View style={styles.adminResponseBubble}>
+                   <View style={styles.messageHeader}>
+                     <Text style={styles.adminResponseSender}>Admin Response</Text>
+                     <Text style={styles.adminResponseTime}>
+                       {formatDate(selectedMessage.admin_responded_at || '')}
+                     </Text>
+                   </View>
+                   <Text style={styles.adminResponseText}>{selectedMessage.admin_response}</Text>
+                 </View>
+               )}
+             </ScrollView>
 
             {/* Response Input */}
             {!selectedMessage.admin_response && (
@@ -524,10 +552,20 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 10,
   },
-  messageDate: {
-    fontSize: 12,
-    color: '#999999',
-  },
+     messageDate: {
+     fontSize: 11,
+     color: '#999999',
+     fontWeight: '500',
+   },
+   messageFooter: {
+     marginTop: 8,
+   },
+   responseDate: {
+     fontSize: 11,
+     color: '#4CAF50',
+     fontWeight: '500',
+     marginTop: 2,
+   },
   responseIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -603,42 +641,54 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 15,
   },
-  messageBubble: {
-    backgroundColor: '#E3F0D5',
-    padding: 15,
-    borderRadius: 15,
-    marginBottom: 15,
-    alignSelf: 'flex-start',
-    maxWidth: '85%',
-  },
-  messageText: {
-    fontSize: 16,
-    color: '#22330B',
-    lineHeight: 22,
-  },
-  messageTime: {
-    fontSize: 12,
-    color: '#666666',
-    marginTop: 8,
-  },
-  adminResponseBubble: {
-    backgroundColor: '#2196F3',
-    padding: 15,
-    borderRadius: 15,
-    marginBottom: 15,
-    alignSelf: 'flex-end',
-    maxWidth: '85%',
-  },
-  adminResponseText: {
-    fontSize: 16,
-    color: '#fff',
-    lineHeight: 22,
-  },
-  adminResponseTime: {
-    fontSize: 12,
-    color: '#B3D9FF',
-    marginTop: 8,
-  },
+     messageBubble: {
+     backgroundColor: '#E3F0D5',
+     padding: 15,
+     borderRadius: 15,
+     marginBottom: 15,
+     alignSelf: 'flex-start',
+     maxWidth: '85%',
+   },
+   messageText: {
+     fontSize: 16,
+     color: '#22330B',
+     lineHeight: 22,
+     marginTop: 8,
+   },
+   messageTime: {
+     fontSize: 11,
+     color: '#666666',
+     fontWeight: '500',
+   },
+   messageSender: {
+     fontSize: 12,
+     color: '#22330B',
+     fontWeight: 'bold',
+   },
+     adminResponseBubble: {
+     backgroundColor: '#2196F3',
+     padding: 15,
+     borderRadius: 15,
+     marginBottom: 15,
+     alignSelf: 'flex-end',
+     maxWidth: '85%',
+   },
+   adminResponseText: {
+     fontSize: 16,
+     color: '#fff',
+     lineHeight: 22,
+     marginTop: 8,
+   },
+   adminResponseTime: {
+     fontSize: 11,
+     color: '#B3D9FF',
+     fontWeight: '500',
+   },
+   adminResponseSender: {
+     fontSize: 12,
+     color: '#fff',
+     fontWeight: 'bold',
+   },
   responseInput: {
     flexDirection: 'row',
     alignItems: 'flex-end',

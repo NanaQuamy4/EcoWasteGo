@@ -43,7 +43,7 @@ export default function HelpScreen() {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
-    { id: 1, text: "Hi! How can we help you today?", sender: "support" },
+    { id: 1, text: "Hi! How can we help you today?", sender: "support", timestamp: new Date() },
   ]);
   const [faqSetIndex, setFaqSetIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -73,11 +73,40 @@ export default function HelpScreen() {
     }
   }, []);
 
+  // Format message time
+  const formatMessageTime = (messageId: number) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message || !message.timestamp) return '';
+    
+    try {
+      const date = new Date(message.timestamp);
+      const now = new Date();
+      const diffInHours = Math.abs(now.getTime() - date.getTime()) / (1000 * 60 * 60);
+      
+      // If less than 24 hours, show relative time
+      if (diffInHours < 24) {
+        const diffInMinutes = Math.abs(now.getTime() - date.getTime()) / (1000 * 60);
+        if (diffInMinutes < 1) {
+          return 'Just now';
+        } else if (diffInMinutes < 60) {
+          return `${Math.floor(diffInMinutes)}m ago`;
+        } else {
+          return `${Math.floor(diffInHours)}h ago`;
+        }
+      }
+      
+      // If more than 24 hours, show date and time
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      return '';
+    }
+  };
+
   const sendMessage = async (text?: string) => {
     const messageText = text !== undefined ? text : input;
     if (!messageText.trim()) return;
 
-    const userMsg = { id: Date.now(), text: messageText, sender: "user" };
+    const userMsg = { id: Date.now(), text: messageText, sender: "user", timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
@@ -106,7 +135,8 @@ export default function HelpScreen() {
       const confirmationMsg = { 
         id: Date.now() + 1, 
         text: "Your message has been sent to our support team. We'll get back to you soon!", 
-        sender: "support" 
+        sender: "support",
+        timestamp: new Date()
       };
       setMessages(prev => [...prev, confirmationMsg]);
 
@@ -222,6 +252,14 @@ export default function HelpScreen() {
                   : [styles.supportBubble, { alignSelf: 'flex-start', marginLeft: 18 }]
               }
             >
+              <View style={styles.messageHeader}>
+                <Text style={[styles.messageSender, msg.sender === 'user' && styles.userMessageSender]}>
+                  {msg.sender === 'user' ? 'You' : 'Support'}
+                </Text>
+                <Text style={[styles.messageTime, msg.sender === 'user' && styles.userMessageTime]}>
+                  {formatMessageTime(msg.id)}
+                </Text>
+              </View>
               <Text style={msg.sender === 'user' ? styles.userText : styles.supportText}>{msg.text}</Text>
             </View>
           ))}
@@ -365,6 +403,29 @@ const styles = StyleSheet.create({
   supportText: {
     color: '#22330B',
     fontSize: 15,
+    marginTop: 4,
+  },
+  messageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  messageSender: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#22330B',
+  },
+  messageTime: {
+    fontSize: 10,
+    color: '#666666',
+    fontWeight: '500',
+  },
+  userMessageSender: {
+    color: '#fff',
+  },
+  userMessageTime: {
+    color: '#B3D9FF',
   },
   userBubble: {
     backgroundColor: '#2196F3',
@@ -381,6 +442,7 @@ const styles = StyleSheet.create({
   userText: {
     color: '#fff',
     fontSize: 15,
+    marginTop: 4,
   },
   inputBar: {
     flexDirection: 'row',
