@@ -38,7 +38,7 @@ export default function HelpScreen() {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
-    { id: 1, text: "Hi! How can we help you today?", sender: "support", timestamp: new Date() },
+    { id: "1", text: "Hi! How can we help you today?", sender: "support", timestamp: new Date() },
   ]);
   const [faqSetIndex, setFaqSetIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -74,7 +74,7 @@ export default function HelpScreen() {
   }, []);
 
   // Format message time
-  const formatMessageTime = (messageId: number) => {
+  const formatMessageTime = (messageId: string) => {
     const message = messages.find(m => m.id === messageId);
     if (!message || !message.timestamp) return '';
     
@@ -106,7 +106,7 @@ export default function HelpScreen() {
     const messageText = text !== undefined ? text : input;
     if (!messageText.trim()) return;
 
-    const userMsg = { id: Date.now(), text: messageText, sender: "user", timestamp: new Date() };
+    const userMsg = { id: Date.now().toString(), text: messageText, sender: "user", timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
@@ -164,7 +164,7 @@ export default function HelpScreen() {
 
       // Show confirmation message
       const confirmationMsg = { 
-        id: Date.now() + 1, 
+        id: (Date.now() + 1).toString(), 
         text: "Your message has been sent to our support team. We'll get back to you soon!", 
         sender: "support",
         timestamp: new Date()
@@ -211,7 +211,7 @@ export default function HelpScreen() {
 
       // Start with welcome message
       const allMessages = [{ 
-        id: 1, 
+        id: "1", 
         text: "Hi! How can we help you today?", 
         sender: "support", 
         timestamp: new Date() 
@@ -222,7 +222,7 @@ export default function HelpScreen() {
         data.forEach(msg => {
           // Add user message
           allMessages.push({
-            id: msg.id,
+            id: msg.id.toString(),
             text: msg.message,
             sender: 'user',
             timestamp: new Date(msg.created_at)
@@ -231,19 +231,18 @@ export default function HelpScreen() {
           // Add admin response if it exists
           if (msg.admin_response) {
             allMessages.push({
-              id: msg.id * 1000000 + 1, // Ensure a unique numeric id for admin response
+              id: `${msg.id}_response`,
               text: msg.admin_response,
               sender: 'support',
               timestamp: new Date(msg.admin_responded_at)
             });
           }
-          }
         });
       }
 
       console.log('HelpScreen: Setting messages:', allMessages.length);
-      setMessages(allMessages)
-i    } catch (error) {
+      setMessages(allMessages);
+    } catch (error) {
       console.error('HelpScreen: Error fetching help messages:', error);
     }
   }, [user]);
@@ -272,14 +271,14 @@ i    } catch (error) {
           console.log('New help message received:', payload);
           // Add new user message
           const newMessage = {
-            id: payload.new.id,
+            id: payload.new.id.toString(),
             text: payload.new.message,
             sender: 'user',
             timestamp: new Date(payload.new.created_at)
           };
           setMessages(prev => {
             // Check if message already exists to avoid duplicates
-            const exists = prev.some(msg => msg.id === payload.new.id);
+            const exists = prev.some(msg => msg.id === payload.new.id.toString());
             if (exists) return prev;
             return [...prev, newMessage];
           });
@@ -303,14 +302,14 @@ i    } catch (error) {
           if (payload.new.admin_response && !payload.old.admin_response) {
             console.log('Admin response received for user:', user.id);
             const adminResponse = {
-              id: `${payload.new.id}_response`,
+              id: `${payload.new.id.toString()}_response`,
               text: payload.new.admin_response,
               sender: 'support',
               timestamp: new Date(payload.new.admin_responded_at)
             };
             setMessages(prev => {
               // Check if response already exists to avoid duplicates
-              const exists = prev.some(msg => msg.id === `${payload.new.id}_response`);
+              const exists = prev.some(msg => msg.id === `${payload.new.id.toString()}_response`);
               if (exists) return prev;
               return [...prev, adminResponse];
             });
