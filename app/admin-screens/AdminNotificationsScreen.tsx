@@ -14,7 +14,6 @@ interface AdminNotification {
   related_table: string;
   priority: string;
   is_read: boolean;
-  action_required: boolean;
   created_at: string;
   read_at: string | null;
 }
@@ -101,7 +100,7 @@ export default function AdminNotificationsScreen() {
       setNotifications(prev => 
         prev.map(notification => 
           notification.id === notificationId 
-            ? { ...notification, is_read: true, action_required: false }
+            ? { ...notification, is_read: true }
             : notification
         )
       );

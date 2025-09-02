@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS admin_notifications (
     related_table TEXT, -- 'help_messages' or 'recycler_verifications'
     priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
     is_read BOOLEAN DEFAULT FALSE,
-    action_required BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     read_at TIMESTAMP WITH TIME ZONE
 );
@@ -22,7 +21,7 @@ CREATE INDEX IF NOT EXISTS idx_admin_notifications_admin_id ON admin_notificatio
 CREATE INDEX IF NOT EXISTS idx_admin_notifications_type ON admin_notifications(type);
 CREATE INDEX IF NOT EXISTS idx_admin_notifications_is_read ON admin_notifications(is_read);
 CREATE INDEX IF NOT EXISTS idx_admin_notifications_created_at ON admin_notifications(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_admin_notifications_action_required ON admin_notifications(action_required);
+
 
 -- Create updated_at trigger
 CREATE OR REPLACE FUNCTION update_admin_notifications_updated_at()
@@ -76,7 +75,6 @@ RETURNS TABLE (
     related_table TEXT,
     priority TEXT,
     is_read BOOLEAN,
-    action_required BOOLEAN,
     created_at TIMESTAMP WITH TIME ZONE,
     read_at TIMESTAMP WITH TIME ZONE
 ) AS $$
@@ -91,7 +89,6 @@ BEGIN
         an.related_table,
         an.priority,
         an.is_read,
-        an.action_required,
         an.created_at,
         an.read_at
     FROM admin_notifications an
@@ -105,7 +102,7 @@ CREATE OR REPLACE FUNCTION mark_admin_notification_read(p_notification_id UUID, 
 RETURNS BOOLEAN AS $$
 BEGIN
     UPDATE admin_notifications 
-    SET is_read = TRUE, action_required = FALSE
+    SET is_read = TRUE
     WHERE id = p_notification_id AND admin_id = p_admin_id;
     
     RETURN FOUND;
