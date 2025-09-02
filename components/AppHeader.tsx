@@ -1,5 +1,4 @@
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
-import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface AppHeaderProps {
@@ -10,6 +9,8 @@ interface AppHeaderProps {
   rightIcon?: 'bell' | 'list' | 'truck';
   onLeftPress?: () => void;
   onRightPress?: () => void;
+  hideLeftIcon?: boolean;
+  hideRightIcon?: boolean;
 }
 
 export default function AppHeader({ 
@@ -19,33 +20,45 @@ export default function AppHeader({
   leftIcon = 'menu',
   rightIcon = 'bell',
   onLeftPress,
-  onRightPress
+  onRightPress,
+  hideLeftIcon = false,
+  hideRightIcon = false
 }: AppHeaderProps) {
   return (
     <View style={styles.header}>
-      <TouchableOpacity 
-        style={styles.menuButton} 
-        onPress={onLeftPress || onMenuPress}
-      >
-        <Feather name={leftIcon} size={28} color="#263A13" />
-      </TouchableOpacity>
-      <Image source={require('../assets/images/logo landscape.png')} style={styles.logo} />
-      <View style={{ flex: 1 }} />
-      <TouchableOpacity 
-        style={styles.notificationButton} 
-        onPress={onRightPress || onNotificationPress}
-      >
-        {rightIcon === 'truck' ? (
-          <FontAwesome5 name="truck" size={24} color="#263A13" />
-        ) : (
-          <Feather name={rightIcon} size={26} color="#263A13" />
-        )}
-        {notificationCount > 0 && rightIcon === 'bell' && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{notificationCount}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+      {!hideLeftIcon && (
+        <TouchableOpacity 
+          style={styles.menuButton} 
+          onPress={onLeftPress || onMenuPress}
+        >
+          <Feather name={leftIcon} size={28} color="#263A13" />
+        </TouchableOpacity>
+      )}
+      
+      <View style={[
+        styles.logoContainer,
+        hideLeftIcon && hideRightIcon && styles.logoContainerCentered
+      ]}>
+        <Image source={require('../assets/images/logo landscape.png')} style={styles.logo} />
+      </View>
+      
+      {!hideRightIcon && (
+        <TouchableOpacity 
+          style={styles.notificationButton} 
+          onPress={onRightPress || onNotificationPress}
+        >
+          {rightIcon === 'truck' ? (
+            <FontAwesome5 name="truck" size={24} color="#263A13" />
+          ) : (
+            <Feather name={rightIcon} size={26} color="#263A13" />
+          )}
+          {notificationCount > 0 && rightIcon === 'bell' && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{notificationCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -66,6 +79,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 24,
+  },
+  logoContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoContainerCentered: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logo: {
     width: 200,

@@ -1,9 +1,35 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Animated, Easing, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Animated, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import { DIMENSIONS } from '../../constants';
-import customerStats from '../../utils/customerStats';
+// Mock customer stats (replacing utils/customerStats)
+const customerStats = {
+  getTotalPickups: () => 12,
+  getTotalWeight: () => '156.8 kg',
+  getCo2Saved: () => '78.4 kg',
+  initializeMockData: () => {},
+  addCompletedPickup: (pickup: any) => {},
+  getStats: () => ({ totalPickups: 12, totalWeight: '156.8 kg', co2Saved: '78.4 kg' }),
+  getEarnedAchievements: () => []
+};
+
+// ===== MOCK NOTIFICATION SERVICE =====
+// This replaces the notificationService with local mock functions
+// In a real app, this would create actual notifications
+
+const mockNotificationService = {
+  createLocalNotification: async (title: string, message: string, type: string) => {
+    // Mock notification creation - just log it
+    console.log(`Mock Notification [${type}]: ${title} - ${message}`);
+    
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // In a real app, this would create actual local notifications
+    return { success: true, id: `mock_notification_${Date.now()}` };
+  }
+};
 
 export default function EcoImpactCelebrationScreen() {
   const params = useLocalSearchParams();
@@ -20,12 +46,48 @@ export default function EcoImpactCelebrationScreen() {
 
   // Animation values
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [scaleAnim] = useState(new Animated.Value(0.8));
-  const [bounceAnim] = useState(new Animated.Value(0));
-  const [glitterAnim] = useState(new Animated.Value(0));
-  const [sparkleAnim] = useState(new Animated.Value(0));
   const [showConfetti, setShowConfetti] = useState(true);
   const [achievementsEarned, setAchievementsEarned] = useState<string[]>([]);
+
+  // Create completion notifications
+  const createCompletionNotifications = async () => {
+    try {
+      // Main completion notification
+      await mockNotificationService.createLocalNotification(
+        '🎉 Pickup Completed Successfully!',
+        `Great job! Your waste pickup has been completed. Weight: ${weight}, Total: ${totalAmount}. Thank you for helping the environment!`,
+        'pickup_completed'
+      );
+      
+      // Points earned notification
+      const weightNum = parseFloat(weight.replace(' kg', ''));
+      const estimatedPoints = Math.floor(weightNum * 10); // 10 points per kg
+      await mockNotificationService.createLocalNotification(
+        '⭐ Points Earned!',
+        `You've earned approximately ${estimatedPoints} points for this pickup. Keep recycling to earn more rewards!`,
+        'points_earned'
+      );
+      
+      // Environmental impact notification
+      const co2Saved = (weightNum * 0.5).toFixed(1); // 0.5 kg CO2 saved per kg of waste
+      await mockNotificationService.createLocalNotification(
+        '🌱 Environmental Impact',
+        `You've helped save ${co2Saved} kg of CO2 emissions! Every pickup contributes to a cleaner planet.`,
+        'system'
+      );
+      
+      // Next pickup reminder
+      await mockNotificationService.createLocalNotification(
+        '📅 Schedule Next Pickup',
+        'Ready for your next recycling session? Schedule another pickup to continue earning points and helping the environment.',
+        'reminder'
+      );
+      
+      console.log('EcoImpactCelebration: Mock completion notifications created successfully');
+    } catch (error) {
+      console.error('EcoImpactCelebration: Failed to create mock completion notifications:', error);
+    }
+  };
 
   useEffect(() => {
     // Initialize customer stats and save the completed pickup
@@ -52,71 +114,24 @@ export default function EcoImpactCelebrationScreen() {
       // Get newly earned achievements
       const stats = customerStats.getStats();
       const earnedAchievements = customerStats.getEarnedAchievements();
-      setAchievementsEarned(earnedAchievements.map(a => a.key));
+      setAchievementsEarned(earnedAchievements.map((a: any) => a.key || ''));
+      
+      // Create pickup completion notifications
+      createCompletionNotifications();
     }
 
-    // Animate in the celebration screen
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.sequence([
-        Animated.delay(500),
-        Animated.spring(bounceAnim, {
-          toValue: 1,
-          tension: 100,
-          friction: 5,
-        }),
-      ]),
-    ]).start();
-
-    // Start glitter animation for celebration card
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glitterAnim, { 
-          toValue: 1, 
-          duration: 800, 
-          useNativeDriver: true, 
-          easing: Easing.linear 
-        }),
-        Animated.timing(glitterAnim, { 
-          toValue: 0, 
-          duration: 800, 
-          useNativeDriver: true, 
-          easing: Easing.linear 
-        }),
-      ])
-    ).start();
-
-    // Start sparkle animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(sparkleAnim, { 
-          toValue: 1, 
-          duration: 1200, 
-          useNativeDriver: true 
-        }),
-        Animated.timing(sparkleAnim, { 
-          toValue: 0, 
-          duration: 1200, 
-          useNativeDriver: true 
-        }),
-      ])
-    ).start();
+    // Simple fade in animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start();
 
     // Stop confetti after 3 seconds
     setTimeout(() => {
       setShowConfetti(false);
     }, 3000);
-  }, [fadeAnim, scaleAnim, bounceAnim, glitterAnim, sparkleAnim, requestId, weight, totalAmount, recyclerName, pickup, wasteType, amount, environmentalTax]);
+      }, [fadeAnim, requestId, weight, totalAmount, recyclerName, pickup, wasteType, amount, environmentalTax]);
 
   const handleReturnHome = () => {
     // Navigate to user home screen (user tabs)
@@ -194,8 +209,7 @@ export default function EcoImpactCelebrationScreen() {
         style={[
           styles.content,
           {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }]
+            opacity: fadeAnim
           }
         ]}
       >
@@ -205,50 +219,13 @@ export default function EcoImpactCelebrationScreen() {
           showsVerticalScrollIndicator={false}
         >
         {/* Celebration Header */}
-        <Animated.View 
-          style={[
-            styles.header,
-            {
-              transform: [{ scale: bounceAnim }]
-            }
-          ]}
-        >
+        <View style={styles.header}>
           <Text style={styles.celebrationTitle}>🎉 Thank You!</Text>
           <Text style={styles.celebrationSubtitle}>You&apos;ve made a difference today!</Text>
-        </Animated.View>
+        </View>
 
-        {/* Celebration Card with Glitter Animation */}
-        <Animated.View 
-          style={[
-            styles.celebrationCard,
-            {
-              transform: [
-                { scale: bounceAnim },
-                { 
-                  scale: glitterAnim.interpolate({ 
-                    inputRange: [0, 1], 
-                    outputRange: [1, 1.05] 
-                  }) 
-                },
-                { 
-                  rotate: glitterAnim.interpolate({ 
-                    inputRange: [0, 1], 
-                    outputRange: ['0deg', '2deg'] 
-                  }) 
-                }
-              ],
-              shadowColor: '#FFD700',
-              shadowOpacity: glitterAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.15, 0.4]
-              }),
-              shadowRadius: glitterAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [15, 25]
-              }),
-            }
-          ]}
-        >
+        {/* Celebration Card */}
+        <View style={styles.celebrationCard}>
           <View style={styles.decorationRow}>
             <Text style={styles.decoration}>🎉</Text>
             <Text style={styles.decoration}>✨</Text>
@@ -265,40 +242,10 @@ export default function EcoImpactCelebrationScreen() {
             <Text style={styles.decoration}>💚</Text>
             <Text style={styles.decoration}>🌍</Text>
           </View>
-          
-          {/* Sparkle Effect */}
-          <Animated.View
-            style={[
-              styles.sparkleEffect,
-              {
-                opacity: sparkleAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 0.8]
-                }),
-                transform: [
-                  { 
-                    scale: sparkleAnim.interpolate({ 
-                      inputRange: [0, 1], 
-                      outputRange: [0.8, 1.2] 
-                    }) 
-                  }
-                ]
-              }
-            ]}
-          >
-            <Text style={styles.sparkle}>✨</Text>
-          </Animated.View>
-        </Animated.View>
+        </View>
 
         {/* Contribution Summary */}
-        <Animated.View 
-          style={[
-            styles.contributionCard,
-            {
-              transform: [{ scale: bounceAnim }]
-            }
-          ]}
-        >
+        <View style={styles.contributionCard}>
           <Text style={styles.contributionTitle}>Your Contribution</Text>
           <View style={styles.contributionItem}>
             <Text style={styles.contributionLabel}>Waste Recycled:</Text>
@@ -316,17 +263,10 @@ export default function EcoImpactCelebrationScreen() {
             <Text style={styles.contributionLabel}>Total Amount:</Text>
             <Text style={styles.contributionValue}>GHS {totalAmount}</Text>
           </View>
-        </Animated.View>
+        </View>
 
         {/* Environmental Impact Card */}
-        <Animated.View 
-          style={[
-            styles.impactCard,
-            {
-              transform: [{ scale: bounceAnim }]
-            }
-          ]}
-        >
+        <View style={styles.impactCard}>
           <Text style={styles.impactTitle}>🌍 Environmental Impact</Text>
           <Text style={styles.impactText}>
             By recycling {weight}, you&apos;ve contributed to:
@@ -337,17 +277,10 @@ export default function EcoImpactCelebrationScreen() {
             <Text style={styles.impactItem}>• {environmentalImpact.landfillSpaceSaved} m³ landfill space saved</Text>
             <Text style={styles.impactItem}>• {environmentalImpact.energySaved} kWh energy saved</Text>
           </View>
-        </Animated.View>
+        </View>
 
         {/* Thank You Message */}
-        <Animated.View 
-          style={[
-            styles.thankYouCard,
-            {
-              transform: [{ scale: bounceAnim }]
-            }
-          ]}
-        >
+        <View style={styles.thankYouCard}>
           <Text style={styles.thankYouTitle}>🌍 Together We Make a Difference</Text>
           <Text style={styles.thankYouMessage}>
             By choosing EcoWasteGo, you&apos;re helping to create a cleaner, greener future for Ghana. 
@@ -356,17 +289,10 @@ export default function EcoImpactCelebrationScreen() {
           <Text style={styles.thankYouQuote}>
             &quot;One Tap to a Greener Planet&quot;
           </Text>
-        </Animated.View>
+        </View>
 
         {/* Action Buttons */}
-        <Animated.View 
-          style={[
-            styles.actionButtons,
-            {
-              transform: [{ scale: bounceAnim }]
-            }
-          ]}
-        >
+        <View style={styles.actionButtons}>
           <TouchableOpacity style={styles.historyButton} onPress={handleViewHistory}>
             <Text style={styles.historyButtonText}>View History</Text>
           </TouchableOpacity>
@@ -376,7 +302,7 @@ export default function EcoImpactCelebrationScreen() {
           <TouchableOpacity style={styles.continueButton} onPress={handleReturnHome}>
             <Text style={styles.continueButtonText}>Return Home</Text>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
         
         {/* Extra spacing to ensure buttons are visible */}
         <View style={{ height: 50 }} />

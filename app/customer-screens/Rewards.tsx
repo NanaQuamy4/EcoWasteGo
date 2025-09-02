@@ -6,7 +6,36 @@ import { Alert, Animated, Easing, Linking, StyleSheet, Text, TouchableOpacity, V
 import ConfettiCannon from 'react-native-confetti-cannon'; // Uncomment when implementing confetti
 import Modal from 'react-native-modal';
 import { useSharedValue, withTiming } from 'react-native-reanimated';
-import customerStats from '../../utils/customerStats';
+// Mock customer stats (replacing utils/customerStats)
+const customerStats = {
+  getTotalPickups: () => 12,
+  getTotalWeight: () => '156.8 kg',
+  getCo2Saved: () => '78.4 kg',
+  initializeMockData: () => {},
+  addCompletedPickup: (pickup: any) => {},
+  getStats: () => ({ 
+    totalPickups: 12, 
+    totalWeight: '156.8 kg', 
+    co2Saved: '78.4 kg',
+    totalWasteRecycled: 156.8,
+    totalPoints: 1250
+  }),
+  getEarnedAchievements: () => [],
+  getAchievements: () => new Map([
+    ['first_pickup', { earned: true, date: '2024-01-15', points: 50 }],
+    ['eco_warrior', { earned: true, date: '2024-01-20', points: 100 }],
+    ['waste_reducer', { earned: true, date: '2024-01-25', points: 75 }],
+    ['environmental_champion', { earned: true, date: '2024-02-01', points: 150 }],
+    ['recycling_master', { earned: false, date: '', points: 200 }],
+    ['planet_protector', { earned: false, date: '', points: 300 }]
+  ]),
+  getEnvironmentalImpact: () => ({ 
+    co2Saved: 78.4, 
+    treesEquivalent: 3, 
+    landfillSpaceSaved: 78.4,
+    energySaved: 219.5
+  })
+};
 
 export const config = {
   headerShown: false,
@@ -127,7 +156,7 @@ export default function RewardsScreen() {
   // Handle new achievements from EcoImpactCelebration
   useEffect(() => {
     if (params.newAchievements === 'true' && params.achievementsEarned) {
-      const newAchievements = params.achievementsEarned.split(',');
+      const newAchievements = (params.achievementsEarned as string).split(',');
       
       // Show confetti for new achievements
       setShowNewAchievementConfetti(true);

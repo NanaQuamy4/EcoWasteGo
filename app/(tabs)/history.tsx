@@ -1,15 +1,15 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
-import { useAuth } from '../../contexts/AuthContext';
+// Mock user data (replacing useAuth)
 // import BottomNav from '../../components/BottomNav';
 
 export default function HistoryScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(1); // Mock notification count
-  const { user } = useAuth();
+  const user = { id: "user_001", username: "User", email: "user@example.com", phone: "+233 24 123 4567", role: "customer", verification_status: "verified", created_at: "2024-01-15T10:30:00Z", profile_image: null, company_name: "Green Team Recycling" };
   const router = useRouter();
 
   const handleNotificationPress = () => {
@@ -26,13 +26,7 @@ export default function HistoryScreen() {
         onNotificationPress={handleNotificationPress}
         notificationCount={notificationCount}
       />
-      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={{
-        name: user?.username || 'User',
-        email: user?.email,
-        phone: user?.phone,
-        type: user?.role === 'recycler' ? 'recycler' : 'user',
-        status: user?.role === 'recycler' ? 'recycler' : 'user'
-      }} />
+      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <View style={styles.greenSectionWrapper}>
         <ImageBackground
           source={require('../../assets/images/blend.jpg')}

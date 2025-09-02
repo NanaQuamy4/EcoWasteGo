@@ -1,12 +1,46 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
-import { apiService } from '../../services/apiService';
+
+// ===== MOCK DATA FOR RECYCLER NAVIGATION =====
+// This replaces all backend API calls with local mock data
+// In a real app, this would come from a database or real-time service
+
+// Mock waste collection data
+const mockWasteCollections = [
+  {
+    id: 'col_001',
+    customer_id: 'user_001',
+    pickup_address: 'Gold hostel - Komfo Anokye',
+    waste_type: 'Plastic',
+    weight: 10,
+    status: 'accepted',
+    created_at: '2024-01-15T10:30:00Z'
+  },
+  {
+    id: 'col_002',
+    customer_id: 'user_002',
+    pickup_address: 'KNUST Campus, Kumasi',
+    waste_type: 'Paper & Cardboard',
+    weight: 15,
+    status: 'accepted',
+    created_at: '2024-01-15T11:15:00Z'
+  },
+  {
+    id: 'col_003',
+    customer_id: 'user_003',
+    pickup_address: 'Adum Business District',
+    waste_type: 'Mixed Waste',
+    weight: 8,
+    status: 'accepted',
+    created_at: '2024-01-15T12:00:00Z'
+  }
+];
 
 interface NavigationData {
   requestId: string;
@@ -34,6 +68,7 @@ export default function RecyclerNavigation() {
     latitude: 6.6834,
     longitude: -1.5814,
   });
+  const [arrivalTimer, setArrivalTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [navigationData, setNavigationData] = useState<NavigationData | null>(null);
   const [locationPermission, setLocationPermission] = useState(false);
   const [locationSubscription, setLocationSubscription] = useState<Location.LocationSubscription | null>(null);
@@ -41,42 +76,45 @@ export default function RecyclerNavigation() {
   const [distanceToDestination, setDistanceToDestination] = useState(0);
   const [etaToDestination, setEtaToDestination] = useState(0);
 
-  // Get request details when component mounts
-  useEffect(() => {
-    if (requestId) {
-      fetchRequestDetails();
-    }
-    requestLocationPermission();
-  }, [requestId]);
-
-  // Cleanup location subscription
-  useEffect(() => {
-    return () => {
-      if (locationSubscription) {
-        locationSubscription.remove();
-      }
-    };
-  }, [locationSubscription]);
-
-  const fetchRequestDetails = async () => {
+  // ===== MOCK DATA LOADING FUNCTION =====
+  // This replaces the backend API call to fetch waste collection details
+  // It loads data from our mock data arrays
+  const loadMockData = async () => {
     try {
-      const response = await apiService.getWasteCollection(requestId);
-      if (response) {
-        // For now, using mock data - in real app, you'd get coordinates from address
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Find waste collection in mock data
+      const foundCollection = mockWasteCollections.find(c => c.id === requestId);
+      
+      if (foundCollection) {
+        // Create navigation data from mock collection
         setNavigationData({
-          requestId: response.id,
-          customerName: `Customer ${response.customer_id.substring(0, 8)}`,
+          requestId: foundCollection.id,
+          customerName: `Customer ${foundCollection.customer_id.substring(0, 8)}`,
           customerPhone: '+233 XX XXX XXXX',
-          pickupAddress: response.pickup_address || 'Location not specified',
-          wasteType: response.waste_type,
-          weight: response.weight || 0,
+          pickupAddress: foundCollection.pickup_address || 'Location not specified',
+          wasteType: foundCollection.waste_type,
+          weight: foundCollection.weight || 0,
+          estimatedDistance: 2.3,
+          estimatedTime: 8
+        });
+      } else {
+        // Use fallback mock data if collection not found
+        setNavigationData({
+          requestId: requestId || 'mock-id',
+          customerName: 'Michael Afia',
+          customerPhone: '0546732719',
+          pickupAddress: 'Gold hostel - Komfo Anokye',
+          wasteType: 'Plastic',
+          weight: 10,
           estimatedDistance: 2.3,
           estimatedTime: 8
         });
       }
     } catch (error) {
-      console.error('Error fetching request details:', error);
-      // Use mock data as fallback
+      console.error('Error loading mock data:', error);
+      // Use fallback mock data on error
       setNavigationData({
         requestId: requestId || 'mock-id',
         customerName: 'Michael Afia',
@@ -89,6 +127,26 @@ export default function RecyclerNavigation() {
       });
     }
   };
+
+  // Get request details when component mounts
+  useEffect(() => {
+    if (requestId) {
+      loadMockData();
+    }
+    requestLocationPermission();
+  }, [requestId]);
+
+  // Cleanup location subscription and arrival timer
+  useEffect(() => {
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+      if (arrivalTimer) {
+        clearTimeout(arrivalTimer);
+      }
+    };
+  }, [locationSubscription, arrivalTimer]);
 
   const requestLocationPermission = async () => {
     try {
@@ -194,10 +252,7 @@ export default function RecyclerNavigation() {
   const updateCustomerTracking = async (recyclerLocation: {latitude: number, longitude: number}) => {
     try {
       // Update the waste collection status to 'in_progress' if not already done
-      await apiService.updateWasteStatus(requestId, 'in_progress');
-      
-      // In a real app, you'd send the recycler's location to a real-time service
-      // For now, we'll simulate this with the API
+      // This mock function does nothing, as there's no backend API
       console.log('Updating customer tracking with recycler location:', recyclerLocation);
       
       // You could also update a separate tracking table or use WebSockets for real-time updates
@@ -218,25 +273,7 @@ export default function RecyclerNavigation() {
       try {
         // Update database status to indicate arrival (using 'in_progress' since 'arrived' is not a valid status)
         // The status 'in_progress' now means: recycler has arrived and is ready to collect
-        await apiService.updateWasteStatus(requestId, 'in_progress');
-        
-        // Show arrival notification to recycler
-        Alert.alert(
-          '🎯 Destination Reached!',
-          `You have arrived at ${navigationData?.pickupAddress || 'the pickup location'}.\n\nReady to collect waste from ${navigationData?.customerName || 'the customer'}.\n\nNavigation has ended automatically.`,
-          [
-            { 
-              text: 'Start Collection', 
-              onPress: () => {
-                // Optionally navigate to collection screen or show collection options
-                console.log('Starting waste collection process');
-              }
-            }
-          ]
-        );
-        
-        // In a real app, you would also send a push notification to the customer
-        // For now, we'll update the database status which the customer can poll
+        // This mock function does nothing, as there's no backend API
         console.log('Recycler has arrived at customer location');
         
       } catch (error) {
@@ -271,10 +308,33 @@ export default function RecyclerNavigation() {
 
     try {
       // Update status to 'in_progress' in the database
-      await apiService.updateWasteStatus(requestId, 'in_progress');
+      // This mock function does nothing, as there's no backend API
+      console.log('Starting waste collection process');
       
       setIsNavigating(true);
       startLocationTracking();
+      
+      // Simulate arrival after 10 seconds for testing purposes
+      const timer = setTimeout(() => {
+        console.log('Timer-based arrival triggered');
+        setHasArrived(true);
+        setIsNavigating(false);
+        stopLocationTracking();
+        
+        // Clear the timer
+        if (arrivalTimer) {
+          clearTimeout(arrivalTimer);
+          setArrivalTimer(null);
+        }
+        
+        Alert.alert(
+          '🎯 Destination Reached!',
+          'You have arrived at the pickup location. Ready to collect waste.',
+          [{ text: 'OK' }]
+        );
+      }, 10000); // 10 seconds
+      
+      setArrivalTimer(timer);
       
       Alert.alert(
         '🚀 Navigation Started!',
@@ -356,7 +416,8 @@ export default function RecyclerNavigation() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await apiService.updateWasteStatus(requestId, 'cancelled');
+              // This mock function does nothing, as there's no backend API
+              console.log('Ride cancelled');
               Alert.alert(
                 'Ride Cancelled',
                 'The pickup request has been cancelled. You will be redirected to the requests screen.',
@@ -426,11 +487,17 @@ export default function RecyclerNavigation() {
               <Text style={styles.notificationTitle}>🎯 You have arrived at your destination!</Text>
               <Text style={styles.notificationText}>Ready to collect waste from {navigationData.customerName}</Text>
               <TouchableOpacity style={styles.calculateButton} onPress={handleCalculate}>
-                <Text style={styles.calculateButtonText}>Calculate Weight</Text>
+                <Text style={styles.calculateButtonText}>⚖️ Calculate Weight</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
+
+        {/* Debug Info - Remove in production */}
+        <View style={styles.debugInfo}>
+          <Text style={styles.debugText}>Debug: hasArrived = {hasArrived.toString()}</Text>
+          <Text style={styles.debugText}>Debug: isNavigating = {isNavigating.toString()}</Text>
+        </View>
 
         {/* Route Information Card */}
         <View style={styles.routeInfoCard}>
@@ -481,7 +548,7 @@ export default function RecyclerNavigation() {
         <View style={styles.mapContainer}>
           <View style={styles.mapHeader}>
             <Text style={styles.mapTitle}>
-              {isNavigating ? '�� Live Navigation' : '🗺️ Route Preview'}
+              {isNavigating ? '🔴 Live Navigation' : '🗺️ Route Preview'}
             </Text>
             <Text style={styles.mapSubtitle}>
               {isNavigating 
@@ -600,6 +667,29 @@ export default function RecyclerNavigation() {
             }
           </Text>
         </View>
+
+        {/* Test Arrival Button - Remove this in production */}
+        {!hasArrived && (
+          <View style={styles.testButtonContainer}>
+            <TouchableOpacity 
+              style={styles.testArrivalButton}
+              onPress={() => {
+                console.log('Manual arrival test triggered');
+                setHasArrived(true);
+                setIsNavigating(false);
+                stopLocationTracking();
+                
+                Alert.alert(
+                  '🎯 Destination Reached!',
+                  'You have arrived at the pickup location. Ready to collect waste.',
+                  [{ text: 'OK' }]
+                );
+              }}
+            >
+              <Text style={styles.testArrivalButtonText}>🧪 Test Arrival (Remove in Production)</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -757,16 +847,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 16,
+    paddingHorizontal: 16,
+    gap: 12,
   },
   actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginHorizontal: 4,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    marginHorizontal: 0,
+    backgroundColor: COLORS.darkGreen,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    minHeight: 56,
   },
   callButton: {
     backgroundColor: COLORS.darkGreen,
@@ -776,9 +875,10 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: 'bold',
     marginLeft: 8,
+    letterSpacing: 0.5,
   },
   navigationControls: {
     marginBottom: 20,
@@ -857,18 +957,23 @@ const styles = StyleSheet.create({
   calculateButton: {
     backgroundColor: COLORS.darkGreen,
     borderRadius: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
   },
   calculateButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: COLORS.white,
+    fontSize: 18,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   navigationMap: {
     height: 300,
@@ -901,16 +1006,52 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.darkGreen,
     borderRadius: 16,
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    paddingVertical: 16,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calculateWeightButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  testButtonContainer: {
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  testArrivalButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+  },
+  testArrivalButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  debugInfo: {
+    backgroundColor: COLORS.lightGray,
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 8,
+  },
+  debugText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    fontFamily: 'monospace',
   },
 }); 

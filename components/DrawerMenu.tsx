@@ -1,7 +1,8 @@
 import { Feather, FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Animated, Dimensions, Linking, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../lib/supabase';
 
 // Menu items for recyclers
 const RECYCLER_MENU_ITEMS = [
@@ -33,21 +34,85 @@ const USER_MENU_ITEMS = [
 type DrawerMenuProps = {
   open: boolean;
   onClose: () => void;
-  user: { name: string; email?: string; phone?: string; status?: string; type?: 'recycler' | 'user' };
   menuItems?: typeof RECYCLER_MENU_ITEMS;
 };
 
-export default function DrawerMenu({ open, onClose, user, menuItems }: DrawerMenuProps) {
+export default function DrawerMenu({ open, onClose, menuItems }: DrawerMenuProps) {
   const [showContactCard, setShowContactCard] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
   const screenWidth = Dimensions.get('window').width;
   const drawerWidth = screenWidth * 0.78;
   const router = useRouter();
 
+  // Function to fetch user data from Supabase
+  const fetchUserData = useCallback(async () => {
+    try {
+      console.log('DrawerMenu: Fetching current user data...');
+      setIsLoadingUser(true);
+
+      // Get current authenticated user
+      const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+
+      if (error) {
+        console.error('DrawerMenu: Error fetching user:', error);
+        setIsLoadingUser(false);
+        return;
+      }
+
+      if (!currentUser) {
+        console.log('DrawerMenu: No authenticated user found');
+        setIsLoadingUser(false);
+        return;
+      }
+
+      console.log('DrawerMenu: Current user found:', currentUser.id);
+      console.log('DrawerMenu: User metadata:', currentUser.user_metadata);
+
+      // Create enhanced user object with metadata
+      const enhancedUser = {
+        id: currentUser.id,
+        email: currentUser.email,
+        created_at: currentUser.created_at,
+        email_confirmed_at: currentUser.email_confirmed_at,
+        // Get data from user metadata
+        name: currentUser.user_metadata?.full_name || 'User',
+        full_name: currentUser.user_metadata?.full_name || '',
+        phone: currentUser.user_metadata?.phone || '',
+        role: currentUser.user_metadata?.role || 'customer',
+        company_name: currentUser.user_metadata?.company_name || '',
+        verification_status: currentUser.user_metadata?.verification_status || 'incomplete',
+        profile_image: null,
+      };
+
+      console.log('DrawerMenu: Enhanced user object:', enhancedUser);
+      setUser(enhancedUser);
+      setIsLoadingUser(false);
+
+    } catch (error) {
+      console.error('DrawerMenu: Error in fetchUserData:', error);
+      setIsLoadingUser(false);
+    }
+  }, []);
+
+  // Fetch user data on component mount
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
+
+  // Refresh user data when drawer opens
+  useEffect(() => {
+    if (open) {
+      console.log('DrawerMenu: Drawer opened, refreshing user data...');
+      fetchUserData();
+    }
+  }, [open, fetchUserData]);
+
   // Determine user type and menu items
-  const isRecycler = user.type === 'recycler' || user.status === 'recycler';
+  const isRecycler = user?.role === 'recycler';
   const currentMenuItems = menuItems || (isRecycler ? RECYCLER_MENU_ITEMS : USER_MENU_ITEMS);
   const userTitle = isRecycler ? 'Recycler' : 'User';
-  const userName = user.name || (isRecycler ? 'GreenFleet GH' : 'User');
+  const userName = user?.name || (isRecycler ? 'GreenFleet GH' : 'User');
 
   // Drawer overlay
   const DrawerOverlay = open ? (
@@ -73,6 +138,9 @@ export default function DrawerMenu({ open, onClose, user, menuItems }: DrawerMen
           }}>
             <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 19 }}>{userName}</Text>
             <Text style={{ color: '#22330B', fontSize: 13, marginTop: 0 }}>{userTitle}</Text>
+            {user?.email && (
+              <Text style={{ color: '#22330B', fontSize: 11, marginTop: 2, opacity: 0.7 }}>{user.email}</Text>
+            )}
           </TouchableOpacity>
         </View>
         {currentMenuItems.map(item => (

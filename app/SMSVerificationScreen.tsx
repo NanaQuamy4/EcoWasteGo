@@ -1,9 +1,41 @@
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants';
-import { apiService } from '../services/apiService';
+
+// ===== MOCK DATA FOR SMS VERIFICATION =====
+// This replaces the backend API calls with local mock data
+// In a real app, this would come from a database or SMS service
+const mockSMSCodes: { [key: string]: string } = {
+  "+233241234567": "123456",
+  "+233241234568": "654321", 
+  "+233241234569": "789012",
+  "+233546732719": "456789" // For Michael Afia
+};
+
+// Mock users for registration
+const mockUsers = [
+  {
+    id: "user_001",
+    email: "john@example.com",
+    password: "123456",
+    username: "john_doe",
+    phone: "+233241234567",
+    role: "customer",
+    name: "John Doe"
+  },
+  {
+    id: "user_002",
+    email: "green@example.com",
+    password: "123456", 
+    username: "green_team",
+    phone: "+233241234568",
+    role: "recycler",
+    name: "Green Team",
+    companyName: "EcoWaste Solutions Ltd"
+  }
+];
 
 interface VerificationData {
   phoneNumber: string;
@@ -21,13 +53,16 @@ export default function SMSVerificationScreen() {
     isRegistration?: string;
   }>();
   
+  // ===== LOCAL STATE MANAGEMENT =====
+  // These state variables manage the verification form and UI state
   const [verificationCode, setVerificationCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [codeError, setCodeError] = useState('');
-  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
+  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes countdown
   const [canResend, setCanResend] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60); // 1 minute resend cooldown
   
+  // Parse the verification data from navigation params
   const verificationData: VerificationData = {
     phoneNumber: params.phoneNumber || '',
     userType: (params.userType as 'customer' | 'recycler') || 'customer',
@@ -35,7 +70,10 @@ export default function SMSVerificationScreen() {
     isRegistration: params.isRegistration === 'true'
   };
 
-  // Timer for code expiration
+  // ===== TIMER EFFECTS =====
+  // These effects manage the countdown timers for code expiration and resend cooldown
+  
+  // Timer for code expiration (10 minutes)
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -50,7 +88,7 @@ export default function SMSVerificationScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // Resend cooldown timer
+  // Resend cooldown timer (1 minute)
   useEffect(() => {
     if (resendCooldown > 0) {
       const timer = setTimeout(() => {
@@ -67,13 +105,52 @@ export default function SMSVerificationScreen() {
     }
   }, [resendCooldown]);
 
+  // ===== UTILITY FUNCTIONS =====
+  // Format time display for countdown timers
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  // ===== MOCK SMS VERIFICATION FUNCTION =====
+  // This replaces the backend SMS verification API call
+  // It checks if the entered code matches the mock code for the phone number
+  const mockVerifySMSCode = (phone: string, code: string, userType: string) => {
+    const expectedCode = mockSMSCodes[phone];
+    
+    if (!expectedCode) {
+      return { success: false, message: 'Phone number not found' };
+    }
+    
+    if (expectedCode === code) {
+      return { success: true, message: 'Code verified successfully' };
+    } else {
+      return { success: false, message: 'Invalid verification code' };
+    }
+  };
+
+  // ===== MOCK REGISTRATION FUNCTION =====
+  // This replaces the backend user registration API call
+  // It creates a new user and adds them to the mock users array
+  const mockRegisterUser = (userData: any) => {
+    const newUser = {
+      id: `user_${Date.now()}`,
+      ...userData,
+      smsVerified: true,
+      created_at: new Date().toISOString()
+    };
+    
+    // Add to mock users array
+    mockUsers.push(newUser);
+    
+    return { success: true, data: { user: newUser } };
+  };
+
+  // ===== MAIN VERIFICATION HANDLER =====
+  // This is the main function that handles SMS code verification
   const handleVerifyCode = async () => {
+    // Validate the verification code input
     if (!verificationCode.trim()) {
       setCodeError('Please enter the verification code.');
       return;
@@ -95,7 +172,8 @@ export default function SMSVerificationScreen() {
         isRegistration: verificationData.isRegistration
       });
 
-      const response = await apiService.verifySMSCode(
+      // Call our mock verification function instead of backend API
+      const response = mockVerifySMSCode(
         verificationData.phoneNumber,
         verificationCode,
         verificationData.userType
@@ -147,12 +225,14 @@ export default function SMSVerificationScreen() {
     }
   };
 
-  // Handle registration after successful verification
+  // ===== REGISTRATION HANDLER =====
+  // This function handles user registration after successful SMS verification
   const handleRegistration = async () => {
     try {
       console.log('Creating account with verified phone...');
       
-      const response = await apiService.registerWithSMSVerification({
+      // Call our mock registration function instead of backend API
+      const response = mockRegisterUser({
         email: verificationData.formData.email,
         password: verificationData.formData.password,
         username: verificationData.formData.username,
@@ -173,8 +253,10 @@ export default function SMSVerificationScreen() {
               onPress: () => {
                 // Navigate to appropriate home screen based on role
                 if (verificationData.formData.role === 'recycler') {
+                  console.log('SMSVerificationScreen: Navigating to recycler app');
                   router.replace('/(recycler-tabs)');
                 } else {
+                  console.log('SMSVerificationScreen: Navigating to customer app');
                   router.replace('/(tabs)');
                 }
               }
@@ -198,15 +280,19 @@ export default function SMSVerificationScreen() {
     }
   };
 
+  // ===== RESEND CODE HANDLER =====
+  // This function handles resending verification codes
   const handleResendCode = async () => {
     if (!canResend) return;
 
     setIsLoading(true);
     try {
-      const response = await apiService.resendSMSVerificationCode(
-        verificationData.phoneNumber,
-        verificationData.userType
-      );
+      // Generate a new mock code for the phone number
+      const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+      mockSMSCodes[verificationData.phoneNumber] = newCode;
+      
+      // Simulate successful resend
+      const response = { success: true, message: 'New code sent successfully' };
 
       if (response.success) {
         Alert.alert('Code Resent', 'A new verification code has been sent to your phone.');
@@ -233,10 +319,13 @@ export default function SMSVerificationScreen() {
     }
   };
 
+  // ===== NAVIGATION HANDLER =====
   const handleBackToRegistration = () => {
     router.back();
   };
 
+  // ===== UI RENDERING =====
+  // Mask the phone number for privacy (shows only first 3 and last 2 digits)
   const maskedPhoneNumber = verificationData.phoneNumber.replace(/(\+233\d{2})\d{5}(\d{2})/, '$1*****$2');
 
   return (

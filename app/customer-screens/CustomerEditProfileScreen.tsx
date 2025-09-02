@@ -1,15 +1,15 @@
-import { Feather, MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { FlatList, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useEffect, useState } from 'react';
+import { Alert, FlatList, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
-import PhoneNumberInput from '../../components/PhoneNumberInput';
-import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function CustomerEditProfileScreen() {
-  const { user } = useAuth();
-  const [name, setName] = useState(user?.username || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phone || '');
+  const [user, setUser] = useState<any>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
 
   // Debug logging for user data
   useEffect(() => {
@@ -19,6 +19,112 @@ export default function CustomerEditProfileScreen() {
       console.log('CustomerEditProfileScreen: User object keys:', Object.keys(user));
     }
   }, [user]);
+
+  // Fetch current user data on component mount
+  useEffect(() => {
+    fetchCurrentUser();
+  }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      console.log('CustomerEditProfileScreen: Fetching current user...');
+      setIsLoadingUser(true);
+
+      const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+
+      if (error) {
+        console.error('CustomerEditProfileScreen: Error fetching user:', error);
+        return;
+      }
+
+      if (currentUser) {
+        console.log('CustomerEditProfileScreen: Current user found:', currentUser);
+        
+        // Extract user data from metadata
+        const userData = {
+          id: currentUser.id,
+          email: currentUser.email,
+          full_name: currentUser.user_metadata?.full_name || '',
+          phone: currentUser.user_metadata?.phone || '',
+          role: currentUser.user_metadata?.role || 'customer',
+          created_at: currentUser.created_at,
+        };
+
+        setUser(userData);
+        
+        // Populate form fields with user data
+        setName(userData.full_name);
+        setEmail(userData.email || '');
+        setPhone(userData.phone);
+        
+        console.log('CustomerEditProfileScreen: User data set:', userData);
+      } else {
+        console.log('CustomerEditProfileScreen: No user found');
+      }
+    } catch (error) {
+      console.error('CustomerEditProfileScreen: Error in fetchCurrentUser:', error);
+    } finally {
+      setIsLoadingUser(false);
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    try {
+      console.log('CustomerEditProfileScreen: Saving changes...');
+      
+      // Get current user to get their ID
+      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !currentUser) {
+        console.error('CustomerEditProfileScreen: Error getting current user:', userError);
+        Alert.alert('Error', 'Failed to get user information. Please try again.');
+        return;
+      }
+
+      console.log('CustomerEditProfileScreen: Current user ID:', currentUser.id);
+      
+      // Update user metadata in Supabase
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: {
+          full_name: name,
+          phone: phone,
+        }
+      });
+
+      if (metadataError) {
+        console.error('CustomerEditProfileScreen: Error updating user metadata:', metadataError);
+        Alert.alert('Error', 'Failed to save changes. Please try again.');
+        return;
+      }
+
+      // Update the customers table in the database
+      const { error: dbError } = await supabase
+        .from('customers')
+        .update({
+          full_name: name,
+          phone: phone,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentUser.id);
+
+      if (dbError) {
+        console.error('CustomerEditProfileScreen: Error updating customers table:', dbError);
+        // Don't show error to user since metadata was updated successfully
+        console.log('CustomerEditProfileScreen: Metadata updated but database update failed');
+      } else {
+        console.log('CustomerEditProfileScreen: Customers table updated successfully');
+      }
+
+      console.log('CustomerEditProfileScreen: User updated successfully');
+      Alert.alert('Success', 'Profile changes saved successfully!');
+      
+      // Refresh user data
+      await fetchCurrentUser();
+    } catch (error) {
+      console.error('CustomerEditProfileScreen: Error in handleSaveChanges:', error);
+      Alert.alert('Error', 'Failed to save changes. Please try again.');
+    }
+  };
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -313,7 +419,7 @@ export default function CustomerEditProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader />
+      <AppHeader hideLeftIcon hideRightIcon />
       {/* Banner with blend.jpg */}
       <View style={styles.bannerWrapper}>
         <ImageBackground source={require('../../assets/images/blend.jpg')} style={styles.bannerBg} imageStyle={[styles.bannerImage, { opacity: 0.7 }]}>
@@ -336,63 +442,79 @@ export default function CustomerEditProfileScreen() {
       </View>
       {/* Green container for fields and actions, starts immediately after banner */}
       <View style={styles.greenContentContainerNoOverlap}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Account Creation Date Display */}
-          <View style={styles.creationDateContainer}>
-            <MaterialIcons name="event" size={20} color="#263A13" style={styles.inputIcon} />
-            <View style={styles.creationDateContent}>
-              <Text style={styles.creationDateLabel}>Account Created</Text>
-              <Text style={styles.creationDateValue}>
-                {formatCreationDate(user?.created_at || '')}
-              </Text>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          
+          {/* Account Information Section */}
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Account Information</Text>
+            
+            {/* Account Creation Date */}
+            <View style={styles.creationDateContainer}>
+              <MaterialIcons name="event" size={20} color="#263A13" style={styles.inputIcon} />
+              <View style={styles.creationDateContent}>
+                <Text style={styles.creationDateLabel}>Account Created</Text>
+                <Text style={styles.creationDateValue}>
+                  {formatCreationDate(user?.created_at || '')}
+                </Text>
+              </View>
             </View>
           </View>
-          
-          {/* Name Field */}
-          <View style={styles.inputRow}>
-            <MaterialIcons name="person" size={20} color="#263A13" style={styles.inputIcon} />
-            <TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Name" />
+
+          {/* Personal Information Section */}
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Personal Information</Text>
+            
+            {/* Name Field */}
+            <View style={styles.inputRow}>
+              <MaterialIcons name="person" size={20} color="#263A13" style={styles.inputIcon} />
+              <TextInput 
+                value={name} 
+                onChangeText={setName} 
+                style={styles.input} 
+                placeholder="Full Name" 
+              />
+            </View>
+
+            {/* Email Field */}
+            <View style={styles.inputRow}>
+              <MaterialIcons name="email" size={20} color="#263A13" style={styles.inputIcon} />
+              <TextInput 
+                value={email} 
+                onChangeText={setEmail} 
+                style={styles.input} 
+                placeholder="Email Address" 
+                keyboardType="email-address"
+              />
+            </View>
+
+            {/* Phone Field */}
+            <View style={styles.inputRow}>
+              <View style={styles.phoneInputContainer}>
+                <TouchableOpacity 
+                  style={styles.countryCodeSelector}
+                  onPress={() => setCountryModalVisible(true)}
+                >
+                  <Text style={styles.countryFlag}>{countryFlag}</Text>
+                  <Text style={styles.countryCodeText}>{countryCode}</Text>
+                  <MaterialIcons name="arrow-drop-down" size={16} color="#263A13" />
+                </TouchableOpacity>
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  style={styles.phoneInput}
+                  placeholder="Enter phone number"
+                  keyboardType="phone-pad"
+                  maxLength={15}
+                />
+              </View>
+            </View>
           </View>
-          {/* Email Field */}
-          <View style={styles.inputRow}>
-            <MaterialIcons name="email" size={20} color="#263A13" style={styles.inputIcon} />
-            <TextInput value={email} onChangeText={setEmail} style={styles.input} placeholder="Email" />
-          </View>
-          {/* Phone Field */}
-          <View style={styles.inputRow}>
-            <PhoneNumberInput
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="Enter phone number"
-            />
-          </View>
-          {/* Current Password Field */}
-          <View style={styles.inputRow}>
-            <MaterialIcons name="lock" size={20} color="#263A13" style={styles.inputIcon} />
-            <TextInput value={currentPassword} onChangeText={setCurrentPassword} placeholder="Current password" secureTextEntry={!showCurrent} style={styles.input} />
-            <TouchableOpacity onPress={() => setShowCurrent(!showCurrent)}>
-              <Feather name={showCurrent ? 'eye' : 'eye-off'} size={20} color="#263A13" style={styles.eyeIcon} />
-            </TouchableOpacity>
-          </View>
-          {/* New Password Field */}
-          <View style={styles.inputRow}>
-            <MaterialIcons name="lock" size={20} color="#263A13" style={styles.inputIcon} />
-            <TextInput value={newPassword} onChangeText={setNewPassword} placeholder="New password" secureTextEntry={!showNew} style={styles.input} />
-            <TouchableOpacity onPress={() => setShowNew(!showNew)}>
-              <Feather name={showNew ? 'eye' : 'eye-off'} size={20} color="#263A13" style={styles.eyeIcon} />
-            </TouchableOpacity>
-          </View>
-          {/* Confirm New Password Field */}
-          <View style={styles.inputRow}>
-            <MaterialIcons name="lock" size={20} color="#263A13" style={styles.inputIcon} />
-            <TextInput value={confirmNewPassword} onChangeText={setConfirmNewPassword} placeholder="Confirm new password" secureTextEntry={!showConfirm} style={styles.input} />
-            <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)}>
-              <Feather name={showConfirm ? 'eye' : 'eye-off'} size={20} color="#263A13" style={styles.eyeIcon} />
-            </TouchableOpacity>
-          </View>
+
+
+
           {/* Save Button */}
-          <TouchableOpacity style={styles.saveButton}>
-            <Text style={styles.saveButtonText}>Save</Text>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges}>
+            <Text style={styles.saveButtonText}>Save Changes</Text>
           </TouchableOpacity>
           <View style={{ height: 80 }} />
         </ScrollView>
@@ -408,14 +530,7 @@ export default function CustomerEditProfileScreen() {
           <View style={styles.countryModalContent}>
             <Text style={styles.countryModalTitle}>Select Country Code</Text>
             <TextInput
-              style={{
-                borderWidth: 1,
-                borderColor: '#ccc',
-                borderRadius: 8,
-                padding: 8,
-                marginBottom: 10,
-                width: '100%',
-              }}
+              style={styles.countrySearchInput}
               placeholder="Search country or code"
               value={search}
               onChangeText={setSearch}
@@ -543,7 +658,7 @@ const styles = StyleSheet.create({
   countryCodeText: {
     color: '#263A13',
     fontWeight: 'bold',
-    fontSize: 13,
+    fontSize: 12,
     marginRight: 2,
   },
   eyeIcon: {
@@ -552,11 +667,17 @@ const styles = StyleSheet.create({
   saveButton: {
     backgroundColor: '#22330B',
     borderRadius: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     alignItems: 'center',
-    marginTop: 8,
-    width: '50%', // set width to 50% of container
-    alignSelf: 'center', // center the button
+    marginTop: 20,
+    marginHorizontal: 16,
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   saveButtonText: {
     color: '#fff',
@@ -709,5 +830,59 @@ const styles = StyleSheet.create({
     color: '#263A13',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  sectionContainer: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontWeight: 'bold',
+    fontSize: 18,
+    color: '#263A13',
+    marginBottom: 12,
+  },
+  countrySearchInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 10,
+    width: '100%',
+  },
+  phoneInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  countryCodeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    minWidth: 70,
+  },
+  countryFlag: {
+    fontSize: 16,
+    marginRight: 4,
+  },
+  phoneInput: {
+    flex: 1,
+    color: '#263A13',
+    fontWeight: 'bold',
+    fontSize: 16,
+    paddingVertical: 10,
   },
 }); 

@@ -1,27 +1,25 @@
-import { Feather, MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { FlatList, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useEffect, useState } from 'react';
+import { Alert, FlatList, Image, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
-import PhoneNumberInput from '../../components/PhoneNumberInput';
-import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function RecyclerEditProfileScreen() {
-  const { user } = useAuth();
-  const [companyName, setCompanyName] = useState(user?.company_name || 'EcoWaste Solutions Ltd');
-  const [email, setEmail] = useState(user?.email || 'nanaquamy4@gmail.com');
-  const [phone, setPhone] = useState(user?.phone || '54 673 2719');
+  const [user, setUser] = useState<any>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [name, setName] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
 
-  // Debug logging for user data
-  useEffect(() => {
-    if (user) {
-      console.log('RecyclerEditProfileScreen: User data:', user);
-      console.log('RecyclerEditProfileScreen: User created_at:', user.created_at);
-      console.log('RecyclerEditProfileScreen: User object keys:', Object.keys(user));
-    }
-  }, [user]);
-  const [businessLocation, setBusinessLocation] = useState('Accra, Ghana');
   const [areasOfOperation, setAreasOfOperation] = useState('Accra, Kumasi, Tema');
-  const [availableResources, setAvailableResources] = useState('2 Trucks, 1 Van');
+
+  const [residentialAddress, setResidentialAddress] = useState('');
+  const [truckSize, setTruckSize] = useState('');
+  const [truckNumberPlate, setTruckNumberPlate] = useState('');
+  const [driversLicense, setDriversLicense] = useState<string | null>(null);
+  const [isVerified, setIsVerified] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -32,6 +30,171 @@ export default function RecyclerEditProfileScreen() {
   const [countryFlag, setCountryFlag] = useState('🇬🇭');
   const [countryModalVisible, setCountryModalVisible] = useState(false);
   const [search, setSearch] = useState('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [adminNotes, setAdminNotes] = useState<string>('');
+
+  // Debug logging for user data
+  useEffect(() => {
+    if (user) {
+      console.log('RecyclerEditProfileScreen: User data:', user);
+      console.log('RecyclerEditProfileScreen: User created_at:', user.created_at);
+      console.log('RecyclerEditProfileScreen: User object keys:', Object.keys(user));
+    }
+  }, [user]);
+
+  // Fetch current user data on component mount
+  useEffect(() => {
+    fetchCurrentUser();
+  }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      console.log('RecyclerEditProfileScreen: Fetching current user...');
+      setIsLoadingUser(true);
+
+      const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+
+      if (error) {
+        console.error('RecyclerEditProfileScreen: Error fetching user:', error);
+        return;
+      }
+
+      if (currentUser) {
+        console.log('RecyclerEditProfileScreen: Current user found:', currentUser);
+        
+                 // Extract user data from metadata
+         const userData = {
+           id: currentUser.id,
+           email: currentUser.email,
+           full_name: currentUser.user_metadata?.full_name || '',
+           phone: currentUser.user_metadata?.phone || '',
+           company_name: currentUser.user_metadata?.company_name || '',
+           role: currentUser.user_metadata?.role || 'recycler',
+           created_at: currentUser.created_at,
+
+           residential_address: currentUser.user_metadata?.residential_address || '',
+           areas_of_operation: currentUser.user_metadata?.areas_of_operation || '',
+
+           truck_size: currentUser.user_metadata?.truck_size || '',
+           truck_number_plate: currentUser.user_metadata?.truck_number_plate || '',
+           drivers_license: currentUser.user_metadata?.drivers_license || '',
+           profile_image: currentUser.user_metadata?.profile_photo_url || null,
+           verification_complete: currentUser.user_metadata?.verification_complete || false,
+           verification_status: currentUser.user_metadata?.verification_status || 'incomplete',
+           admin_notes: currentUser.user_metadata?.admin_notes || '',
+         };
+
+        setUser(userData);
+        
+        // Populate form fields with user data
+        setName(userData.full_name);
+        setCompanyName(userData.company_name);
+        setEmail(userData.email || '');
+        setPhone(userData.phone);
+
+        setResidentialAddress(userData.residential_address || '');
+        setAreasOfOperation(userData.areas_of_operation || '');
+
+        setTruckSize(userData.truck_size || '');
+        setTruckNumberPlate(userData.truck_number_plate || '');
+        setDriversLicense(userData.drivers_license || null);
+        setProfileImage(userData.profile_image || null);
+        setAdminNotes(userData.admin_notes || '');
+        setIsVerified(userData.verification_complete || false);
+        
+        console.log('RecyclerEditProfileScreen: User data set:', userData);
+      } else {
+        console.log('RecyclerEditProfileScreen: No user found');
+      }
+    } catch (error) {
+      console.error('RecyclerEditProfileScreen: Error in fetchCurrentUser:', error);
+    } finally {
+      setIsLoadingUser(false);
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    if (!name.trim() || !phone.trim()) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    setIsLoadingUser(true);
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) throw new Error('User not found');
+
+      // Check if this is a verification submission
+      const isVerificationSubmission = user?.verification_status !== 'approved';
+      const hasProfileImage = !!profileImage;
+
+                       // Update user metadata
+         const { error: metadataError } = await supabase.auth.updateUser({
+           data: {
+             full_name: name,
+             phone: phone,
+             company_name: companyName,
+
+             residential_address: residentialAddress,
+             areas_of_operation: areasOfOperation,
+
+             truck_size: truckSize,
+             truck_number_plate: truckNumberPlate,
+             drivers_license: driversLicense,
+             profile_photo_url: profileImage, // Include profile image in metadata
+             verification_status: isVerificationSubmission ? 'pending' : user?.verification_status,
+             last_updated: new Date().toISOString(),
+           }
+         });
+
+      if (metadataError) throw metadataError;
+
+             // Update recyclers table
+       const { error: recyclerError } = await supabase
+         .from('recyclers')
+         .update({
+           full_name: name,
+           phone: phone,
+           company_name: companyName,
+
+           residential_address: residentialAddress,
+           areas_of_operation: areasOfOperation,
+
+           truck_size: truckSize,
+           truck_number_plate: truckNumberPlate,
+           drivers_license: driversLicense,
+           profile_photo_url: profileImage, // Include profile image in database
+           verification_status: isVerificationSubmission ? 'pending' : user?.verification_status,
+           updated_at: new Date().toISOString(),
+         })
+         .eq('id', currentUser.id);
+
+      if (recyclerError) throw recyclerError;
+
+              Alert.alert(
+          'Success',
+          isVerificationSubmission
+            ? user?.verification_status === 'rejected'
+              ? 'Verification information resubmitted successfully!\n\nYour updated application is now under review by our admin team. We have addressed the previous feedback and the verification process may take 1-3 business days to complete.\n\nYou will receive a notification when your verification status is updated.'
+              : 'Verification information submitted successfully!\n\nYour application is now under review by our admin team. The verification process may take 1-3 business days to complete.\n\nYou will receive a notification when your verification status is updated. Please check back regularly for updates.'
+            : 'Profile updated successfully!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                fetchCurrentUser(); // Refresh the data
+              }
+            }
+          ]
+        );
+
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setIsLoadingUser(false);
+    }
+  };
 
   // Format account creation date
   const formatCreationDate = (createdAt: string | undefined) => {
@@ -59,6 +222,77 @@ export default function RecyclerEditProfileScreen() {
       return 'N/A';
     }
   };
+
+  // Image picker functions
+  const requestPermissions = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please grant camera roll permissions to change your profile picture.');
+      return false;
+    }
+    return true;
+  };
+
+  const pickImage = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setProfileImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please grant camera permissions to take a photo.');
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setProfileImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    }
+  };
+
+   const pickLicenseFile = async () => {
+     const hasPermission = await requestPermissions();
+     if (!hasPermission) return;
+
+     try {
+       const result = await ImagePicker.launchImageLibraryAsync({
+         mediaTypes: ImagePicker.MediaTypeOptions.All,
+         allowsEditing: false,
+         quality: 0.8,
+       });
+
+       if (!result.canceled && result.assets[0]) {
+         setDriversLicense(result.assets[0].uri);
+       }
+     } catch (error) {
+       Alert.alert('Error', 'Failed to pick license file. Please try again.');
+     }
+   };
 
   // Full country/calling code list (shortened for brevity, but will include all countries)
   const countryCodes = [
@@ -146,7 +380,7 @@ export default function RecyclerEditProfileScreen() {
     { code: '+30', country: 'Greece', flag: '🇬🇷' },
     { code: '+299', country: 'Greenland', flag: '🇬🇱' },
     { code: '+1-473', country: 'Grenada', flag: '🇬🇩' },
-    { code: '+590', country: 'Guadeloupe', flag: '🇬🇵' },
+    { code: '+590', country: 'Guadeloupe', flag: '🇬��' },
     { code: '+1-671', country: 'Guam', flag: '🇬🇺' },
     { code: '+502', country: 'Guatemala', flag: '🇬🇹' },
     { code: '+44-1481', country: 'Guernsey', flag: '🇬🇬' },
@@ -316,7 +550,8 @@ export default function RecyclerEditProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader />
+      <AppHeader hideLeftIcon hideRightIcon />
+      
       {/* Banner with blend.jpg */}
       <View style={styles.bannerWrapper}>
         <ImageBackground source={require('../../assets/images/blend.jpg')} style={styles.bannerBg} imageStyle={[styles.bannerImage, { opacity: 0.7 }]}>
@@ -337,69 +572,337 @@ export default function RecyclerEditProfileScreen() {
           </View>
         </ImageBackground>
       </View>
-      {/* Green container for fields and actions, starts immediately after banner */}
+
+      {/* Main Content Container */}
       <View style={styles.greenContentContainerNoOverlap}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Account Creation Date Display */}
-          <View style={styles.creationDateContainer}>
-            <MaterialIcons name="event" size={20} color="#263A13" style={styles.inputIcon} />
-            <View style={styles.creationDateContent}>
-              <Text style={styles.creationDateLabel}>Account Created</Text>
-              <Text style={styles.creationDateValue}>
-                {formatCreationDate(user?.created_at || '')}
-              </Text>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          
+          {/* Profile Image Section */}
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Profile Picture</Text>
+            
+            <View style={styles.profileImageContainer}>
+              <View style={styles.profileImageWrapper}>
+                {profileImage ? (
+                  <Image source={{ uri: profileImage }} style={styles.profileImage} />
+                ) : (
+                  <View style={styles.profileImagePlaceholder}>
+                    <MaterialIcons name="person" size={60} color="#B6CDBD" />
+                  </View>
+                )}
+                <TouchableOpacity style={styles.changeImageButton} onPress={pickImage}>
+                  <MaterialIcons name="camera-alt" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.imageActionButtons}>
+                <TouchableOpacity style={styles.imageActionButton} onPress={pickImage}>
+                  <MaterialIcons name="photo-library" size={20} color="#263A13" />
+                  <Text style={styles.imageActionButtonText}>Choose Photo</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity style={styles.imageActionButton} onPress={takePhoto}>
+                  <MaterialIcons name="camera" size={20} color="#263A13" />
+                  <Text style={styles.imageActionButtonText}>Take Photo</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
           
-          {/* Name Field */}
-          <View style={styles.inputRow}>
-            <MaterialIcons name="person" size={20} color="#263A13" style={styles.inputIcon} />
-            <TextInput value={companyName} onChangeText={setCompanyName} style={styles.input} placeholder="Company Name" />
+          {/* Account Information Section */}
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Account Information</Text>
+            
+            {/* Account Creation Date */}
+            <View style={styles.creationDateContainer}>
+              <MaterialIcons name="event" size={20} color="#263A13" style={styles.inputIcon} />
+              <View style={styles.creationDateContent}>
+                <Text style={styles.creationDateLabel}>Account Created</Text>
+                <Text style={styles.creationDateValue}>
+                  {formatCreationDate(user?.created_at || '')}
+                </Text>
+              </View>
+            </View>
           </View>
-          {/* Email Field */}
-          <View style={styles.inputRow}>
-            <MaterialIcons name="email" size={20} color="#263A13" style={styles.inputIcon} />
-            <TextInput value={email} onChangeText={setEmail} style={styles.input} placeholder="Email" />
+
+          {/* Company Information Section */}
+          <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Company Information</Text>
+                {user?.verification_status === 'approved' && (
+                  <View style={styles.verifiedBadge}>
+                    <MaterialIcons name="verified" size={16} color="#fff" />
+                    <Text style={styles.verifiedText}>Verified</Text>
+                  </View>
+                )}
+              </View>
+             
+             {/* Full Name Field */}
+             <View style={styles.inputRow}>
+               <MaterialIcons name="person" size={20} color="#263A13" style={styles.inputIcon} />
+               <TextInput 
+                 value={name} 
+                 onChangeText={setName} 
+                 style={styles.input} 
+                 placeholder="Enter your full name (e.g., John Doe)" 
+               />
+             </View>
+            
+            {/* Company Name Field */}
+            <View style={styles.inputRow}>
+              <MaterialIcons name="business" size={20} color="#263A13" style={styles.inputIcon} />
+              <TextInput 
+                value={companyName} 
+                onChangeText={setCompanyName} 
+                style={styles.input} 
+                 placeholder="Enter your company name (e.g., Green Waste Solutions Ltd.)" 
+              />
+            </View>
+
+            {/* Email Field */}
+            <View style={styles.inputRow}>
+              <MaterialIcons name="email" size={20} color="#263A13" style={styles.inputIcon} />
+              <TextInput 
+                value={email} 
+                onChangeText={setEmail} 
+                style={styles.input} 
+                                 placeholder="Enter your email address (e.g., john.doe@example.com)" 
+                keyboardType="email-address"
+              />
+            </View>
+
+            {/* Phone Field */}
+            <View style={styles.inputRow}>
+              <View style={styles.phoneInputContainer}>
+                <TouchableOpacity 
+                  style={styles.countryCodeSelector}
+                  onPress={() => setCountryModalVisible(true)}
+                >
+                  <Text style={styles.countryFlag}>{countryFlag}</Text>
+                  <Text style={styles.countryCodeText}>{countryCode}</Text>
+                  <MaterialIcons name="arrow-drop-down" size={16} color="#263A13" />
+                </TouchableOpacity>
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  style={styles.phoneInput}
+                  placeholder="Enter your phone number (e.g., 0241234567)"
+                  keyboardType="phone-pad"
+                  maxLength={15}
+                />
+              </View>
+            </View>
+
+            {/* Show verification fields in Company Information if user is verified */}
+            {user?.verification_status === 'approved' && (
+              <>
+
+
+            {/* Areas of Operation Field */}
+            <View style={styles.inputRow}>
+              <MaterialIcons name="map" size={20} color="#263A13" style={styles.inputIcon} />
+              <TextInput 
+                value={areasOfOperation} 
+                onChangeText={setAreasOfOperation} 
+                style={styles.input} 
+                    placeholder="List all areas where you operate (e.g., Accra, Kumasi, Tema, Cape Coast)"
+                    placeholderTextColor="#666666"
+              />
+            </View>
+
+
+
+                {/* Residential Address Field */}
+            <View style={styles.inputRow}>
+                  <MaterialIcons name="home" size={20} color="#263A13" style={styles.inputIcon} />
+              <TextInput 
+                    value={residentialAddress} 
+                    onChangeText={setResidentialAddress} 
+                style={styles.input} 
+                    placeholder="Enter your complete residential address (e.g., 123 Main Street, Accra, Ghana)"
+                    placeholderTextColor="#666666"
+              />
+            </View>
+
+                {/* Truck Size Field */}
+                <View style={styles.inputRow}>
+                  <MaterialIcons name="straighten" size={20} color="#263A13" style={styles.inputIcon} />
+                  <TextInput 
+                    value={truckSize} 
+                    onChangeText={setTruckSize} 
+                    style={styles.input} 
+                    placeholder="Specify your truck capacity (e.g., 5 tons, 10 tons, 15 tons)"
+                    placeholderTextColor="#666666"
+                  />
           </View>
-          {/* Phone Field */}
-          <View style={styles.inputRow}>
-            <PhoneNumberInput
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="Enter phone number"
-            />
-          </View>
-          {/* Current Password Field */}
-          <View style={styles.inputRow}>
-            <MaterialIcons name="lock" size={20} color="#263A13" style={styles.inputIcon} />
-            <TextInput value={currentPassword} onChangeText={setCurrentPassword} placeholder="Current password" secureTextEntry={!showCurrent} style={styles.input} />
-            <TouchableOpacity onPress={() => setShowCurrent(!showCurrent)}>
-              <Feather name={showCurrent ? 'eye' : 'eye-off'} size={20} color="#263A13" style={styles.eyeIcon} />
-            </TouchableOpacity>
-          </View>
-          {/* New Password Field */}
-          <View style={styles.inputRow}>
-            <MaterialIcons name="lock" size={20} color="#263A13" style={styles.inputIcon} />
-            <TextInput value={newPassword} onChangeText={setNewPassword} placeholder="New password" secureTextEntry={!showNew} style={styles.input} />
-            <TouchableOpacity onPress={() => setShowNew(!showNew)}>
-              <Feather name={showNew ? 'eye' : 'eye-off'} size={20} color="#263A13" style={styles.eyeIcon} />
-            </TouchableOpacity>
-          </View>
-          {/* Confirm New Password Field */}
-          <View style={styles.inputRow}>
-            <MaterialIcons name="lock" size={20} color="#263A13" style={styles.inputIcon} />
-            <TextInput value={confirmNewPassword} onChangeText={setConfirmNewPassword} placeholder="Confirm new password" secureTextEntry={!showConfirm} style={styles.input} />
-            <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)}>
-              <Feather name={showConfirm ? 'eye' : 'eye-off'} size={20} color="#263A13" style={styles.eyeIcon} />
-            </TouchableOpacity>
-          </View>
-          {/* Save Button */}
-          <TouchableOpacity style={styles.saveButton}>
-            <Text style={styles.saveButtonText}>Save</Text>
+
+                {/* Truck Number Plate Field */}
+                <View style={styles.inputRow}>
+                  <MaterialIcons name="confirmation-number" size={20} color="#263A13" style={styles.inputIcon} />
+                  <TextInput 
+                    value={truckNumberPlate} 
+                    onChangeText={setTruckNumberPlate} 
+                    style={styles.input} 
+                    placeholder="Enter your truck's license plate number (e.g., GT-1234-20)"
+                    placeholderTextColor="#666666"
+                    autoCapitalize="characters"
+                  />
+                </View>
+              </>
+            )}
+            
+           </View>
+
+                       {/* Verification Information Section - Only show if not approved */}
+            {user?.verification_status !== 'approved' && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Verification Information</Text>
+                  {user?.verification_status === 'pending' && (
+                    <View style={[styles.verifiedBadge, { backgroundColor: '#FF9800' }]}>
+                      <MaterialIcons name="schedule" size={16} color="#fff" />
+                      <Text style={styles.verifiedText}>Pending</Text>
+                    </View>
+                  )}
+                  {user?.verification_status === 'rejected' && (
+                    <View style={[styles.verifiedBadge, { backgroundColor: '#F44336' }]}>
+                      <MaterialIcons name="error" size={16} color="#fff" />
+                      <Text style={styles.verifiedText}>Rejected</Text>
+                    </View>
+                  )}
+                  {user?.verification_status === 'expired' && (
+                    <View style={[styles.verifiedBadge, { backgroundColor: '#9E9E9E' }]}>
+                      <MaterialIcons name="schedule" size={16} color="#fff" />
+                      <Text style={styles.verifiedText}>Expired</Text>
+                    </View>
+                  )}
+                  {user?.verification_status === 'incomplete' && (
+                    <View style={[styles.verifiedBadge, { backgroundColor: '#9E9E9E' }]}>
+                      <MaterialIcons name="info" size={16} color="#fff" />
+                      <Text style={styles.verifiedText}>Incomplete</Text>
+                    </View>
+                  )}
+                </View>
+              
+                             <Text style={styles.verificationNote}>
+                 {user?.verification_status === 'approved' 
+                   ? 'Your account is verified and active. You can accept waste collection requests.'
+                   : user?.verification_status === 'pending'
+                   ? 'Your verification request is under review. You will be notified once approved.'
+                   : user?.verification_status === 'rejected'
+                   ? 'Your verification was rejected. Please check the admin notes below and resubmit with corrections.'
+                   : 'Complete all fields below (including profile picture) and submit for admin verification to start accepting waste collection requests.'
+                 }
+               </Text>
+
+               {/* Show admin notes for rejected users */}
+               {user?.verification_status === 'rejected' && adminNotes && (
+                 <View style={styles.adminNotesContainer}>
+                   <View style={styles.adminNotesHeader}>
+                     <MaterialIcons name="admin-panel-settings" size={20} color="#F44336" />
+                     <Text style={styles.adminNotesTitle}>Admin Feedback</Text>
+                   </View>
+                   <Text style={styles.adminNotesText}>{adminNotes}</Text>
+                 </View>
+               )}
+
+             
+                           {/* Residential Address Field */}
+              <View style={styles.inputRow}>
+                <MaterialIcons name="home" size={20} color="#263A13" style={styles.inputIcon} />
+                <TextInput 
+                  value={residentialAddress} 
+                  onChangeText={setResidentialAddress} 
+                  style={styles.input} 
+                  placeholder="Enter your complete residential address (e.g., 123 Main Street, Accra, Ghana)"
+                  placeholderTextColor="#666666"
+                />
+              </View>
+
+
+
+              {/* Areas of Operation Field */}
+              <View style={styles.inputRow}>
+                <MaterialIcons name="map" size={20} color="#263A13" style={styles.inputIcon} />
+                <TextInput 
+                  value={areasOfOperation} 
+                  onChangeText={setAreasOfOperation} 
+                  style={styles.input} 
+                  placeholder="List all areas where you operate (e.g., Accra, Kumasi, Tema, Cape Coast)"
+                  placeholderTextColor="#666666"
+                />
+              </View>
+
+
+
+              {/* Truck Size Field */}
+              <View style={styles.inputRow}>
+                <MaterialIcons name="straighten" size={20} color="#263A13" style={styles.inputIcon} />
+                <TextInput 
+                  value={truckSize} 
+                  onChangeText={setTruckSize} 
+                  style={styles.input} 
+                  placeholder="Specify your truck capacity (e.g., 5 tons, 10 tons, 15 tons)"
+                  placeholderTextColor="#666666"
+                />
+              </View>
+
+              {/* Truck Number Plate Field */}
+              <View style={styles.inputRow}>
+                <MaterialIcons name="confirmation-number" size={20} color="#263A13" style={styles.inputIcon} />
+                <TextInput 
+                  value={truckNumberPlate} 
+                  onChangeText={setTruckNumberPlate} 
+                  style={styles.input} 
+                  placeholder="Enter your truck's license plate number (e.g., GT-1234-20)"
+                  placeholderTextColor="#666666"
+                  autoCapitalize="characters"
+                />
+              </View>
+
+                           {/* Driver's License Upload Field */}
+              <View style={styles.licenseUploadContainer}>
+                <MaterialIcons name="card-membership" size={20} color="#263A13" style={styles.inputIcon} />
+                <View style={styles.licenseUploadContent}>
+                  <Text style={styles.licenseUploadLabel}>Driver's License</Text>
+                  {driversLicense ? (
+                    <View style={styles.licenseFileContainer}>
+                      <MaterialIcons name="description" size={24} color="#4CAF50" />
+                      <Text style={styles.licenseFileName}>License uploaded</Text>
+                      <TouchableOpacity onPress={() => setDriversLicense(null)}>
+                        <MaterialIcons name="close" size={20} color="#F44336" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={styles.uploadButton} onPress={pickLicenseFile}>
+                      <MaterialIcons name="cloud-upload" size={20} color="#263A13" />
+                      <Text style={styles.uploadButtonText}>Upload License File</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+           </View>
+            )}
+
+
+
+          {/* Save/Submit Button */}
+          <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges}>
+            <Text style={styles.saveButtonText}>
+              {user?.verification_status === 'approved' 
+                ? 'Save Changes' 
+                : user?.verification_status === 'rejected'
+                ? 'Resubmit for Verification'
+                : 'Submit for Verification'
+              }
+            </Text>
           </TouchableOpacity>
+
+          {/* Bottom Spacing */}
           <View style={{ height: 80 }} />
         </ScrollView>
       </View>
+
       {/* Country Code Picker Modal */}
       <Modal
         visible={countryModalVisible}
@@ -411,14 +914,7 @@ export default function RecyclerEditProfileScreen() {
           <View style={styles.countryModalContent}>
             <Text style={styles.countryModalTitle}>Select Country Code</Text>
             <TextInput
-              style={{
-                borderWidth: 1,
-                borderColor: '#ccc',
-                borderRadius: 8,
-                padding: 8,
-                marginBottom: 10,
-                width: '100%',
-              }}
+              style={styles.countrySearchInput}
               placeholder="Search country or code"
               value={search}
               onChangeText={setSearch}
@@ -546,7 +1042,7 @@ const styles = StyleSheet.create({
   countryCodeText: {
     color: '#263A13',
     fontWeight: 'bold',
-    fontSize: 13,
+    fontSize: 12,
     marginRight: 2,
   },
   eyeIcon: {
@@ -555,11 +1051,17 @@ const styles = StyleSheet.create({
   saveButton: {
     backgroundColor: '#22330B',
     borderRadius: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     alignItems: 'center',
-    marginTop: 8,
-    width: '50%', // set width to 50% of container
-    alignSelf: 'center', // center the button
+    marginTop: 20,
+    marginHorizontal: 16,
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   saveButtonText: {
     color: '#fff',
@@ -712,5 +1214,232 @@ const styles = StyleSheet.create({
     color: '#263A13',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  sectionContainer: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontWeight: 'bold',
+    fontSize: 18,
+    color: '#263A13',
+    marginBottom: 12,
+  },
+  countrySearchInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 10,
+    width: '100%',
+  },
+  phoneInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  countryCodeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    minWidth: 70,
+  },
+  countryFlag: {
+    fontSize: 16,
+    marginRight: 4,
+  },
+  phoneInput: {
+    flex: 1,
+    color: '#263A13',
+    fontWeight: 'bold',
+    fontSize: 16,
+    paddingVertical: 10,
+  },
+  profileImageContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  profileImageWrapper: {
+    position: 'relative',
+    marginBottom: 20,
+  },
+  profileImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#B6CDBD',
+  },
+  profileImagePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 3,
+    borderColor: '#B6CDBD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  changeImageButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#263A13',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  imageActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    maxWidth: 300,
+  },
+  imageActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 2,
+    borderColor: '#B6CDBD',
+    minWidth: 120,
+    justifyContent: 'center',
+  },
+  imageActionButtonText: {
+    color: '#263A13',
+    fontWeight: 'bold',
+    fontSize: 14,
+     marginLeft: 8,
+   },
+   sectionHeader: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     justifyContent: 'space-between',
+     marginBottom: 8,
+   },
+   verifiedBadge: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     backgroundColor: '#4CAF50',
+     borderRadius: 12,
+     paddingHorizontal: 8,
+     paddingVertical: 4,
+   },
+   verifiedText: {
+     color: '#fff',
+     fontWeight: 'bold',
+     fontSize: 12,
+     marginLeft: 4,
+   },
+       verificationNote: {
+      color: '#666',
+      fontSize: 14,
+      marginBottom: 16,
+      fontStyle: 'italic',
+    },
+    adminNotesContainer: {
+      backgroundColor: '#FFEBEE',
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: '#F44336',
+    },
+    adminNotesHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    adminNotesTitle: {
+      color: '#F44336',
+      fontSize: 16,
+      fontWeight: 'bold',
+      marginLeft: 8,
+    },
+    adminNotesLabel: {
+      color: '#E65100',
+      fontSize: 14,
+      fontWeight: 'bold',
+      marginBottom: 4,
+    },
+         adminNotesText: {
+       color: '#666',
+       fontSize: 14,
+       lineHeight: 20,
+     },
+     licenseUploadContainer: {
+       flexDirection: 'row',
+       alignItems: 'flex-start',
+       backgroundColor: '#fff',
+       borderRadius: 20,
+       borderWidth: 2,
+       borderColor: '#B6CDBD',
+       marginBottom: 12,
+       paddingHorizontal: 12,
+       paddingVertical: 12,
+       maxWidth: 340,
+       alignSelf: 'center',
+     },
+     licenseUploadContent: {
+       flex: 1,
+       marginLeft: 8,
+     },
+     licenseUploadLabel: {
+       color: '#263A13',
+       fontSize: 14,
+       fontWeight: 'bold',
+       marginBottom: 8,
+     },
+     licenseFileContainer: {
+       flexDirection: 'row',
+       alignItems: 'center',
+       backgroundColor: '#F0F8F0',
+       borderRadius: 12,
+       paddingHorizontal: 12,
+       paddingVertical: 8,
+     },
+     licenseFileName: {
+       color: '#4CAF50',
+       fontSize: 14,
+       fontWeight: 'bold',
+       marginLeft: 8,
+       flex: 1,
+     },
+     uploadButton: {
+       flexDirection: 'row',
+       alignItems: 'center',
+       backgroundColor: '#F5F5F5',
+       borderRadius: 12,
+       paddingHorizontal: 16,
+       paddingVertical: 12,
+       borderWidth: 2,
+       borderColor: '#B6CDBD',
+       borderStyle: 'dashed',
+     },
+     uploadButtonText: {
+       color: '#263A13',
+       fontSize: 14,
+       fontWeight: 'bold',
+    marginLeft: 8,
   },
 }); 

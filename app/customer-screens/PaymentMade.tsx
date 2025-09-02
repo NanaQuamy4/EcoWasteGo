@@ -1,139 +1,187 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, Image, Modal, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { COLORS, DIMENSIONS } from '../../constants';
-import apiService from '../../services/apiService';
-import CommonHeader from '../components/CommonHeader';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS } from '../../constants';
 
-export default function PaymentMadeScreen() {
-  const params = useLocalSearchParams();
-  
-  // Extract parameters from navigation
-  const recyclerName = params.recyclerName as string;
-  const pickup = params.pickup as string;
-  const requestId = params.requestId as string;
-  const weight = params.weight as string;
-  const wasteType = params.wasteType as string;
-  const amount = params.amount as string;
-  const environmentalTax = params.environmentalTax as string;
-  const totalAmount = params.totalAmount as string;
-  const recyclerId = params.recyclerId as string;
+// ===== MOCK DATA FOR PAYMENT MADE SCREEN =====
+// This replaces the backend API calls with local mock data
+// In a real app, this would come from a database or payment service
 
-  // Rating state
-  const [showRatingModal, setShowRatingModal] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+// Mock payment data
+const mockPaymentData = {
+  id: "pay_001",
+  requestId: "req_001",
+  amount: 250,
+  currency: "₵",
+  wasteType: "Mixed Waste",
+  weight: "8 kg",
+  recyclerName: "Green Team",
+  recyclerRating: 4.8,
+  paymentMethod: "Mobile Money",
+  transactionId: "TXN123456789",
+  status: "completed",
+  completedAt: "2024-01-15T14:30:00Z",
+  pickupAddress: "123 Main Street, Accra Central"
+};
 
-  const handlePaymentMade = () => {
-    // Show rating modal instead of directly navigating
-    setShowRatingModal(true);
+// Mock recycler review data
+const mockReviewData = {
+  rating: 0,
+  comment: "",
+  submitted: false
+};
+
+export default function PaymentMade() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    requestId?: string;
+    amount?: string;
+    recyclerName?: string;
+    wasteType?: string;
+    weight?: string;
+  }>();
+
+  // ===== LOCAL STATE MANAGEMENT =====
+  // These state variables manage the UI state and data
+  const [paymentData, setPaymentData] = useState<any>(null);
+  const [reviewData, setReviewData] = useState(mockReviewData);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+
+  // ===== INITIALIZATION EFFECT =====
+  // This effect runs when the component first loads
+  useEffect(() => {
+    loadMockData();
+  }, []);
+
+  // ===== MOCK DATA LOADING FUNCTION =====
+  // This replaces the backend API call to fetch payment data
+  // It loads data from our mock data arrays
+  const loadMockData = async () => {
+    try {
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Create payment data from params or use mock data
+      const payment = {
+        ...mockPaymentData,
+        amount: parseFloat(params.amount || mockPaymentData.amount.toString()),
+        recyclerName: params.recyclerName || mockPaymentData.recyclerName,
+        wasteType: params.wasteType || mockPaymentData.wasteType,
+        weight: params.weight || mockPaymentData.weight,
+        requestId: params.requestId || mockPaymentData.requestId
+      };
+      
+      setPaymentData(payment);
+      console.log('PaymentMade: Mock data loaded successfully');
+    } catch (error) {
+      console.error('PaymentMade: Error loading mock data:', error);
+      // Fallback to default mock data
+      setPaymentData(mockPaymentData);
+    }
   };
 
-  const handleRatingSubmit = async () => {
-    if (rating === 0) {
-      Alert.alert('Rating Required', 'Please select a rating before proceeding.');
+  // ===== MOCK ACTION HANDLERS =====
+  // These functions handle user actions
+  
+  // Submit recycler review
+  const handleSubmitReview = async () => {
+    if (reviewData.rating === 0) {
+      Alert.alert('Rating Required', 'Please select a rating before submitting.');
       return;
     }
 
-    if (!recyclerId) {
-      Alert.alert('Error', 'Recycler information not available. Please try again.');
+    if (!reviewData.comment.trim()) {
+      Alert.alert('Comment Required', 'Please add a comment to your review.');
       return;
     }
 
-    setIsSubmitting(true);
+    setIsSubmittingReview(true);
+
     try {
-      // Submit the review
-      await apiService.addRecyclerReview({
-        recycler_id: recyclerId,
-        collection_id: requestId,
-        rating: rating,
-        comment: comment.trim() || undefined
-      });
-
-      // Close modal and navigate to celebration
-      setShowRatingModal(false);
-      navigateToCelebration();
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Update mock review data
+      const updatedReview = {
+        ...reviewData,
+        submitted: true
+      };
+      
+      setReviewData(updatedReview);
+      setShowSuccessMessage(true);
+      
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+      }, 3000);
+      
+      console.log('PaymentMade: Review submitted successfully');
+      
+      Alert.alert(
+        'Review Submitted!',
+        'Thank you for your feedback. Your review helps other customers choose the best recyclers.',
+        [{ text: 'OK' }]
+      );
     } catch (error) {
       console.error('Error submitting review:', error);
       Alert.alert('Error', 'Failed to submit review. Please try again.');
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingReview(false);
     }
   };
 
-  const navigateToCelebration = () => {
-    // Navigate to eco impact celebration screen after rating submission
-    router.push({
-      pathname: '/customer-screens/EcoImpactCelebration' as any,
-      params: { 
-        recyclerName: recyclerName, 
-        pickup: pickup,
-        requestId: requestId,
-        weight: weight,
-        wasteType: wasteType,
-        amount: amount,
-        environmentalTax: environmentalTax,
-        totalAmount: totalAmount
-      }
-    });
+  // Handle rating selection
+  const handleRatingSelect = (rating: number) => {
+    setReviewData(prev => ({ ...prev, rating }));
   };
 
-  const handleSkipRating = () => {
-    setShowRatingModal(false);
-    navigateToCelebration();
+  // Handle comment change
+  const handleCommentChange = (comment: string) => {
+    setReviewData(prev => ({ ...prev, comment }));
   };
 
-  const handleBack = () => {
-    router.back();
+  // Navigate to home
+  const handleGoHome = () => {
+    // TEMPORARILY DISABLED - Let the app follow the intended flow
+    console.log('PaymentMade: Auto-navigation DISABLED');
+    // router.replace('/(tabs)');
   };
 
-  const renderStars = () => {
-    const stars = [];
-    for (let i = 1; i <= 5; i++) {
-      stars.push(
-        <TouchableOpacity
-          key={i}
-          onPress={() => setRating(i)}
-          style={styles.starButton}
-        >
-          <Text style={[
-            styles.star,
-            rating >= i ? styles.starFilled : styles.starEmpty
-          ]}>
-            ★
-          </Text>
-        </TouchableOpacity>
-      );
-    }
-    return stars;
+  // Schedule another pickup
+  const handleSchedulePickup = () => {
+    router.push('/customer-screens/SelectTruck');
   };
 
-  // Show error if recyclerId is missing
-  if (!recyclerId) {
+  if (!paymentData) {
     return (
-      <SafeAreaView style={styles.container}>
-        <CommonHeader onBackPress={handleBack} />
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorTitle}>Missing Information</Text>
-          <Text style={styles.errorText}>
-            Recycler information is not available. Please go back and try again.
-          </Text>
-          <TouchableOpacity style={styles.errorButton} onPress={handleBack}>
-            <Text style={styles.errorButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading payment details...</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <CommonHeader onBackPress={handleBack} />
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleGoHome} style={styles.backButton}>
+          <MaterialIcons name="arrow-back" size={24} color={COLORS.darkGreen} />
+        </TouchableOpacity>
+        
+        <View style={styles.logoContainer}>
+          <Image 
+            source={require('../../assets/images/logo landscape.png')} 
+            style={styles.logoLandscape}
+            resizeMode="contain"
+          />
+        </View>
+        
+        <View style={styles.headerRight} />
+      </View>
 
-      {/* Payment Confirmation Banner */}
+      {/* Payment Made Banner */}
       <View style={styles.bannerSection}>
-        {/* Payment Made Pill in Image Rectangle */}
         <View style={styles.imageRectangle}>
           <Image
             source={require('../../assets/images/blend.jpg')}
@@ -146,116 +194,38 @@ export default function PaymentMadeScreen() {
         </View>
       </View>
 
-      {/* Pickup Summary Card */}
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Pickup Summary</Text>
-        <View style={styles.summaryDetails}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Recycler:</Text>
-            <Text style={styles.summaryValue}>{recyclerName}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Location:</Text>
-            <Text style={styles.summaryValue}>{pickup}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Waste Type:</Text>
-            <Text style={styles.summaryValue}>{wasteType}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Weight:</Text>
-            <Text style={styles.summaryValue}>{weight}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Amount:</Text>
-            <Text style={styles.summaryValue}>GHS {amount}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Environmental Tax:</Text>
-            <Text style={styles.summaryValue}>GHS {environmentalTax}</Text>
-          </View>
-          <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total Amount:</Text>
-            <Text style={styles.totalValue}>GHS {totalAmount}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Payment Instruction Card */}
-      <View style={styles.instructionCard}>
-        <Text style={styles.instructionText}>
-          Thank you for choosing{'\n'}
-          <Text style={styles.brandHighlight}>EcoWasteGo.</Text>
+      {/* Simple Payment Confirmation */}
+      <View style={styles.confirmationCard}>
+        <Text style={styles.greetingText}>
+          Thank you for choosing <Text style={styles.brandText}>EcoWasteGo.</Text>
         </Text>
-        <Text style={styles.paymentInstruction}>
+        <Text style={styles.instructionText}>
           You can make your payment through{'\n'}
           <Text style={styles.boldText}>Momo</Text> or <Text style={styles.boldText}>Cash</Text> to your <Text style={styles.boldText}>Recycler</Text>.
         </Text>
       </View>
 
-      {/* Confirmation Button */}
-      <TouchableOpacity style={styles.confirmButton} onPress={handlePaymentMade}>
-        <Text style={styles.confirmButtonText}>PAYMENT MADE</Text>
+      {/* Payment Made Button */}
+      <TouchableOpacity style={styles.paymentButton} onPress={() => router.push('/customer-screens/EcoImpactCelebration')}>
+        <Text style={styles.paymentButtonText}>PAYMENT MADE</Text>
       </TouchableOpacity>
 
-      {/* Rating Modal */}
-      <Modal
-        visible={showRatingModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowRatingModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.ratingModal}>
-            <Text style={styles.ratingTitle}>Rate Your Recycler</Text>
-            <Text style={styles.ratingSubtitle}>
-              How was your experience with {recyclerName}?
-            </Text>
-
-            {/* Star Rating */}
-            <View style={styles.starsContainer}>
-              {renderStars()}
-            </View>
-            <Text style={styles.ratingText}>
-              {rating > 0 ? `${rating} star${rating > 1 ? 's' : ''}` : 'Select rating'}
-            </Text>
-
-            {/* Comment Input */}
-            <Text style={styles.commentLabel}>Add a comment (optional):</Text>
-            <TextInput
-              style={styles.commentInput}
-              placeholder="Share your experience..."
-              value={comment}
-              onChangeText={setComment}
-              multiline
-              numberOfLines={3}
-              maxLength={200}
-            />
-
-            {/* Action Buttons */}
-            <View style={styles.ratingActions}>
-              <TouchableOpacity
-                style={[styles.ratingButton, styles.skipButton]}
-                onPress={handleSkipRating}
-                disabled={isSubmitting}
-              >
-                <Text style={styles.skipButtonText}>Skip</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.ratingButton, styles.submitButton, rating === 0 && styles.submitButtonDisabled]}
-                onPress={handleRatingSubmit}
-                disabled={rating === 0 || isSubmitting}
-              >
-                <Text style={styles.submitButtonText}>
-                  {isSubmitting ? 'Submitting...' : 'Submit & Continue'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/customer-screens/HomeScreen')}>
+          <MaterialIcons name="home" size={28} color="#22330B" />
+          <Text style={styles.navLabel}>Home</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/customer-screens/history')}>
+          <MaterialIcons name="history" size={28} color="#22330B" />
+          <Text style={styles.navLabel}>History</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/user')}>
+          <MaterialIcons name="person" size={28} color="#22330B" />
+          <Text style={styles.navLabel}>User</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
@@ -264,14 +234,47 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.white,
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 10,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    textAlign: 'center',
+    flex: 1,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  logoLandscape: {
+    width: 180,
+    height: 60,
+  },
+  headerRight: {
+    width: 40,
+  },
   bannerSection: {
-    height:100,
+    height: 100,
     backgroundColor: COLORS.background,
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
     borderRadius: 20,
+    margin: 16,
   },
   imageRectangle: {
     position: 'absolute',
@@ -290,14 +293,15 @@ const styles = StyleSheet.create({
   },
   paymentPill: {
     position: 'absolute',
-    top: '80%',
-    left: '40%',
-    transform: [{ translateX: -50 }, { translateY: -50 }],
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -100 }, { translateY: -50 }],
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
     paddingHorizontal: 20,
+    marginTop: 20,
     paddingVertical: 10,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
@@ -311,82 +315,29 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     textAlign: 'center',
   },
-  summaryCard: {
-    backgroundColor: COLORS.background,
-    margin: DIMENSIONS.margin,
-    borderRadius: DIMENSIONS.cardBorderRadius,
-    padding: 20,
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-    marginBottom: 16,
-  },
-  summaryTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.darkGreen,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  summaryDetails: {
-    gap: 8,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: COLORS.darkGreen,
-    fontWeight: '500',
-  },
-  summaryValue: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    paddingTop: 8,
-    marginTop: 4,
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.darkGreen,
-  },
-  totalValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  instructionCard: {
-    backgroundColor: COLORS.background,
-    margin: DIMENSIONS.margin,
-    borderRadius: DIMENSIONS.cardBorderRadius,
+  confirmationCard: {
+    backgroundColor: '#CFDFBF',
+    margin: 16,
+    borderRadius: 16,
     padding: 24,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 5,
+    elevation: 4,
     marginBottom: 16,
   },
-  instructionText: {
+  greetingText: {
     fontSize: 16,
     color: COLORS.darkGreen,
     textAlign: 'center',
     marginBottom: 16,
     lineHeight: 24,
   },
-  brandHighlight: {
+  brandText: {
     fontWeight: 'bold',
     color: COLORS.primary,
   },
-  paymentInstruction: {
+  instructionText: {
     fontSize: 14,
     color: COLORS.darkGreen,
     textAlign: 'center',
@@ -396,170 +347,60 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.primary,
   },
-  confirmButton: {
+  paymentButton: {
     backgroundColor: COLORS.primary,
-    margin: DIMENSIONS.margin,
+    margin: 16,
     paddingVertical: 16,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 12,
     alignItems: 'center',
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    width: '50%',
-    alignSelf: 'center',
+    marginBottom: 80, // Space for bottom navigation
   },
-  confirmButtonText: {
+  paymentButtonText: {
     color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  ratingModal: {
+  bottomNav: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: COLORS.white,
-    borderRadius: DIMENSIONS.cardBorderRadius,
-    padding: 24,
-    width: '90%',
-    alignItems: 'center',
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  ratingTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.darkGreen,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  ratingSubtitle: {
-    fontSize: 16,
-    color: COLORS.darkGreen,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 22,
-  },
-  starsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    width: '100%',
-    marginBottom: 20,
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
   },
-  starButton: {
-    padding: 10,
+  navItem: {
+    alignItems: 'center',
+    flex: 1,
   },
-  star: {
-    fontSize: 30,
-  },
-  starFilled: {
-    color: COLORS.primary,
-  },
-  starEmpty: {
-    color: '#E0E0E0',
-  },
-  ratingText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.darkGreen,
-    marginBottom: 15,
-  },
-  commentLabel: {
-    fontSize: 16,
-    color: COLORS.darkGreen,
+  navLabel: {
+    fontSize: 12,
+    color: '#22330B',
+    marginTop: 4,
     fontWeight: '500',
-    marginBottom: 8,
-    alignSelf: 'flex-start',
   },
-  commentInput: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: DIMENSIONS.borderRadius,
-    padding: 12,
-    fontSize: 14,
-    color: COLORS.darkGreen,
-    minHeight: 80,
-    width: '100%',
-    textAlignVertical: 'top',
-    marginBottom: 20,
-  },
-  ratingActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-  },
-  ratingButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: DIMENSIONS.borderRadius,
-    alignItems: 'center',
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  skipButton: {
-    backgroundColor: COLORS.lightGray,
-    borderWidth: 1,
-    borderColor: COLORS.gray,
-  },
-  skipButtonText: {
-    color: COLORS.gray,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  submitButton: {
-    backgroundColor: COLORS.primary,
-  },
-  submitButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  submitButtonDisabled: {
-    backgroundColor: COLORS.gray,
-  },
-  errorContainer: {
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
     backgroundColor: COLORS.white,
   },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.red,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  errorText: {
-    fontSize: 16,
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 22,
-  },
-  errorButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: DIMENSIONS.borderRadius,
-    alignItems: 'center',
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  errorButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: 'bold',
+  loadingText: {
+    fontSize: 18,
+    color: COLORS.darkGreen,
   },
 }); 

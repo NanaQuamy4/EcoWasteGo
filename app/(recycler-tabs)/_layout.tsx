@@ -1,7 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Text, View } from 'react-native';
 
 export default function RecyclerTabLayout() {
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    // Ensure tabs are ready before rendering
+    const timer = setTimeout(() => {
+      setIsReady(true);
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!isReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading recycler tabs...</Text>
+      </View>
+    );
+  }
+
   return (
     <Tabs
       screenOptions={{

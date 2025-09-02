@@ -1,10 +1,18 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import { COLORS } from '../../constants';
-import recyclerStats from '../../utils/recyclerStats';
+// Mock recycler stats (replacing utils/recyclerStats)
+const recyclerStats = {
+  getCompletedPickupsCount: () => 8,
+  getTodayEarnings: () => 120.50,
+  getTotalAvailableRequestsCount: () => 5,
+  isPaymentRequired: () => false,
+  getSubscriptionFeeString: () => '₵0.00',
+  getActivePickupsCount: () => 3
+};
 
 export default function RecyclerHistoryTab() {
   const params = useLocalSearchParams();

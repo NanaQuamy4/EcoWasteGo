@@ -1,248 +1,233 @@
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Image, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { COLORS, DIMENSIONS, MESSAGE_SUGGESTION_SETS } from '../../constants';
-import { useAuth } from '../../contexts/AuthContext';
-import { apiService } from '../../services/apiService';
-import { messageAnalysisService, ResponseSuggestion } from '../../services/messageAnalysisService';
-import CommonHeader from '../components/CommonHeader';
 
-interface Message {
-  id: string;
-  message: string;
-  sender_type: 'customer' | 'recycler';
-  sender_id: string;
-  created_at: string;
-  is_read: boolean;
-}
+// ===== MOCK DATA FOR TEXT RECYCLER SCREEN =====
+// This replaces the backend API calls with local mock data
+// In a real app, this would come from a database or messaging service
 
-interface RecyclerData {
-  name: string;
-  phone: string;
-  rating: number;
-  truckType: string;
-  recyclerId: string;
-  color: string;
-  rate: string;
-  pastPickups: number;
-}
+// Mock chat messages
+const mockChatMessages = [
+  {
+    id: 1,
+    text: "Hi! I'm ready for pickup. What's your location?",
+    sender: "customer"
+  },
+  {
+    id: 2,
+    text: "Great! I'll be there in 10 minutes. Please have your waste ready.",
+    sender: "recycler"
+  },
+  {
+    id: 3,
+    text: "Perfect, I'll be waiting at the gate. I have mixed waste.",
+    sender: "customer"
+  },
+  {
+    id: 4,
+    text: "I'm at the gate now. Can you come out with your waste?",
+    sender: "recycler"
+  }
+];
+
+// Mock recycler data
+const mockRecyclerData = {
+  id: "recycler_001",
+  name: "Green Team",
+  phone: "+233241234568",
+  rating: 4.8,
+  completedPickups: 150,
+  vehicle: "Recycling Truck",
+  photo: null
+};
+
+// FAQ suggestion sets for customers
+const FAQ_SUGGESTION_SETS = [
+  [
+    "I'm ready for pickup",
+    "What time will you arrive?",
+    "I have mixed waste",
+    "Please call when you arrive",
+    "I'll be waiting at the gate",
+  ],
+  [
+    "How much do you pay per kg?",
+    "Do you accept all types of waste?",
+    "Can you help carry the waste?",
+    "I'm not home right now",
+    "Can we reschedule?",
+  ],
+  [
+    "What's your exact location?",
+    "Do you provide bags?",
+    "How long will pickup take?",
+    "I have special instructions",
+    "Please confirm my address",
+  ],
+];
+
+// Dummy responses for recycler
+const DUMMY_RESPONSES = [
+  "Got it! I'll be there in 10 minutes.",
+  "Thanks for letting me know.",
+  "I'll call when I arrive.",
+  "Perfect, see you soon.",
+  "Noted, thank you.",
+  "What type of waste do you have?",
+  "How much waste do you have?",
+  "I'll be there shortly."
+];
 
 export default function TextRecyclerScreen() {
-  const params = useLocalSearchParams();
-  const requestId = params.requestId as string;
-  const recyclerName = params.recyclerName as string;
-  const pickup = params.pickup as string;
-  const { user } = useAuth();
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    requestId?: string;
+    recyclerName?: string;
+    recyclerPhone?: string;
+    pickup?: string;
+  }>();
 
-  // Mock data for the recycler (in real app, this would come from API)
-  const recyclerData: RecyclerData = {
-    name: recyclerName || 'Recycler',
-    phone: '+233 XX XXX XXXX',
-    rating: 4.8,
-    truckType: 'Pickup Truck',
-    recyclerId: 'R001',
-    color: 'Green',
-    rate: '₵2.50/kg',
-    pastPickups: 156,
-  };
-
+  // ===== LOCAL STATE MANAGEMENT =====
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState(mockChatMessages);
+  const [faqSetIndex, setFaqSetIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [suggestionSetIndex, setSuggestionSetIndex] = useState(0);
-  const [pollingInterval, setPollingInterval] = useState<ReturnType<typeof setInterval> | null>(null);
-  const [currentPickupStage, setCurrentPickupStage] = useState('in_progress'); // Default stage
-  const [intelligentSuggestions, setIntelligentSuggestions] = useState<ResponseSuggestion[]>([]);
+  const [recyclerData, setRecyclerData] = useState<any>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Load messages when component mounts
+  // ===== INITIALIZATION EFFECT =====
   useEffect(() => {
-    if (requestId) {
-      loadMessages();
-      startMessagePolling();
-      loadPickupStatus();
-    }
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-    };
-  }, [requestId]);
+    loadMockData();
+  }, []);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (scrollViewRef.current && messages.length > 0) {
+    if (scrollViewRef.current) {
       scrollViewRef.current.scrollToEnd({ animated: true });
     }
   }, [messages]);
 
-  // Generate intelligent suggestions when messages change
-  useEffect(() => {
-    if (messages.length > 0) {
-      generateIntelligentSuggestions();
-    }
-  }, [messages, currentPickupStage]);
-
-  // Rotate message suggestions every 15 seconds
+  // Rotate FAQ suggestions every 15 seconds
   useEffect(() => {
     const interval = setInterval(() => {
-      setSuggestionSetIndex(prev => (prev + 1) % MESSAGE_SUGGESTION_SETS.length);
+      setFaqSetIndex(prev => (prev + 1) % FAQ_SUGGESTION_SETS.length);
     }, 15000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadMessages = async () => {
+  // ===== MOCK DATA LOADING FUNCTION =====
+  const loadMockData = async () => {
     try {
       setIsLoading(true);
-      const messages = await apiService.getChatMessages(requestId);
-      setMessages(messages);
+      
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Load mock recycler data
+      const recycler = {
+        ...mockRecyclerData,
+        name: params.recyclerName || mockRecyclerData.name,
+        phone: params.recyclerPhone || mockRecyclerData.phone
+      };
+      
+      setRecyclerData(recycler);
+      console.log('TextRecyclerScreen: Mock data loaded successfully');
     } catch (error) {
-      console.error('Error loading messages:', error);
-      // Show fallback message
-      setMessages([{
-        id: '1',
-        message: `Hi! I'm ${recyclerData.name}, your recycler. How can I help you with your waste pickup?`,
-        sender_type: 'recycler',
-        sender_id: 'recycler',
-        created_at: new Date().toISOString(),
-        is_read: false
-      }]);
+      console.error('TextRecyclerScreen: Error loading mock data:', error);
+      // Fallback to default mock data
+      setRecyclerData(mockRecyclerData);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadPickupStatus = async () => {
-    try {
-      // In a real app, you'd fetch the current pickup status
-      // For now, we'll use a default stage
-      setCurrentPickupStage('in_progress');
-    } catch (error) {
-      console.error('Error loading pickup status:', error);
-      setCurrentPickupStage('in_progress');
-    }
-  };
-
-  const generateIntelligentSuggestions = () => {
-    if (messages.length === 0) return;
-
-    // Get the last recycler message to analyze
-    const lastRecyclerMessage = messages
-      .filter(msg => msg.sender_type === 'recycler')
-      .pop();
-
-    if (lastRecyclerMessage) {
-      const suggestions = messageAnalysisService.generateResponseSuggestions(
-        lastRecyclerMessage.message,
-        'recycler', // The recycler sent the message
-        currentPickupStage,
-        messages.map(msg => msg.message)
-      );
-      setIntelligentSuggestions(suggestions);
-    } else {
-      // If no recycler messages, show default suggestions
-      const defaultSuggestions = messageAnalysisService.getQuickResponses('customer', currentPickupStage);
-      setIntelligentSuggestions(defaultSuggestions.map(text => ({
-        text,
-        relevance: 0.7,
-        context: 'Default suggestions',
-        category: 'helpful'
-      })));
-    }
-  };
-
-  const startMessagePolling = () => {
-    // Poll for new messages every 3 seconds
-    const interval = setInterval(async () => {
-      try {
-        const newMessages = await apiService.getChatMessages(requestId);
-        if (newMessages.length !== messages.length) {
-          setMessages(newMessages);
-        }
-      } catch (error) {
-        console.error('Error polling messages:', error);
-      }
-    }, 3000);
-    
-    setPollingInterval(interval);
-  };
-
-  const sendMessage = async (text?: string) => {
+  // ===== MESSAGE HANDLING =====
+  const sendMessage = (text?: string) => {
     const messageText = text !== undefined ? text : input;
-    if (!messageText.trim() || !requestId) return;
+    if (!messageText.trim()) return;
+    
+    const customerMsg = { id: Date.now(), text: messageText, sender: "customer" };
+    setMessages(prev => [...prev, customerMsg]);
+    setInput("");
+    
+    // Simulate recycler response after 1-3 seconds
+    setTimeout(() => {
+      const dummy = DUMMY_RESPONSES[Math.floor(Math.random() * DUMMY_RESPONSES.length)];
+      setMessages(prev => [...prev, { id: Date.now() + 1, text: dummy, sender: "recycler" }]);
+    }, Math.random() * 2000 + 1000);
+  };
 
-    try {
-      // Optimistically add message to UI
-      const tempMessage: Message = {
-        id: `temp-${Date.now()}`,
-        message: messageText,
-        sender_type: 'customer',
-        sender_id: user?.id || 'customer',
-        created_at: new Date().toISOString(),
-        is_read: false
-      };
-
-      setMessages(prev => [...prev, tempMessage]);
-      setInput("");
-
-      // Send message to backend
-      await apiService.sendChatMessage(requestId, messageText);
-      
-      // Reload messages to get the real message from backend
-      await loadMessages();
-      
-    } catch (error) {
-      console.error('Error sending message:', error);
-      Alert.alert('Error', 'Failed to send message. Please try again.');
-      
-      // Remove temporary message if sending failed
-      setMessages(prev => prev.filter(msg => !msg.id.startsWith('temp-')));
+  // ===== ACTION HANDLERS =====
+  const handleCallRecycler = () => {
+    if (recyclerData?.phone) {
+      Alert.alert(
+        'Call Recycler',
+        `Call ${recyclerData.name} at ${recyclerData.phone}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Call', 
+            onPress: () => {
+              console.log('Calling recycler:', recyclerData.phone);
+              Alert.alert('Call Recycler', 'Phone call functionality would be implemented here.');
+            }
+          }
+        ]
+      );
     }
   };
 
-  const formatMessageTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  };
-
-  const isOwnMessage = (message: Message) => {
-    return message.sender_type === 'customer';
-  };
-
-  const getSuggestionColor = (category: string) => {
-    switch (category) {
-      case 'immediate':
-        return COLORS.darkGreen;
-      case 'helpful':
-        return COLORS.primary;
-      case 'alternative':
-        return COLORS.gray;
-      default:
-        return COLORS.lightGreen;
+  const handleViewRecyclerProfile = () => {
+    if (recyclerData?.id) {
+      Alert.alert('Recycler Profile', 'Recycler profile view would be implemented here.');
     }
   };
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <CommonHeader />
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading messages...</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ fontSize: 18, color: '#22330B', fontWeight: 'bold' }}>Loading chat...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!recyclerData) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Text style={{ color: '#22330B', fontSize: 18, textAlign: 'center', marginBottom: 20 }}>
+            Failed to load recycler information
+          </Text>
+          <TouchableOpacity 
+            style={{ backgroundColor: '#E3F0D5', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10 }}
+            onPress={loadMockData}
+          >
+            <Text style={{ color: '#22330B', fontSize: 16, fontWeight: 'bold' }}>Retry</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <CommonHeader />
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+      {/* Logo Header with Back Arrow */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 18, paddingBottom: 8, backgroundColor: '#fff', marginTop: 32, position: 'relative' }}>
+        <TouchableOpacity onPress={() => router.back()} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, justifyContent: 'center', paddingLeft: 12, zIndex: 2 }}>
+          <Feather name="arrow-left" size={28} color="#263A13" />
+        </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Image
+            source={require('../../assets/images/logo landscape.png')}
+            style={{ width: 220, height: 52, resizeMode: 'contain', marginBottom: 12 }}
+          />
+        </View>
+      </View>
 
-      {/* Recycler Info Banner */}
+      {/* Banner */}
       <View style={styles.bannerBg}>
         <ImageBackground
           source={require('../../assets/images/blend.jpg')}
@@ -251,90 +236,75 @@ export default function TextRecyclerScreen() {
           resizeMode="cover"
         >
           <View style={styles.bannerPill}>
-            <Text style={styles.bannerText}>Text with Recycler</Text>
+            <Text style={styles.bannerText}>Text With Recycler</Text>
           </View>
         </ImageBackground>
       </View>
 
-      {/* Main Chat Area */}
-      <View style={styles.chatContainer}>
-        <View style={[styles.chatBackground, { backgroundColor: '#F8FFF0' }]}>
-          <Image
-            source={require('../../assets/images/bin.png')}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              opacity: 0.4,
-              resizeMode: "contain"
-            }}
-          />
-          
-          {/* Intelligent Message Suggestions */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ paddingHorizontal: 12, marginVertical: 8 }}
-            contentContainerStyle={{ alignItems: 'center' }}
-          >
-            {intelligentSuggestions.map((suggestion, idx) => (
-              <TouchableOpacity
-                key={`${suggestion.text}-${idx}`}
-                style={[
-                  styles.suggestionButton,
-                  { 
-                    marginRight: idx === intelligentSuggestions.length - 1 ? 0 : 10,
-                    backgroundColor: getSuggestionColor(suggestion.category)
-                  }
-                ]}
-                onPress={() => sendMessage(suggestion.text)}
-              >
-                <Text style={styles.suggestionText}>{suggestion.text}</Text>
-                <View style={styles.suggestionBadge}>
-                  <Text style={styles.suggestionBadgeText}>
-                    {suggestion.category.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+      {/* Main Chat Area with Background */}
+      <View style={{ flex: 1, backgroundColor: '#F8FFF0' }}>
+        <Image
+          source={require('../../assets/images/bin.png')}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            opacity: 0.4,
+            resizeMode: 'contain'
+          }}
+        />
+        
+        {/* FAQ Suggestions - Horizontal scrollable */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ paddingHorizontal: 12, marginVertical: 8 }}
+          contentContainerStyle={{ alignItems: 'center' }}
+        >
+          {FAQ_SUGGESTION_SETS[faqSetIndex].map((faq, idx) => (
+            <TouchableOpacity
+              key={faq}
+              style={{
+                backgroundColor: '#E3F0D5',
+                borderRadius: 12,
+                paddingVertical: 4,
+                paddingHorizontal: 12,
+                marginRight: idx === FAQ_SUGGESTION_SETS[faqSetIndex].length - 1 ? 0 : 8,
+                marginLeft: idx === 0 ? 0 : 0,
+                borderWidth: 1,
+                borderColor: '#B6CDBD',
+              }}
+              onPress={() => sendMessage(faq)}
+            >
+              <Text style={{ color: '#22330B', fontWeight: 'bold', fontSize: 12 }}>{faq}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-          {/* Messages */}
-          <ScrollView
-            ref={scrollViewRef}
-            contentContainerStyle={styles.chatContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {messages.length === 0 ? (
-              <View style={styles.recycleIconContainer}>
-                <FontAwesome5 name="recycle" size={120} color={COLORS.lightGreen} style={{ opacity: 0.25 }} />
-                <Text style={styles.noMessagesText}>No messages yet. Start the conversation!</Text>
-              </View>
-            ) : (
-              messages.map((msg) => (
-                <View
-                  key={msg.id}
-                  style={[
-                    isOwnMessage(msg) ? styles.customerBubble : styles.recyclerBubble,
-                    isOwnMessage(msg) ? styles.customerBubblePosition : styles.recyclerBubblePosition
-                  ]}
-                >
-                  <Text style={isOwnMessage(msg) ? styles.customerText : styles.recyclerText}>
-                    {msg.message}
-                  </Text>
-                  <Text style={styles.messageTime}>
-                    {formatMessageTime(msg.created_at)}
-                  </Text>
-                  {!isOwnMessage(msg) && !msg.is_read && (
-                    <View style={styles.unreadIndicator} />
-                  )}
-                </View>
-              ))
-            )}
-          </ScrollView>
-        </View>
+        {/* Chat Messages */}
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 8, paddingBottom: 90 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={{ alignItems: 'center', marginBottom: 12 }}>
+            <FontAwesome5 name="recycle" size={120} color="#B6CDBD" style={{ opacity: 0.25 }} />
+          </View>
+          {messages.map((msg, idx) => (
+            <View
+              key={msg.id}
+              style={
+                msg.sender === 'customer'
+                  ? [styles.customerBubble, { alignSelf: 'flex-end', marginRight: 18 }]
+                  : [styles.recyclerBubble, { alignSelf: 'flex-start', marginLeft: 18 }]
+              }
+            >
+              <Text style={msg.sender === 'customer' ? styles.customerText : styles.recyclerText}>{msg.text}</Text>
+            </View>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Input Bar */}
@@ -342,34 +312,29 @@ export default function TextRecyclerScreen() {
         <TextInput
           style={styles.input}
           placeholder="Type your message..."
-          placeholderTextColor={COLORS.darkGreen}
+          placeholderTextColor="#263A13"
           value={input}
           onChangeText={setInput}
           onSubmitEditing={() => sendMessage()}
           returnKeyType="send"
-          multiline
         />
-        <TouchableOpacity 
-          style={[styles.inputSendBtn, !input.trim() && styles.inputSendBtnDisabled]} 
-          onPress={() => sendMessage()}
-          disabled={!input.trim()}
-        >
-          <Feather name="send" size={22} color={input.trim() ? COLORS.darkGreen : COLORS.gray} />
+        <TouchableOpacity style={styles.inputSendBtn} onPress={() => sendMessage()}>
+          <Feather name="send" size={22} color="#263A13" />
         </TouchableOpacity>
       </View>
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)') }>
-          <Feather name="home" size={28} color={COLORS.darkGreen} />
+          <Feather name="home" size={28} color="#22330B" />
           <Text style={styles.navLabel}>Home</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/history') }>
-          <Feather name="rotate-ccw" size={28} color={COLORS.darkGreen} />
+          <Feather name="rotate-ccw" size={28} color="#22330B" />
           <Text style={styles.navLabel}>History</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/user') }>
-          <Feather name="user" size={28} color={COLORS.darkGreen} />
+          <Feather name="user" size={28} color="#22330B" />
           <Text style={styles.navLabel}>User</Text>
         </TouchableOpacity>
       </View>
@@ -378,12 +343,8 @@ export default function TextRecyclerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-  },
   bannerBg: {
-    backgroundColor: COLORS.lightGreen,
+    backgroundColor: '#B6CDBD',
     borderRadius: 18,
     marginHorizontal: 0,
     marginTop: 8,
@@ -393,7 +354,7 @@ const styles = StyleSheet.create({
     height: 80,
   },
   bannerPill: {
-    backgroundColor: COLORS.white,
+    backgroundColor: '#fff',
     borderRadius: 18,
     paddingVertical: 7,
     paddingHorizontal: 32,
@@ -401,98 +362,60 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 180,
     maxWidth: '90%',
-    shadowColor: COLORS.black,
+    shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
   bannerText: {
-    color: COLORS.darkGreen,
+    color: '#22330B',
     fontWeight: 'bold',
     fontSize: 18,
   },
-  suggestionsContainer: {
-    paddingHorizontal: 12,
-    marginBottom: 6,
-  },
-  suggestionsContent: {
-    alignItems: 'center',
-  },
-  suggestionButton: {
-    backgroundColor: COLORS.lightGreen,
-    borderRadius: 16,
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: COLORS.lightGreen,
-  },
-  suggestionText: {
-    color: COLORS.darkGreen,
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  chatContainer: {
-    flex: 1,
-  },
-  chatContent: {
-    paddingHorizontal: 0,
-    paddingTop: 8,
-    paddingBottom: 90,
-  },
-  recycleIconContainer: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  recyclerBubble: {
-    backgroundColor: COLORS.secondary,
-    borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-    maxWidth: '80%',
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  recyclerBubblePosition: {
-    alignSelf: 'flex-start',
-    marginLeft: 18,
-  },
-  recyclerText: {
-    color: COLORS.white,
-    fontSize: 15,
-  },
-  userBubble: {
+  customerBubble: {
     backgroundColor: '#2196F3',
     borderRadius: 18,
     paddingVertical: 10,
     paddingHorizontal: 16,
     marginBottom: 10,
     maxWidth: '80%',
-    shadowColor: COLORS.black,
+    shadowColor: '#000',
     shadowOpacity: 0.04,
     shadowRadius: 2,
     elevation: 1,
   },
-  userBubblePosition: {
-    alignSelf: 'flex-end',
-    marginRight: 18,
+  customerText: {
+    color: '#fff',
+    fontSize: 15,
   },
-  userText: {
-    color: COLORS.white,
+  recyclerBubble: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#B6CDBD',
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+    maxWidth: '80%',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  recyclerText: {
+    color: '#22330B',
     fontSize: 15,
   },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: '#fff',
     borderRadius: 18,
-    marginHorizontal: DIMENSIONS.margin,
+    marginHorizontal: 16,
     marginBottom: 18,
     paddingHorizontal: 12,
     paddingVertical: 4,
-    shadowColor: COLORS.black,
+    shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 2,
@@ -500,36 +423,33 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: COLORS.darkGreen,
+    color: '#22330B',
     paddingVertical: 10,
     paddingHorizontal: 10,
-    backgroundColor: COLORS.white,
+    backgroundColor: '#fff',
     borderRadius: 18,
   },
   inputSendBtn: {
     marginLeft: 6,
-    backgroundColor: COLORS.lightGreen,
+    backgroundColor: '#E3F0D5',
     borderRadius: 16,
     padding: 8,
-  },
-  inputSendBtnDisabled: {
-    backgroundColor: COLORS.gray,
   },
   bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: '#fff',
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderColor: COLORS.lightGreen,
+    borderColor: '#E3F0D5',
   },
   navItem: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   navLabel: {
-    color: COLORS.darkGreen,
+    color: '#22330B',
     fontSize: 13,
     marginTop: 2,
     fontWeight: 'bold',
@@ -540,75 +460,5 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  chatBackground: {
-    flex: 1,
-    paddingTop: 8,
-    paddingBottom: 90,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-  },
-  loadingText: {
-    color: COLORS.darkGreen,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  noMessagesText: {
-    color: COLORS.darkGreen,
-    fontSize: 16,
-    marginTop: 10,
-    textAlign: 'center',
-  },
-  customerBubble: {
-    backgroundColor: '#2196F3',
-    borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-    maxWidth: '80%',
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  customerBubblePosition: {
-    alignSelf: 'flex-end',
-    marginRight: 18,
-  },
-  customerText: {
-    color: COLORS.white,
-    fontSize: 15,
-  },
-  messageTime: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 4,
-    textAlign: 'right',
-  },
-  unreadIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.red,
-    position: 'absolute',
-    top: 0,
-    right: 0,
-  },
-  suggestionBadge: {
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    marginTop: 5,
-    alignSelf: 'center',
-  },
-  suggestionBadgeText: {
-    color: COLORS.darkGreen,
-    fontSize: 12,
-    fontWeight: 'bold',
   },
 }); 

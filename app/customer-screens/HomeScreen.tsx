@@ -2,13 +2,103 @@ import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
-import { useAuth } from '../../contexts/AuthContext';
-import { locationSearchService, LocationSuggestion } from '../../services/locationSearchService';
+// Mock user data (replacing useAuth)
+
+// ===== MOCK DATA FOR CUSTOMER HOME SCREEN =====
+// This replaces the backend API calls with local mock data
+// In a real app, this would come from a database or location service
+
+// Mock nearby recyclers data with recycling trucks and facilities (around Ghana)
+const mockRecyclers = [
+  {
+    id: '1',
+    name: 'Green Waste Solutions Truck',
+    coordinate: { latitude: 6.6734, longitude: -1.5714 }, // Kumasi area
+    rating: 4.5,
+    distance: '0.5 km',
+    type: 'recycler',
+    status: 'Available',
+    truckType: 'Recycling Truck',
+    completedPickups: 150,
+    estimatedTime: '15 mins'
+  },
+  {
+    id: '2',
+    name: 'Eco Collectors Mobile Unit',
+    coordinate: { latitude: 6.6834, longitude: -1.5814 }, // Nearby Kumasi
+    rating: 4.2,
+    distance: '1.2 km',
+    type: 'recycler',
+    status: 'On Route',
+    truckType: 'Mobile Collection Unit',
+    completedPickups: 89,
+    estimatedTime: '25 mins'
+  },
+  {
+    id: '3',
+    name: 'Recycle Pro Facility',
+    coordinate: { latitude: 6.6634, longitude: -1.5614 }, // Kumasi area
+    rating: 4.8,
+    distance: '0.8 km',
+    type: 'destination',
+    status: 'Open',
+    truckType: 'Recycling Center',
+    completedPickups: 320,
+    estimatedTime: '10 mins'
+  },
+  {
+    id: '4',
+    name: 'Waste Management Truck',
+    coordinate: { latitude: 6.6934, longitude: -1.5914 }, // Nearby Kumasi
+    rating: 4.6,
+    distance: '1.5 km',
+    type: 'recycler',
+    status: 'Available',
+    truckType: 'Waste Collection Truck',
+    completedPickups: 210,
+    estimatedTime: '20 mins'
+  },
+  {
+    id: '5',
+    name: 'EcoWaste Mobile Unit',
+    coordinate: { latitude: 6.6534, longitude: -1.5514 }, // Kumasi area
+    rating: 4.3,
+    distance: '0.3 km',
+    type: 'recycler',
+    status: 'Nearby',
+    truckType: 'Mobile Recycling Unit',
+    completedPickups: 95,
+    estimatedTime: '8 mins'
+  },
+];
+
+// Mock location suggestions for search
+const mockLocationSuggestions = [
+  'Gold Hostel, komfo anokye',
+  'Atonsu unity oil',
+  'Kumasi Central Market',
+  'KNUST Campus',
+  'Adum Business District',
+  'Kejetia Market',
+  'Manhyia Palace',
+  'Kumasi Airport'
+];
+
+// Mock user stats and recent activity
+const mockUserStats = {
+  totalPickups: 12,
+  totalPoints: 250,
+  currentLevel: 'Bronze',
+  nextLevel: 'Silver',
+  pointsToNextLevel: 50,
+  monthlySavings: '₵180',
+  environmentalImpact: '24 kg CO2 saved'
+};
 
 const SUGGESTIONS = [
   'Gold Hostel, komfo anokye',
@@ -16,272 +106,181 @@ const SUGGESTIONS = [
 ];
 
 export default function HomeScreen() {
+  // ===== LOCAL STATE MANAGEMENT =====
+  // These state variables manage the UI state and data
   const [search, setSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [nearbyRecyclers, setNearbyRecyclers] = useState<any[]>([]);
-  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<LocationSuggestion | null>(null);
+  const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<any | null>(null);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const { user } = useAuth();
+  const user = { id: "user_001", username: "User", email: "user@example.com", phone: "+233 24 123 4567", role: "customer", verification_status: "verified", created_at: "2024-01-15T10:30:00Z", profile_image: null, company_name: "Green Team Recycling" };
   const router = useRouter();
 
-  // Mock nearby recyclers data with recycling trucks and facilities (around Ghana)
-  const mockRecyclers = [
-    {
-      id: '1',
-      name: 'Green Waste Solutions Truck',
-      coordinate: { latitude: 6.6734, longitude: -1.5714 }, // Kumasi area
-      rating: 4.5,
-      distance: '0.5 km',
-      type: 'recycler',
-      status: 'Available',
-      truckType: 'Recycling Truck',
-    },
-    {
-      id: '2',
-      name: 'Eco Collectors Mobile Unit',
-      coordinate: { latitude: 6.6834, longitude: -1.5814 }, // Nearby Kumasi
-      rating: 4.2,
-      distance: '1.2 km',
-      type: 'recycler',
-      status: 'On Route',
-      truckType: 'Mobile Collection Unit',
-    },
-    {
-      id: '3',
-      name: 'Recycle Pro Facility',
-      coordinate: { latitude: 6.6634, longitude: -1.5614 }, // Kumasi area
-      rating: 4.8,
-      distance: '0.8 km',
-      type: 'destination',
-      status: 'Open',
-      truckType: 'Recycling Center',
-    },
-    {
-      id: '4',
-      name: 'Waste Management Truck',
-      coordinate: { latitude: 6.6934, longitude: -1.5914 }, // Nearby Kumasi
-      rating: 4.6,
-      distance: '1.5 km',
-      type: 'recycler',
-      status: 'Available',
-      truckType: 'Waste Collection Truck',
-    },
-    {
-      id: '5',
-      name: 'EcoWaste Mobile Unit',
-      coordinate: { latitude: 6.6534, longitude: -1.5514 }, // Kumasi area
-      rating: 4.3,
-      distance: '0.3 km',
-      type: 'recycler',
-      status: 'Nearby',
-      truckType: 'Mobile Recycling Unit',
-    },
-  ];
-
+  // ===== INITIALIZATION EFFECT =====
+  // This effect runs when the component first loads
   useEffect(() => {
-    fetchNearbyRecyclers();
+    loadMockData();
     getCurrentLocation();
   }, []);
 
-  const fetchNearbyRecyclers = async () => {
+  // ===== MOCK DATA LOADING FUNCTION =====
+  // This replaces the backend API call to fetch nearby recyclers
+  // It loads data from our mock data arrays
+  const loadMockData = async () => {
     try {
-      console.log('HomeScreen: Fetching nearby recyclers...');
-      const response = await fetch('http://10.132.254.147:3000/api/optimized-users/recyclers');
-      const data = await response.json();
+      console.log('HomeScreen: Loading mock data...');
       
-      if (data.success && data.data) {
-        console.log('HomeScreen: Received recyclers from API:', data.data);
-        setNearbyRecyclers(data.data);
-      } else {
-        console.log('HomeScreen: Using fallback mock recyclers');
-        setNearbyRecyclers(mockRecyclers);
-      }
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Load mock recyclers
+      setNearbyRecyclers([...mockRecyclers]);
+      
+      // Load mock location suggestions
+      setLocationSuggestions([...mockLocationSuggestions]);
+      
+      console.log('HomeScreen: Mock data loaded successfully');
     } catch (error) {
-      console.error('HomeScreen: Error fetching recyclers:', error);
-      console.log('HomeScreen: Using fallback mock recyclers');
+      console.error('HomeScreen: Error loading mock data:', error);
+      // Fallback to default mock data
       setNearbyRecyclers(mockRecyclers);
+      setLocationSuggestions(mockLocationSuggestions);
     }
   };
 
+  // ===== LOCATION HANDLERS =====
+  // These functions handle location-related functionality
+  
+  // Get current user location
   const getCurrentLocation = async () => {
     try {
-      console.log('Getting current location...');
       const { status } = await Location.requestForegroundPermissionsAsync();
-      
-      if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-        
-        console.log('Location obtained:', location.coords);
-        setUserLocation(location);
-        
-        // Update search bar and selected location
-        const currentLocationSuggestion: LocationSuggestion = {
-          id: 'current-location',
-          name: 'My Current Location',
-          address: `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`,
-          coordinate: {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          },
-          type: 'geocode',
-        };
-        
-        setSelectedLocation(currentLocationSuggestion);
-        setSearch('My Current Location');
-        setShowSuggestions(false);
-        
-        // Optional: Try to get a readable address
-        try {
-          const address = await locationSearchService.reverseGeocode({
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          });
-          console.log('Reverse geocoded address:', address);
-          
-          const betterLocationSuggestion: LocationSuggestion = {
-            id: 'current-location',
-            name: address || 'My Current Location',
-            address: address || `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`,
-            coordinate: {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            },
-            type: 'geocode',
-          };
-          
-          setSelectedLocation(betterLocationSuggestion);
-          setSearch(address || 'My Current Location');
-        } catch (reverseError) {
-          console.log('Reverse geocoding failed, using coordinates');
-        }
-        
-      } else {
-        Alert.alert(
-          'Location Permission Required',
-          'Please enable location services to use this feature.',
-          [{ text: 'OK' }]
-        );
+      if (status !== 'granted') {
+        Alert.alert('Permission denied', 'Location permission is required to find nearby recyclers.');
+        return;
       }
+
+      const location = await Location.getCurrentPositionAsync({});
+      setUserLocation(location);
+      console.log('HomeScreen: Current location obtained:', location);
     } catch (error) {
-      console.error('Error getting current location:', error);
-      Alert.alert(
-        'Location Error',
-        'Unable to get your current location. Please try again.',
-        [{ text: 'OK' }]
-      );
+      console.error('HomeScreen: Error getting location:', error);
+      Alert.alert('Location Error', 'Unable to get your current location.');
     }
   };
 
-  const handleSearchChange = async (text: string) => {
-    setSearch(text);
-    setShowSuggestions(true);
+  // Handle location search
+  const handleLocationSearch = (searchText: string) => {
+    setSearch(searchText);
     
-    if (text.length > 1) { // Changed from > 2 to > 1 for faster results
-      setIsSearching(true);
-      try {
-        console.log('Searching for:', text);
-        const suggestions = await locationSearchService.searchLocations(
-          text,
-          userLocation ? {
-            latitude: userLocation.coords.latitude,
-            longitude: userLocation.coords.longitude,
-          } : undefined
-        );
-        console.log('Search results:', suggestions);
-        setLocationSuggestions(suggestions);
-      } catch (error) {
-        console.error('Search error:', error);
-        // Fallback to local filtering of SUGGESTIONS if API fails
-        const filteredSuggestions = SUGGESTIONS.filter(s =>
-          s.toLowerCase().includes(text.toLowerCase())
-        ).map((suggestion, index) => ({
-          id: `suggestion-${index}`,
-          name: suggestion,
-          address: suggestion + ', Ghana',
-          coordinate: { latitude: 6.6734 + (index * 0.01), longitude: -1.5714 + (index * 0.01) },
-          type: 'establishment' as const,
-        }));
-        setLocationSuggestions(filteredSuggestions);
-      } finally {
-        setIsSearching(false);
-      }
-    } else {
+    if (searchText.trim() === '') {
+      setShowSuggestions(false);
       setLocationSuggestions([]);
+      return;
     }
+
+    // Filter mock location suggestions based on search text
+    const filteredSuggestions = mockLocationSuggestions.filter(suggestion =>
+      suggestion.toLowerCase().includes(searchText.toLowerCase())
+    );
+    
+    setLocationSuggestions(filteredSuggestions);
+    setShowSuggestions(filteredSuggestions.length > 0);
   };
 
-  const filteredSuggestions = SUGGESTIONS.filter(s =>
-    s.toLowerCase().includes(search.toLowerCase())
+  // Handle location selection
+  const handleLocationSelect = (suggestion: string) => {
+    setSearch(suggestion);
+    setShowSuggestions(false);
+    setSelectedLocation({ name: suggestion, coordinate: userLocation?.coords });
+    
+    // In a real app, you would geocode the address to get coordinates
+    console.log('HomeScreen: Location selected:', suggestion);
+  };
+
+  // ===== RECYCLER INTERACTION HANDLERS =====
+  // These functions handle interactions with recyclers
+  
+  // View recycler details
+  const handleRecyclerPress = (recycler: any) => {
+    console.log('HomeScreen: Recycler pressed:', recycler);
+    
+    // Navigate to recycler details screen
+    router.push({
+      pathname: '/customer-screens/RecyclerProfileDetails',
+      params: { recyclerId: recycler.id }
+    });
+  };
+
+  // Request pickup from recycler
+  const handleRequestPickup = (recycler: any) => {
+    console.log('HomeScreen: Requesting pickup from:', recycler);
+    
+    // Navigate to pickup request screen
+    router.push({
+      pathname: '/customer-screens/SelectTruck',
+      params: { 
+        recyclerId: recycler.id,
+        recyclerName: recycler.name,
+        recyclerRating: recycler.rating.toString(),
+        recyclerDistance: recycler.distance
+      }
+    });
+  };
+
+  // ===== UI RENDER FUNCTIONS =====
+  // These functions render different parts of the UI
+  
+  // Render recycler item
+  const renderRecyclerItem = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      style={styles.recyclerCard}
+      onPress={() => handleRecyclerPress(item)}
+    >
+      <View style={styles.recyclerHeader}>
+        <View style={styles.recyclerInfo}>
+          <Text style={styles.recyclerName}>{item.name}</Text>
+          <Text style={styles.recyclerType}>{item.truckType}</Text>
+        </View>
+        <View style={styles.recyclerStatus}>
+          <View style={[styles.statusDot, { backgroundColor: item.status === 'Available' ? COLORS.green : COLORS.orange }]} />
+          <Text style={styles.statusText}>{item.status}</Text>
+        </View>
+      </View>
+      
+      <View style={styles.recyclerDetails}>
+        <View style={styles.detailRow}>
+          <MaterialIcons name="star" size={16} color={COLORS.orange} />
+          <Text style={styles.detailText}>{item.rating} • {item.completedPickups} pickups</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <MaterialIcons name="location-on" size={16} color={COLORS.gray} />
+          <Text style={styles.detailText}>{item.distance} • {item.estimatedTime}</Text>
+        </View>
+      </View>
+      
+      <TouchableOpacity
+        style={styles.requestButton}
+        onPress={() => handleRequestPickup(item)}
+      >
+        <Text style={styles.requestButtonText}>Request Pickup</Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
   );
 
-  const handleSuggestionPress = (suggestion: LocationSuggestion) => {
-    setSearch(suggestion.name);
-    setSelectedLocation(suggestion);
-    setShowSuggestions(false);
-    Keyboard.dismiss();
-  };
-
-  const handleMapLocationSelect = async (coordinate: { latitude: number; longitude: number }) => {
-    try {
-      const address = await locationSearchService.reverseGeocode(coordinate);
-      const locationSuggestion: LocationSuggestion = {
-        id: 'map-selected',
-        name: address,
-        address: address,
-        coordinate: coordinate,
-        type: 'geocode',
-      };
-      setSelectedLocation(locationSuggestion);
-      setSearch(address);
-    } catch (error) {
-      console.error('Error getting address from coordinates:', error);
-      Alert.alert(
-        'Location Selected',
-        `Latitude: ${coordinate.latitude.toFixed(4)}\nLongitude: ${coordinate.longitude.toFixed(4)}`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Use This Location', onPress: () => {
-            setSearch('Selected Location');
-          }}
-        ]
-      );
-    }
-  };
-
-  const handleMapPress = (coordinate: { latitude: number; longitude: number }) => {
-    handleMapLocationSelect(coordinate);
-  };
-
-  const handleRecyclerPress = (recyclerId: string) => {
-    const recycler = nearbyRecyclers.find(r => r.id === recyclerId);
-    if (recycler) {
-      Alert.alert(
-        recycler.name,
-        `🚛 ${recycler.truckType}\n⭐ Rating: ${recycler.rating}\n📍 Distance: ${recycler.distance}\n📊 Status: ${recycler.status}`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Request Pickup', onPress: () => {
-            router.push({
-              pathname: '/customer-screens/CallRecyclerScreen',
-              params: { recyclerName: recycler.name }
-            } as any);
-          }},
-          { text: 'Track Truck', onPress: () => {
-            // Navigate to tracking screen
-            router.push({
-              pathname: '/customer-screens/TrackingScreen',
-              params: { recyclerId: recycler.id }
-            } as any);
-          }}
-        ]
-      );
-    }
-  };
+  // Render location suggestion item
+  const renderLocationSuggestion = ({ item }: { item: string }) => (
+    <TouchableOpacity
+      style={styles.suggestionItem}
+      onPress={() => handleLocationSelect(item)}
+    >
+      <MaterialIcons name="location-on" size={20} color={COLORS.gray} />
+      <Text style={styles.suggestionText}>{item}</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
@@ -290,13 +289,7 @@ export default function HomeScreen() {
         onNotificationPress={() => router.push('/customer-screens/CustomerNotificationScreen' as any)}
         notificationCount={3}
       />
-      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={{
-        name: user?.username || 'User',
-        email: user?.email,
-        phone: user?.phone,
-        type: user?.role === 'recycler' ? 'recycler' : 'user',
-        status: user?.role === 'recycler' ? 'recycler' : 'user'
-      }} />
+      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       
       {/* Use My Location Button */}
       <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
@@ -320,13 +313,32 @@ export default function HomeScreen() {
           <View style={styles.searchBar}>
             <Feather name="search" size={20} color="#263A13" style={{ marginLeft: 10 }} />
             <TextInput
-              style={styles.searchInput}
+              style={[
+                styles.searchInput,
+                selectedLocation && selectedLocation.id === 'map-selected' && styles.searchInputMapSelected
+              ]}
               placeholder="What's your pickup point?"
               value={search}
-              onChangeText={handleSearchChange}
+              onChangeText={handleLocationSearch}
               onFocus={() => setShowSuggestions(true)}
               placeholderTextColor="#263A13"
             />
+            {selectedLocation && selectedLocation.id === 'map-selected' && (
+              <View style={styles.mapSelectedIndicator}>
+                <MaterialIcons name="my-location" size={16} color={COLORS.primary} />
+                <Text style={styles.mapSelectedText}>Map Selected</Text>
+                <TouchableOpacity
+                  style={styles.clearSelectionButton}
+                  onPress={() => {
+                    setSelectedLocation(null);
+                    setSearch('');
+                    setShowSuggestions(false);
+                  }}
+                >
+                  <MaterialIcons name="close" size={14} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+            )}
             <TouchableOpacity
               style={{
                 backgroundColor: '#E3F0D5',
@@ -385,16 +397,8 @@ export default function HomeScreen() {
               ) : locationSuggestions.length > 0 ? (
                 <FlatList
                   data={locationSuggestions}
-                  keyExtractor={item => item.id}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSuggestionPress(item)}>
-                      <Feather name="map-pin" size={16} color="#263A13" style={{ marginRight: 8 }} />
-                      <View style={styles.suggestionContent}>
-                        <Text style={styles.suggestionText}>{item.name}</Text>
-                        <Text style={styles.suggestionAddress}>{item.address}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
+                  keyExtractor={(item, index) => index.toString()}
+                  renderItem={renderLocationSuggestion}
                 />
               ) : search.length > 2 ? (
                 <View style={styles.suggestionItem}>
@@ -427,12 +431,30 @@ export default function HomeScreen() {
                 title: recycler.name,
                 description: `${recycler.rating} ⭐ • ${recycler.distance} • ${recycler.status}`,
                 type: recycler.type as 'recycler' | 'destination',
-              }))
+              })),
+              // Show selected location marker if exists
+              ...(selectedLocation && selectedLocation.coordinate ? [{
+                id: 'selected-location',
+                coordinate: selectedLocation.coordinate,
+                title: 'Selected Location',
+                description: 'Your pickup point',
+                type: 'pickup' as const,
+              }] : [])
             ]}
             onMarkerPress={handleRecyclerPress}
-            onMapPress={handleMapPress}
+            onMapPress={() => {
+              // This onMapPress is for the map component itself, not for location selection
+              // If you want to select a location on map press, you'd call handleMapLocationSelect
+            }}
             style={{ flex: 1 }}
           />
+          
+          {/* Map Instructions */}
+          <View style={styles.mapInstructions}>
+            <Text style={styles.mapInstructionsText}>
+              💡 Tap anywhere on the map to select your pickup location
+            </Text>
+          </View>
           
           {/* Map Legend */}
           <View style={styles.mapLegend}>
@@ -453,7 +475,7 @@ export default function HomeScreen() {
             {/* Refresh Button */}
             <TouchableOpacity 
               style={styles.refreshButton} 
-              onPress={fetchNearbyRecyclers}
+              onPress={loadMockData}
             >
               <MaterialIcons name="refresh" size={16} color={COLORS.darkGreen} />
               <Text style={styles.refreshText}>Refresh</Text>
@@ -599,13 +621,81 @@ const styles = StyleSheet.create({
     color: COLORS.darkGreen,
     fontWeight: '600',
   },
-  suggestionContent: {
+  recyclerCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  recyclerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  recyclerInfo: {
     flex: 1,
   },
-  suggestionAddress: {
-    fontSize: 12,
+  recyclerName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginBottom: 2,
+  },
+  recyclerType: {
+    fontSize: 14,
     color: COLORS.gray,
-    marginTop: 2,
+  },
+  recyclerStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 5,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.darkGreen,
+  },
+  recyclerDetails: {
+    marginBottom: 10,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  detailText: {
+    fontSize: 14,
+    color: COLORS.gray,
+    marginLeft: 5,
+  },
+  requestButton: {
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  requestButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
   useLocationButton: {
     backgroundColor: COLORS.darkGreen,
@@ -625,5 +715,56 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+  searchInputMapSelected: {
+    borderColor: COLORS.primary,
+    borderWidth: 2,
+    backgroundColor: '#f0f8ff',
+  },
+  mapSelectedIndicator: {
+    position: 'absolute',
+    right: 10,
+    top: '50%',
+    transform: [{ translateY: -8 }],
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.lightGreen,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  mapSelectedText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  mapInstructions: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 8,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  mapInstructionsText: {
+    fontSize: 14,
+    color: COLORS.darkGreen,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  clearSelectionButton: {
+    marginLeft: 8,
+    padding: 4,
+    borderRadius: 10,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
   },
 });

@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
 import CommonHeader from '../components/CommonHeader';
 
@@ -49,82 +49,88 @@ export default function RecyclerWeightEntry() {
     <SafeAreaView style={styles.container}>
       <CommonHeader />
 
-      {/* Header Section */}
-      <View style={styles.headerSection}>
-        <Text style={styles.headerTitle}>Waste Collection</Text>
-        <Text style={styles.headerSubtitle}>Enter waste details for {userName}</Text>
-        <Text style={styles.locationText}>📍 {pickup}</Text>
-      </View>
-
-      {/* Form Section */}
-      <View style={styles.formContainer}>
-        <View style={styles.formCard}>
-          <Text style={styles.formTitle}>Waste Details</Text>
-          
-          {/* Weight Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Weight (kg)</Text>
-            <TextInput
-              style={styles.textInput}
-              value={weight}
-              onChangeText={setWeight}
-              placeholder="Enter weight in kg"
-              keyboardType="numeric"
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          {/* Waste Type Selection */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Waste Type</Text>
-            <View style={styles.wasteTypeContainer}>
-              {['Plastic', 'Paper', 'Electronic', 'Metal', 'General Waste'].map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.wasteTypeButton,
-                    wasteType === type && styles.wasteTypeButtonActive
-                  ]}
-                  onPress={() => setWasteType(type)}
-                >
-                  <Text style={[
-                    styles.wasteTypeText,
-                    wasteType === type && styles.wasteTypeTextActive
-                  ]}>
-                    {type}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Rate Display */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Rate per kg</Text>
-            <View style={styles.rateDisplay}>
-              <Text style={styles.rateText}>GHS {rate}/kg</Text>
-            </View>
-          </View>
-
-          {/* Calculate Button */}
-          <TouchableOpacity 
-            style={styles.calculateButton} 
-            onPress={calculateBill}
-            disabled={!weight || parseFloat(weight) <= 0}
-          >
-            <Text style={styles.calculateButtonText}>Calculate Bill</Text>
-          </TouchableOpacity>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header Section */}
+        <View style={styles.headerSection}>
+          <Text style={styles.headerTitle}>Waste Collection</Text>
+          <Text style={styles.headerSubtitle}>Enter waste details for {userName}</Text>
+          <Text style={styles.locationText}>📍 {pickup}</Text>
         </View>
 
-        {/* Instructions */}
-        <View style={styles.instructionsCard}>
-          <Text style={styles.instructionsTitle}>Instructions:</Text>
-          <Text style={styles.instructionsText}>• Weigh the collected waste accurately</Text>
-          <Text style={styles.instructionsText}>• Select the appropriate waste type</Text>
-          <Text style={styles.instructionsText}>• Review the calculated bill before sending</Text>
-          <Text style={styles.instructionsText}>• The customer will receive a payment summary</Text>
+        {/* Form Section */}
+        <View style={styles.formContainer}>
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>Waste Details</Text>
+            
+            {/* Weight Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Weight (kg)</Text>
+              <TextInput
+                style={styles.textInput}
+                value={weight}
+                onChangeText={setWeight}
+                placeholder="Enter weight in kg"
+                keyboardType="numeric"
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            {/* Waste Type Selection */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Waste Type</Text>
+              <View style={styles.wasteTypeContainer}>
+                {['Plastic', 'Paper', 'Electronic', 'Metal', 'General Waste'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.wasteTypeButton,
+                      wasteType === type && styles.wasteTypeButtonActive
+                    ]}
+                    onPress={() => setWasteType(type)}
+                  >
+                    <Text style={[
+                      styles.wasteTypeText,
+                      wasteType === type && styles.wasteTypeTextActive
+                    ]}>
+                      {type}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Rate Display */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Rate per kg</Text>
+              <View style={styles.rateDisplay}>
+                <Text style={styles.rateText}>GHS {rate}/kg</Text>
+              </View>
+            </View>
+
+            {/* Calculate Button */}
+            <TouchableOpacity 
+              style={styles.calculateButton} 
+              onPress={calculateBill}
+              disabled={!weight || parseFloat(weight) <= 0}
+            >
+              <Text style={styles.calculateButtonText}>Calculate Bill</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Instructions */}
+          <View style={styles.instructionsCard}>
+            <Text style={styles.instructionsTitle}>Instructions:</Text>
+            <Text style={styles.instructionsText}>• Weigh the collected waste accurately</Text>
+            <Text style={styles.instructionsText}>• Select the appropriate waste type</Text>
+            <Text style={styles.instructionsText}>• Review the calculated bill before sending</Text>
+            <Text style={styles.instructionsText}>• The customer will receive a payment summary</Text>
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -133,6 +139,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FFF0',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   headerSection: {
     alignItems: 'center',

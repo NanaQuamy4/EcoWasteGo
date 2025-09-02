@@ -1,161 +1,75 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
-import { COLORS, DIMENSIONS } from '../../constants';
-import { apiService } from '../../services/apiService';
+import { COLORS } from '../../constants';
 
 interface RecyclerData {
   id: string;
-  business_name?: string;
-  vehicle_type?: string;
+  name: string;
+  vehicleType: string;
+  vehicleId: string;
+  vehicleColor: string;
+  rate: string;
+  pastPickups: number;
   rating: number;
-  total_collections: number;
-  is_available: boolean;
-  service_areas?: string[];
-  city?: string;
-  state?: string;
-  address?: string;
-  profile_image?: string;
-  distance?: number;
-  eta?: string;
-  rate?: string;
-  phone?: string;
-  email?: string;
-  experience_years?: number;
-  specialties?: string[];
-}
-
-interface Review {
-  id: string;
-  rating: number;
-  comment?: string;
-  customer_name: string;
-  created_at: string;
-  collection_id: string;
 }
 
 export default function RecyclerProfileDetailsScreen() {
   const params = useLocalSearchParams();
   const recyclerId = params.recyclerId as string;
-  const pickup = params.pickup as string;
-  const distance = params.distance as string;
-  const eta = params.eta as string;
+  const recyclerName = params.recyclerName as string;
+  const recyclerRating = params.recyclerRating as string;
+  const recyclerDistance = params.recyclerDistance as string;
+  const vehicleType = params.vehicleType as string;
   const rate = params.rate as string;
+  const requestId = params.requestId as string;
 
   const [recycler, setRecycler] = useState<RecyclerData | null>(null);
-  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [reviewsLoading, setReviewsLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [showAllReviews, setShowAllReviews] = useState(false);
 
-  // Fetch recycler details
-  useEffect(() => {
-    const fetchRecyclerDetails = async () => {
-      try {
-        setLoading(true);
-        const recyclers = await apiService.getRecyclers();
-        const foundRecycler = recyclers.find(r => r.id === recyclerId);
-        
-        if (foundRecycler) {
-          // Enhance with additional data from SelectTruck screen
-          const enhancedRecycler: RecyclerData = {
-            ...foundRecycler,
-            distance: distance ? parseFloat(distance) : undefined,
-            eta: eta || undefined,
-            rate: rate || 'GHS 1.00/kg', // Use rate from params, fallback to default
-            // Add mock data for missing fields (in real app, these would come from API)
-            phone: '+233 50 123 4567',
-            email: 'recycler@ecowastego.com',
-            experience_years: Math.floor(Math.random() * 10) + 2,
-            specialties: ['Plastic', 'Paper', 'Metal', 'Glass'],
-          };
-          setRecycler(enhancedRecycler);
-          
-          // Fetch reviews after setting recycler
-          await fetchRecyclerReviews(recyclerId);
-        } else {
-          Alert.alert('Error', 'Recycler not found');
-          router.back();
-        }
-      } catch (error) {
-        console.error('Error fetching recycler details:', error);
-        Alert.alert('Error', 'Failed to load recycler details');
-        router.back();
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRecyclerDetails();
-  }, [recyclerId]);
-
-  // Fetch recycler reviews
-  const fetchRecyclerReviews = async (recyclerId: string) => {
+  // ===== MOCK DATA LOADING FUNCTION =====
+  const loadMockData = async () => {
     try {
-      setReviewsLoading(true);
-      // In a real app, this would call the API to get reviews
-      // For now, we'll use mock data
-      const mockReviews: Review[] = [
-        {
-          id: '1',
-          rating: 5,
-          comment: 'Excellent service! Very professional and punctual. Highly recommend!',
-          customer_name: 'Sarah M.',
-          created_at: '2024-01-15',
-          collection_id: 'col_001'
-        },
-        {
-          id: '2',
-          rating: 4,
-          comment: 'Good service, arrived on time. Would use again.',
-          customer_name: 'John D.',
-          created_at: '2024-01-10',
-          collection_id: 'col_002'
-        },
-        {
-          id: '3',
-          rating: 5,
-          comment: 'Amazing recycler! Very friendly and efficient.',
-          customer_name: 'Maria L.',
-          created_at: '2024-01-05',
-          collection_id: 'col_003'
-        },
-        {
-          id: '4',
-          rating: 4,
-          comment: 'Professional service, good communication.',
-          customer_name: 'David K.',
-          created_at: '2024-01-01',
-          collection_id: 'col_004'
-        },
-        {
-          id: '5',
-          rating: 5,
-          comment: 'Best recycler I\'ve used. Very reliable!',
-          customer_name: 'Lisa P.',
-          created_at: '2023-12-28',
-          collection_id: 'col_005'
-        }
-      ];
+      setLoading(true);
       
-      setReviews(mockReviews);
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Create recycler data from params
+      const recyclerData: RecyclerData = {
+        id: recyclerId || 'recycler_001',
+        name: recyclerName || 'GreenFleet GH',
+        vehicleType: vehicleType || 'Big Truck',
+        vehicleId: 'EWG-ASH-TK-0823',
+        vehicleColor: 'Green and yellow',
+        rate: rate || 'GHS 1.20/kg',
+        pastPickups: 314,
+        rating: parseFloat(recyclerRating) || 4.8
+      };
+      
+      setRecycler(recyclerData);
     } catch (error) {
-      console.error('Error fetching reviews:', error);
-      // Don't show alert for reviews failure, just log it
+      console.error('Error loading mock data:', error);
+      Alert.alert('Error', 'Failed to load recycler details');
+      router.back();
     } finally {
-      setReviewsLoading(false);
+      setLoading(false);
     }
   };
+
+  // ===== INITIALIZATION EFFECT =====
+  useEffect(() => {
+    loadMockData();
+  }, [recyclerId]);
 
   const handleConfirm = async () => {
     if (!recycler) return;
@@ -163,43 +77,25 @@ export default function RecyclerProfileDetailsScreen() {
     setConfirming(true);
     
     try {
-      // Create waste collection request
-      const wasteCollectionData = {
-        waste_type: 'mixed' as const, // Default waste type
-        weight: 10, // Default weight in kg
-        description: `Pickup request from ${pickup}`,
-        pickup_date: new Date().toISOString().split('T')[0], // Today's date
-        pickup_time: new Date().toLocaleTimeString('en-US', { 
-          hour12: false, 
-          hour: '2-digit', 
-          minute: '2-digit' 
-        }),
-        address: pickup,
-        special_instructions: `Customer confirmed pickup. Distance: ${distance}, ETA: ${eta}, Rate: ${rate}`
-      };
-
-      const collection = await apiService.createWasteCollection(wasteCollectionData);
-      
       // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Navigate to waiting screen with additional data
+      // Navigate to waiting screen
       router.push({
-        pathname: '/customer-screens/WaitingForRecycler' as any,
+        pathname: '/customer-screens/WaitingForRecycler',
         params: {
-          recyclerName: recycler.business_name || 'Recycler',
-          pickup: pickup,
-          recyclerId: recyclerId,
-          distance: distance,
-          eta: eta,
-          collectionId: collection.id
+          requestId: requestId,
+          recyclerId: recycler.id,
+          recyclerName: recycler.name,
+          recyclerRating: recycler.rating.toString(),
+          recyclerDistance: recyclerDistance
         }
       });
     } catch (error) {
-      console.error('Error creating pickup request:', error);
+      console.error('Error confirming pickup:', error);
       Alert.alert(
         'Error',
-        'Failed to create pickup request. Please try again.',
+        'Failed to confirm pickup. Please try again.',
         [{ text: 'OK' }]
       );
     } finally {
@@ -231,235 +127,114 @@ export default function RecyclerProfileDetailsScreen() {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>Recycler not found</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
+        <TouchableOpacity style={styles.errorBackButton} onPress={() => router.back()}>
+          <Text style={styles.errorBackButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }}>
-      {/* Header */}
+    <View style={styles.container}>
+      {/* Header with Logo */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Recycler Profile</Text>
+        <View style={styles.logoContainer}>
+          <Image 
+            source={require('../../assets/images/logo landscape.png')} 
+            style={styles.logo} 
+          />
+        </View>
         <View style={styles.placeholder} />
       </View>
 
-      {/* Pickup Location Card */}
-      <View style={styles.pickupCard}>
-        <Text style={styles.pickupLabel}>📍 Pickup Location</Text>
-        <Text style={styles.pickupLocation}>{pickup}</Text>
-      </View>
-
-      {/* Recycler Profile Card */}
-      <View style={styles.profileCard}>
-        <View style={styles.profileHeader}>
-          <Image 
-            source={require('../../assets/images/_MG_2771.jpg')} 
-            style={styles.profileImage} 
-          />
-          <View style={styles.profileInfo}>
-            <Text style={styles.recyclerName}>
-              {recycler.business_name || 'Professional Recycler'}
-            </Text>
-            <View style={styles.ratingRow}>
-              <Text style={styles.ratingText}>⭐ {recycler.rating.toFixed(1)}</Text>
-              <Text style={styles.ratingCount}>({recycler.total_collections} collections)</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Quick Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{recycler.experience_years}+</Text>
-            <Text style={styles.statLabel}>Years</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{recycler.total_collections}</Text>
-            <Text style={styles.statLabel}>Collections</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{recycler.rating.toFixed(1)}</Text>
-            <Text style={styles.statLabel}>Rating</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Ratings & Reviews Card */}
-      <View style={styles.ratingsCard}>
-        <Text style={styles.cardTitle}>⭐ Ratings & Reviews</Text>
+      {/* Background Image Rectangle */}
+      <View style={styles.backgroundImageContainer}>
+        <Image
+          source={require('../../assets/images/blend.jpg')}
+          style={styles.backgroundImage}
+          resizeMode="cover"
+        />
         
-        {/* Rating Summary */}
-        <View style={styles.ratingSummary}>
-          <View style={styles.ratingOverview}>
-            <Text style={styles.overallRating}>{recycler.rating.toFixed(1)}</Text>
-            <View style={styles.starsRow}>
+        {/* Screen Title Banner Overlay */}
+        <View style={styles.titleBanner}>
+          <Text style={styles.titleText}>Recycler Profile Details</Text>
+        </View>
+      </View>
+
+      {/* Recycler Information Section */}
+      <View style={styles.infoSection}>
+        {/* Recycler Name */}
+        <View style={styles.infoRow}>
+          <View style={styles.imageContainer}>
+            <Image 
+              source={require('../../assets/images/_MG_2771.jpg')} 
+              style={styles.recyclerImage} 
+            />
+          </View>
+          <Text style={styles.infoLabel}>{recycler.name}</Text>
+          <View style={styles.badgeContainer}>
+            <Text style={styles.badgeIcon}>🏆</Text>
+          </View>
+        </View>
+
+        {/* Vehicle Type */}
+        <View style={styles.infoRow}>
+          <View style={styles.imageContainer}>
+            <Image 
+              source={
+                recycler.vehicleType === 'Small Truck'
+                  ? require('../../assets/images/small truck.png')
+                  : require('../../assets/images/truck.png')
+              } 
+              style={styles.truckImage} 
+            />
+          </View>
+          <Text style={styles.infoLabel}>{recycler.vehicleType}</Text>
+        </View>
+
+        {/* ID */}
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>ID:</Text>
+          <Text style={styles.infoValue}>{recycler.vehicleId}</Text>
+        </View>
+
+        {/* Color */}
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Color:</Text>
+          <Text style={styles.infoValue}>{recycler.vehicleColor}</Text>
+        </View>
+
+        {/* Rate */}
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Rate:</Text>
+          <Text style={styles.infoValue}>{recycler.rate}</Text>
+        </View>
+
+        {/* Past Pickups */}
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Past Pickups:</Text>
+          <Text style={styles.infoValue}>{recycler.pastPickups} Pickups</Text>
+        </View>
+
+        {/* Rating */}
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Rating:</Text>
+          <View style={styles.ratingContainer}>
+            <Text style={styles.ratingValue}>{recycler.rating}</Text>
+            <View style={styles.starsContainer}>
               {[1, 2, 3, 4, 5].map((star) => (
                 <Text key={star} style={[
-                  styles.star,
-                  star <= recycler.rating ? styles.starFilled : styles.starEmpty
+                  styles.starIcon,
+                  star <= Math.floor(recycler.rating) ? styles.starFilled : styles.starEmpty
                 ]}>
                   ★
                 </Text>
               ))}
             </View>
-            <Text style={styles.totalReviews}>{reviews.length} reviews</Text>
           </View>
-          
-          <View style={styles.ratingBreakdown}>
-            {[5, 4, 3, 2, 1].map((rating) => {
-              const count = reviews.filter(r => r.rating === rating).length;
-              const percentage = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
-              return (
-                <View key={rating} style={styles.ratingBar}>
-                  <Text style={styles.ratingLabel}>{rating}★</Text>
-                  <View style={styles.barContainer}>
-                    <View style={[styles.bar, { width: `${percentage}%` }]} />
-                  </View>
-                  <Text style={styles.ratingCount}>{count}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Recent Reviews */}
-        <View style={styles.reviewsSection}>
-          <View style={styles.reviewsHeader}>
-            <Text style={styles.reviewsTitle}>Recent Reviews</Text>
-            {reviews.length > 3 && (
-              <TouchableOpacity 
-                style={styles.showMoreButton}
-                onPress={() => setShowAllReviews(!showAllReviews)}
-              >
-                <Text style={styles.showMoreText}>
-                  {showAllReviews ? 'Show Less' : `Show All (${reviews.length})`}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {reviewsLoading ? (
-            <View style={styles.reviewsLoading}>
-              <ActivityIndicator size="small" color={COLORS.primary} />
-              <Text style={styles.reviewsLoadingText}>Loading reviews...</Text>
-            </View>
-          ) : (
-            <View style={styles.reviewsList}>
-              {(showAllReviews ? reviews : reviews.slice(0, 3)).map((review) => (
-                <View key={review.id} style={styles.reviewItem}>
-                  <View style={styles.reviewHeader}>
-                    <View style={styles.reviewerInfo}>
-                      <Text style={styles.reviewerName}>{review.customer_name}</Text>
-                      <View style={styles.reviewStars}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Text key={star} style={[
-                            styles.reviewStar,
-                            star <= review.rating ? styles.starFilled : styles.starEmpty
-                          ]}>
-                            ★
-                          </Text>
-                        ))}
-                      </View>
-                    </View>
-                    <Text style={styles.reviewDate}>
-                      {new Date(review.created_at).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  {review.comment && (
-                    <Text style={styles.reviewComment}>{review.comment}</Text>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Vehicle Information Card */}
-      <View style={styles.vehicleCard}>
-        <Text style={styles.cardTitle}>🚛 Vehicle Information</Text>
-        
-        <View style={styles.vehicleRow}>
-          <Image 
-            source={
-              recycler.vehicle_type === 'Small Truck' 
-                ? require('../../assets/images/small truck.png')
-                : require('../../assets/images/truck.png')
-            } 
-            style={styles.vehicleIcon} 
-          />
-          <View style={styles.vehicleInfo}>
-            <Text style={styles.vehicleType}>{recycler.vehicle_type || 'Recycling Truck'}</Text>
-            <Text style={styles.vehicleCapacity}>
-              {recycler.vehicle_type === 'Big Truck' ? 'Large capacity' : 'Compact & agile'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Distance and ETA */}
-        {recycler.distance && (
-          <View style={styles.distanceSection}>
-            <View style={styles.distanceRow}>
-              <Text style={styles.distanceLabel}>📍 Distance:</Text>
-              <Text style={styles.distanceValue}>{recycler.distance} km</Text>
-            </View>
-            <View style={styles.etaRow}>
-              <Text style={styles.etaLabel}>⏱️ Estimated Arrival:</Text>
-              <Text style={styles.etaValue}>{recycler.eta}</Text>
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* Service Details Card */}
-      <View style={styles.serviceCard}>
-        <Text style={styles.cardTitle}>💰 Service Details</Text>
-        
-        <View style={styles.serviceRow}>
-          <Text style={styles.serviceLabel}>Rate per kg:</Text>
-          <Text style={styles.serviceValue}>{recycler.rate}</Text>
-        </View>
-
-        <View style={styles.serviceRow}>
-          <Text style={styles.serviceLabel}>Service Areas:</Text>
-          <Text style={styles.serviceValue}>
-            {recycler.service_areas?.join(', ') || recycler.city || 'City-wide service'}
-          </Text>
-        </View>
-
-        <View style={styles.serviceRow}>
-          <Text style={styles.serviceLabel}>Specialties:</Text>
-          <Text style={styles.serviceValue}>
-            {recycler.specialties?.join(', ') || 'All waste types'}
-          </Text>
-        </View>
-      </View>
-
-      {/* Contact Information Card */}
-      <View style={styles.contactCard}>
-        <Text style={styles.cardTitle}>📞 Contact Information</Text>
-        
-        <View style={styles.contactRow}>
-          <Text style={styles.contactLabel}>Phone:</Text>
-          <Text style={styles.contactValue}>{recycler.phone}</Text>
-        </View>
-
-        <View style={styles.contactRow}>
-          <Text style={styles.contactLabel}>Email:</Text>
-          <Text style={styles.contactValue}>{recycler.email}</Text>
-        </View>
-
-        <View style={styles.contactRow}>
-          <Text style={styles.contactLabel}>Location:</Text>
-          <Text style={styles.contactValue}>
-            {[recycler.city, recycler.state].filter(Boolean).join(', ') || 'City area'}
-          </Text>
         </View>
       </View>
 
@@ -481,38 +256,38 @@ export default function RecyclerProfileDetailsScreen() {
           {confirming ? (
             <ActivityIndicator size="small" color={COLORS.white} />
           ) : (
-            <Text style={styles.confirmButtonText}>CONFIRM PICKUP</Text>
+            <Text style={styles.confirmButtonText}>CONFIRM</Text>
           )}
         </TouchableOpacity>
       </View>
-
-      {/* Confirmation Note */}
-      <View style={styles.noteContainer}>
-        <Text style={styles.noteText}>
-          💡 By confirming, you agree to the pickup service. The recycler will contact you shortly.
-        </Text>
-      </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 0,
-    paddingTop: 0,
+    backgroundColor: '#F5F5F5', // Light gray background like in the image
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 15,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 20,
+    backgroundColor: '#ffffff', // Light green background
+  },
+  logoContainer: {
+    alignItems: 'center',
+  },
+  logo: {
+    width: 200,
+    height: 80,
+    resizeMode: 'contain',
+  },
+  placeholder: {
+    width: 40,
   },
   backButton: {
     padding: 10,
@@ -522,275 +297,153 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: 'bold',
   },
-  headerTitle: {
-    fontSize: 20,
+  backgroundImageContainer: {
+    position: 'relative',
+    height: 120,
+    marginBottom: 30,
+    marginHorizontal: 0,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  backgroundImage: {
+    width: '100%',
+    height: '100%',
+  },
+  titleBanner: {
+    position: 'absolute',
+    top: '50%',
+    width: '70%',
+    left: '15%',
+    right: 0,
+    backgroundColor: '#ffffff', // Light gray banner
+    paddingVertical: 15,
+    borderRadius: 15,
+    alignItems: 'center',
+    transform: [{ translateY: -20 }],
+  },
+  titleText: {
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.primary,
-    flex: 1,
-    textAlign: 'center',
   },
-  placeholder: {
+  infoSection: {
+    backgroundColor: COLORS.white,
+    marginHorizontal: 20,
+    marginBottom: 30,
+    padding: 20,
+    borderRadius: 15,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    justifyContent: 'space-between',
+  },
+  imageContainer: {
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recyclerImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 3,
+    borderColor: COLORS.primary,
+  },
+  truckImage: {
     width: 40,
-  },
-  pickupCard: {
-    backgroundColor: COLORS.lightGray,
-    padding: 18,
-    marginHorizontal: 18,
-    marginBottom: 24,
-    borderRadius: DIMENSIONS.borderRadius,
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  pickupLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 8,
-  },
-  pickupLocation: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  profileCard: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: 18,
-    marginBottom: 24,
-    padding: 20,
-    borderRadius: DIMENSIONS.borderRadius,
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  profileImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 15,
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  recyclerName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 4,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  ratingCount: {
-    fontSize: 14,
-    color: COLORS.gray,
-    marginLeft: 5,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 15,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: COLORS.gray,
-  },
-  vehicleCard: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: 18,
-    marginBottom: 24,
-    padding: 20,
-    borderRadius: DIMENSIONS.borderRadius,
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 15,
-  },
-  vehicleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  vehicleIcon: {
-    width: 30,
-    height: 30,
-    marginRight: 10,
+    height: 40,
     resizeMode: 'contain',
   },
-  vehicleInfo: {
+  infoLabel: {
+    fontSize: 16,
+    color: COLORS.primary,
+    fontWeight: '500',
     flex: 1,
+    marginLeft: 10,
   },
-  vehicleType: {
+  infoValue: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+    color: COLORS.black,
+    fontWeight: '500',
   },
-  vehicleCapacity: {
-    fontSize: 14,
-    color: COLORS.gray,
-  },
-  distanceSection: {
-    marginTop: 15,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
-  },
-  distanceRow: {
-    flexDirection: 'row',
+  badgeContainer: {
+    marginLeft: 10,
+    backgroundColor: COLORS.primary, // Green background
+    borderRadius: 15,
+    padding: 0,
+    width: 30,
+    height: 30,
     alignItems: 'center',
-    marginBottom: 5,
-  },
-  distanceLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    width: 100,
-  },
-  distanceValue: {
-    fontSize: 16,
-    color: COLORS.primary,
-    fontWeight: 'bold',
-  },
-  etaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  etaLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    width: 100,
-  },
-  etaValue: {
-    fontSize: 16,
-    color: COLORS.primary,
-    fontWeight: 'bold',
-  },
-  serviceCard: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: 18,
-    marginBottom: 24,
-    padding: 20,
-    borderRadius: DIMENSIONS.borderRadius,
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
     elevation: 5,
   },
-  serviceRow: {
+  badgeIcon: {
+    fontSize: 16,
+    color: '#000000', // Black trophy
+    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 30,
+  },
+  ratingContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    alignItems: 'center',
+    gap: 8,
   },
-  serviceLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  serviceValue: {
+  ratingValue: {
     fontSize: 16,
     color: COLORS.primary,
     fontWeight: 'bold',
   },
-  contactCard: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: 18,
-    marginBottom: 24,
-    padding: 20,
-    borderRadius: DIMENSIONS.borderRadius,
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  contactRow: {
+  starsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    gap: 2,
   },
-  contactLabel: {
+  starIcon: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
   },
-  contactValue: {
-    fontSize: 16,
-    color: COLORS.primary,
-    fontWeight: 'bold',
+  starFilled: {
+    color: COLORS.primary, // Green color for filled stars
+  },
+  starEmpty: {
+    color: '#E0E0E0', // Light gray for empty stars
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginHorizontal: 18,
-    gap: 12,
+    marginHorizontal: 20,
+    gap: 15,
   },
-  confirmButton: {
+  cancelButton: {
     flex: 1,
-    backgroundColor: COLORS.secondary,
-    paddingVertical: 16,
-    borderRadius: DIMENSIONS.borderRadius,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 15,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  confirmButtonText: {
+  cancelButtonText: {
     color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
-  cancelButton: {
+  confirmButton: {
     flex: 1,
-    backgroundColor: COLORS.red,
-    paddingVertical: 16,
-    borderRadius: DIMENSIONS.borderRadius,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 15,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  cancelButtonText: {
+  confirmButtonText: {
     color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
@@ -799,34 +452,22 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.gray,
     opacity: 0.7,
   },
-  noteContainer: {
-    backgroundColor: COLORS.lightGray,
-    padding: 18,
-    marginHorizontal: 18,
-    marginBottom: 24,
-    borderRadius: DIMENSIONS.borderRadius,
-    alignItems: 'center',
-  },
-  noteText: {
-    fontSize: 14,
-    color: COLORS.gray,
-    textAlign: 'center',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: '#F5F5F5',
   },
   loadingText: {
     marginTop: 10,
-    color: COLORS.darkGreen,
+    color: COLORS.primary,
+    fontSize: 16,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: '#F5F5F5',
     padding: 20,
   },
   errorText: {
@@ -835,149 +476,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  // Ratings & Reviews Styles
-  ratingsCard: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: 18,
-    marginBottom: 24,
-    padding: 20,
-    borderRadius: DIMENSIONS.borderRadius,
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  ratingSummary: {
-    marginBottom: 20,
-  },
-  ratingOverview: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  overallRating: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 8,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  star: {
-    fontSize: 24,
-    marginHorizontal: 2,
-  },
-  starFilled: {
-    color: COLORS.primary,
-  },
-  starEmpty: {
-    color: '#E0E0E0',
-  },
-  totalReviews: {
-    fontSize: 16,
-    color: COLORS.gray,
-  },
-  ratingBreakdown: {
-    marginTop: 15,
-  },
-  ratingBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  ratingLabel: {
-    fontSize: 16,
-    color: COLORS.primary,
-    width: 30,
-    fontWeight: 'bold',
-  },
-  barContainer: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 4,
-    marginHorizontal: 10,
-    overflow: 'hidden',
-  },
-  bar: {
-    height: '100%',
+  errorBackButton: {
     backgroundColor: COLORS.primary,
-    borderRadius: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
   },
-  reviewsSection: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
-    paddingTop: 20,
-  },
-  reviewsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  reviewsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  showMoreButton: {
-    padding: 8,
-  },
-  showMoreText: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '500',
-  },
-  reviewsLoading: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  reviewsLoadingText: {
-    marginTop: 10,
-    color: COLORS.gray,
-  },
-  reviewsList: {
-    gap: 15,
-  },
-  reviewItem: {
-    backgroundColor: COLORS.background,
-    padding: 15,
-    borderRadius: DIMENSIONS.borderRadius,
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  reviewerInfo: {
-    flex: 1,
-  },
-  reviewerName: {
+  errorBackButtonText: {
+    color: COLORS.white,
     fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 4,
-  },
-  reviewStars: {
-    flexDirection: 'row',
-  },
-  reviewStar: {
-    fontSize: 16,
-    marginRight: 2,
-  },
-  reviewDate: {
-    fontSize: 12,
-    color: COLORS.gray,
-  },
-  reviewComment: {
-    fontSize: 14,
-    color: COLORS.darkGreen,
-    lineHeight: 20,
+    fontWeight: '600',
   },
 }); 

@@ -7,14 +7,94 @@ import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
-import { useAuth } from '../../contexts/AuthContext';
-import { apiService } from '../../services/apiService';
-import { locationSearchService, LocationSuggestion } from '../../services/locationSearchService';
+// Mock user data (replacing useAuth)
 
-const SUGGESTIONS = [
+// ===== MOCK DATA FOR HOME SCREEN =====
+// This replaces all backend API calls with local mock data
+// In a real app, this would come from a database or real-time service
+
+// Mock recyclers data
+const mockRecyclers = [
+  {
+    id: '1',
+    name: 'Green Waste Solutions Truck',
+    coordinate: { latitude: 6.6734, longitude: -1.5714 }, // Kumasi area
+    rating: 4.7,
+    distance: '0.5 km',
+    type: 'recycler',
+    status: 'Available',
+    truckType: 'Waste Collection Truck',
+    completedPickups: 156,
+    estimatedTime: '15 mins'
+  },
+  {
+    id: '2',
+    name: 'Eco Collectors Mobile Unit',
+    coordinate: { latitude: 6.6834, longitude: -1.5814 }, // Nearby Kumasi
+    rating: 4.2,
+    distance: '1.2 km',
+    type: 'recycler',
+    status: 'On Route',
+    truckType: 'Mobile Collection Unit',
+    completedPickups: 89,
+    estimatedTime: '25 mins'
+  },
+  {
+    id: '3',
+    name: 'Recycle Pro Facility',
+    coordinate: { latitude: 6.6634, longitude: -1.5614 }, // Kumasi area
+    rating: 4.8,
+    distance: '0.8 km',
+    type: 'destination',
+    status: 'Open',
+    truckType: 'Recycling Center',
+    completedPickups: 320,
+    estimatedTime: '10 mins'
+  },
+  {
+    id: '4',
+    name: 'Waste Management Truck',
+    coordinate: { latitude: 6.6934, longitude: -1.5914 }, // Nearby Kumasi
+    rating: 4.6,
+    distance: '1.5 km',
+    type: 'recycler',
+    status: 'Available',
+    truckType: 'Waste Collection Truck',
+    completedPickups: 210,
+    estimatedTime: '20 mins'
+  },
+  {
+    id: '5',
+    name: 'EcoWaste Mobile Unit',
+    coordinate: { latitude: 6.6534, longitude: -1.5514 }, // Kumasi area
+    rating: 4.3,
+    distance: '0.3 km',
+    type: 'recycler',
+    status: 'Nearby',
+    truckType: 'Mobile Recycling Unit',
+    completedPickups: 95,
+    estimatedTime: '8 mins'
+  },
+];
+
+// Mock location suggestions for search
+const mockLocationSuggestions = [
   'Gold Hostel, komfo anokye',
   'Atonsu unity oil',
+  'Kumasi Central Market',
+  'KNUST Campus',
+  'Adum Business District',
+  'Kejetia Market',
+  'Manhyia Palace',
+  'Kumasi Airport'
 ];
+
+// Mock user stats and recent activity
+const mockUserStats = {
+  totalPickups: 12,
+  totalSavings: 45.50,
+  environmentalImpact: 89.2
+};
 
 // Memoized suggestion item component
 const SuggestionItem = React.memo(({ item, onPress }: { item: string; onPress: (text: string) => void }) => (
@@ -43,18 +123,18 @@ export default function HomeScreen() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [nearbyRecyclers, setNearbyRecyclers] = useState<any[]>([]);
-  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<LocationSuggestion | null>(null);
+  const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]); // Changed to any[] for mock data
+  const [selectedLocation, setSelectedLocation] = useState<any | null>(null); // Changed to any
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
-  const { user } = useAuth();
+  const user = { id: "user_001", username: "User", email: "user@example.com", phone: "+233 24 123 4567", role: "customer", verification_status: "verified", created_at: "2024-01-15T10:30:00Z", profile_image: null, company_name: "Green Team Recycling" };
   const router = useRouter();
 
   // Memoized filtered suggestions
   const filteredSuggestions = useMemo(() => {
-    if (!search.trim()) return SUGGESTIONS;
-    return SUGGESTIONS.filter(suggestion => 
+    if (!search.trim()) return mockLocationSuggestions;
+    return mockLocationSuggestions.filter(suggestion => 
       suggestion.toLowerCase().includes(search.toLowerCase())
     );
   }, [search]);
@@ -76,7 +156,8 @@ export default function HomeScreen() {
     
     setIsSearching(true);
     try {
-      const suggestions = await locationSearchService.searchLocations(query);
+      // Simulate API call
+      const suggestions = mockLocationSuggestions.filter(s => s.toLowerCase().includes(query.toLowerCase()));
       setLocationSuggestions(suggestions);
     } catch (error) {
       console.error('Location search error:', error);
@@ -93,15 +174,16 @@ export default function HomeScreen() {
   }, []);
 
   // Memoized location selection handler
-  const handleLocationSelect = useCallback(async (suggestion: LocationSuggestion) => {
+  const handleLocationSelect = useCallback(async (suggestion: any) => { // Changed to any
     setSelectedLocation(suggestion);
-    setSearch(suggestion.address);
+    setSearch(suggestion);
     setShowSuggestions(false);
     setLocationSuggestions([]);
     
           // Fetch nearby recyclers for the selected location
       try {
-        const recyclers = await apiService.getRecyclers();
+        // Simulate API call
+        const recyclers = mockRecyclers;
         setNearbyRecyclers(recyclers);
       } catch (error) {
         console.error('Error fetching nearby recyclers:', error);
@@ -133,8 +215,9 @@ export default function HomeScreen() {
   // Memoized map location selection handler
   const handleMapLocationSelect = useCallback(async (coordinate: { latitude: number; longitude: number }) => {
     try {
-      const address = await locationSearchService.reverseGeocode(coordinate);
-      const locationSuggestion: LocationSuggestion = {
+      // Simulate reverse geocoding
+      const address = `Location at Latitude: ${coordinate.latitude.toFixed(4)}, Longitude: ${coordinate.longitude.toFixed(4)}`;
+      const locationSuggestion: any = { // Changed to any
         id: 'map-selected',
         name: address,
         address: address,
@@ -165,7 +248,7 @@ export default function HomeScreen() {
 
   // Memoized recycler press handler
   const handleRecyclerPress = useCallback((recyclerId: string) => {
-    const recycler = nearbyRecyclers.find(r => r.id === recyclerId);
+    const recycler = mockRecyclers.find(r => r.id === recyclerId);
     if (recycler) {
       Alert.alert(
         recycler.name,
@@ -187,7 +270,7 @@ export default function HomeScreen() {
         ]
       );
     }
-  }, [nearbyRecyclers, router]);
+  }, [mockRecyclers, router]);
 
   // Memoized location detection handler
   const handleLocationDetection = useCallback(async () => {
@@ -195,10 +278,8 @@ export default function HomeScreen() {
     try {
       const location = await getCurrentLocation();
       if (location) {
-        const address = await locationSearchService.reverseGeocode({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
+        // Simulate reverse geocoding
+        const address = `Current Location: Latitude: ${location.coords.latitude.toFixed(4)}, Longitude: ${location.coords.longitude.toFixed(4)}`;
         
         if (address) {
           setSearch(address);
@@ -230,7 +311,7 @@ export default function HomeScreen() {
               { text: 'Cancel', style: 'cancel' },
               { text: 'Use This Location', onPress: () => {
                                  // Fetch nearby recyclers for current location
-                 apiService.getRecyclers().then(setNearbyRecyclers).catch(console.error);
+                 setNearbyRecyclers(mockRecyclers);
               }}
             ]
           );
@@ -261,7 +342,7 @@ export default function HomeScreen() {
     <SuggestionItem item={item} onPress={handleSuggestionSelect} />
   ), [handleSuggestionSelect]);
 
-  const renderLocationItem = useCallback(({ item }: { item: LocationSuggestion }) => (
+  const renderLocationItem = useCallback(({ item }: { item: any }) => ( // Changed to any
     <TouchableOpacity style={styles.locationItem} onPress={() => handleLocationSelect(item)}>
       <MaterialIcons name="location-on" size={20} color={COLORS.primary} />
       <View style={styles.locationTextContainer}>
@@ -271,7 +352,7 @@ export default function HomeScreen() {
     </TouchableOpacity>
   ), [handleLocationSelect]);
 
-  const renderRecyclerItem = useCallback(({ item }: { item: any }) => (
+  const renderRecyclerItem = useCallback(({ item }: { item: any }) => ( // Changed to any
     <RecyclerItem recycler={item} onPress={handleRecyclerPress} />
   ), [handleRecyclerPress]);
 
@@ -291,79 +372,29 @@ export default function HomeScreen() {
   const windowSize = useMemo(() => 10, []);
 
   // Mock nearby recyclers data with recycling trucks and facilities (around Ghana)
-  const mockRecyclers = [
-    {
-      id: '1',
-      name: 'Green Waste Solutions Truck',
-      coordinate: { latitude: 6.6734, longitude: -1.5714 }, // Kumasi area
-      rating: 4.5,
-      distance: '0.5 km',
-      type: 'recycler',
-      status: 'Available',
-      truckType: 'Recycling Truck',
-    },
-    {
-      id: '2',
-      name: 'Eco Collectors Mobile Unit',
-      coordinate: { latitude: 6.6834, longitude: -1.5814 }, // Nearby Kumasi
-      rating: 4.2,
-      distance: '1.2 km',
-      type: 'recycler',
-      status: 'On Route',
-      truckType: 'Mobile Collection Unit',
-    },
-    {
-      id: '3',
-      name: 'Recycle Pro Facility',
-      coordinate: { latitude: 6.6634, longitude: -1.5614 }, // Kumasi area
-      rating: 4.8,
-      distance: '0.8 km',
-      type: 'destination',
-      status: 'Open',
-      truckType: 'Recycling Center',
-    },
-    {
-      id: '4',
-      name: 'Waste Management Truck',
-      coordinate: { latitude: 6.6934, longitude: -1.5914 }, // Nearby Kumasi
-      rating: 4.6,
-      distance: '1.5 km',
-      type: 'recycler',
-      status: 'Available',
-      truckType: 'Waste Collection Truck',
-    },
-    {
-      id: '5',
-      name: 'EcoWaste Mobile Unit',
-      coordinate: { latitude: 6.6534, longitude: -1.5514 }, // Kumasi area
-      rating: 4.3,
-      distance: '0.3 km',
-      type: 'recycler',
-      status: 'Nearby',
-      truckType: 'Mobile Recycling Unit',
-    },
-  ];
+  // This is now directly used as mock data
 
   // Load available recyclers from backend
-  const loadAvailableRecyclers = async () => {
+  const loadAvailableRecyclers = useCallback(async () => {
     try {
-      const recyclers = await apiService.getRecyclers();
+      // Simulate API call
+      const recyclers = mockRecyclers;
       // Filter only available recyclers
-      const availableRecyclers = recyclers.filter(recycler => recycler.is_available);
+      const availableRecyclers = recyclers.filter(recycler => recycler.status === 'Available');
       
       // Transform to match the expected format
       const transformedRecyclers = availableRecyclers.map((recycler, index) => ({
         id: recycler.id,
-        name: recycler.business_name || `Recycler ${index + 1}`,
+        name: recycler.name || `Recycler ${index + 1}`,
         coordinate: { 
-          latitude: 6.6734 + (Math.random() - 0.5) * 0.01, // Mock coordinates for now
-          longitude: -1.5714 + (Math.random() - 0.5) * 0.01 
+          latitude: recycler.coordinate.latitude + (Math.random() - 0.5) * 0.01, // Mock coordinates for now
+          longitude: recycler.coordinate.longitude + (Math.random() - 0.5) * 0.01 
         },
         rating: recycler.rating || 4.0,
         distance: `${(Math.random() * 2 + 0.3).toFixed(1)} km`,
         type: 'recycler' as const,
-        status: 'Available',
-        truckType: recycler.vehicle_type || 'Recycling Truck',
+        status: recycler.status,
+        truckType: recycler.truckType || 'Recycling Truck',
       }));
       
       setNearbyRecyclers(transformedRecyclers);
@@ -372,14 +403,14 @@ export default function HomeScreen() {
       // Fallback to mock data if API fails
       setNearbyRecyclers(mockRecyclers);
     }
-  };
+  }, []);
 
   useEffect(() => {
     // Try to load real recycler data first, fallback to mock data
     loadAvailableRecyclers();
     console.log('HomeScreen: Setting up recyclers');
     getCurrentLocation();
-  }, []);
+  }, [loadAvailableRecyclers, getCurrentLocation]);
 
   return (
     <View style={styles.container}>
@@ -388,13 +419,7 @@ export default function HomeScreen() {
         onNotificationPress={() => router.push('/customer-screens/CustomerNotificationScreen' as any)}
         notificationCount={3}
       />
-      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={{
-        name: user?.username || 'User',
-        email: user?.email,
-        phone: user?.phone,
-        type: user?.role === 'recycler' ? 'recycler' : 'user',
-        status: user?.role === 'recycler' ? 'recycler' : 'user'
-      }} />
+      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       
       {/* Search Section */}
       <View style={styles.searchSection}>

@@ -1,8 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 export default function ResetPasswordScreen() {
   const [newPassword, setNewPassword] = useState('');
@@ -14,15 +14,11 @@ export default function ResetPasswordScreen() {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const router = useRouter();
   const params = useLocalSearchParams();
-  const email = params.email as string;
-  const verified = params.verified as string;
-  const { resetPassword } = useAuth();
 
   useEffect(() => {
     console.log('ResetPasswordScreen rendered');
-    console.log('Email:', email);
-    console.log('Verified:', verified);
-  }, [email, verified]);
+    console.log('Params:', params);
+  }, [params]);
 
   const validatePassword = (password: string) => {
     // Password must be at least 8 characters with at least one uppercase, one lowercase, and one number
@@ -57,16 +53,22 @@ export default function ResetPasswordScreen() {
       return;
     }
 
-    if (!email || verified !== 'true') {
-      Alert.alert('Error', 'Please verify your email first before resetting password.');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      // Use email as the verification token since the email is already verified
-      await resetPassword(email, newPassword);
+      console.log('ResetPasswordScreen: Updating password...');
+      
+      // Update the user's password using Supabase
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        console.error('ResetPasswordScreen: Password update error:', error);
+        throw error;
+      }
+
+      console.log('ResetPasswordScreen: Password updated successfully');
       
       Alert.alert(
         'Password Reset Successful',
@@ -79,13 +81,16 @@ export default function ResetPasswordScreen() {
         ]
       );
     } catch (error: any) {
-      console.error('Reset password error:', error);
+      console.error('ResetPasswordScreen: Reset password error:', error);
       
       let message = 'Failed to reset password. Please try again.';
-      if (error.message === 'INVALID_EMAIL') {
-        message = 'Invalid email. Please verify your email first.';
+      
+      if (error.message?.includes('Password should be at least')) {
+        message = 'Password must be at least 6 characters long.';
       } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
         message = 'Network error. Please check your internet connection and try again.';
+      } else if (error.message) {
+        message = error.message;
       }
       
       Alert.alert('Error', message, [{ text: 'OK' }]);

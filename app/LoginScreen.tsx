@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -13,31 +13,51 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import PhoneNumberInput from '../components/PhoneNumberInput';
 import { COLORS } from '../constants';
-import { useAuth } from '../contexts/AuthContext';
-import { LoginValidationData, validateLogin } from '../utils/validation';
+import { isAdminUser } from '../lib/adminConfig';
+import { supabase } from '../lib/supabase';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { selectedRole } = useLocalSearchParams<{ selectedRole?: string }>();
-  const { login, user } = useAuth();
-  
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
+  const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Debug: Log user state changes
+  useEffect(() => {
+    console.log('LoginScreen: Current user state:', user);
+    if (user) {
+      console.log('LoginScreen: User is logged in, role:', user.role);
+    } else {
+      console.log('LoginScreen: No user logged in');
+    }
+  }, [user]);
+  
+  // ===== LOCAL STATE MANAGEMENT =====
+  // These state variables manage the form inputs and UI state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [countryCode, setCountryCode] = useState('+233'); // Default to Ghana
-  const [phoneError, setPhoneError] = useState('');
-  const [isPhoneValid, setIsPhoneValid] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [isEmailValid, setIsEmailValid] = useState(false);
 
-  // Navigate based on user role after login
+  // ===== NAVIGATION EFFECT =====
+  // This effect automatically navigates users to the correct screen after login
+  // It watches for changes in the user state and routes accordingly
   useEffect(() => {
     if (user) {
       const userRole = user.role || 'customer';
       console.log('LoginScreen: User logged in with role:', userRole);
       console.log('LoginScreen: Full user object:', user);
       
+      // Check if user is admin first (this should override everything else)
+      if (isAdminUser(user.email)) {
+        console.log('LoginScreen: ADMIN USER DETECTED - Navigating to admin portal');
+        router.replace('/admin-screens/AdminPortal');
+        return;
+      }
+      
+      // Navigate based on user role (only for non-admin users)
       if (userRole === 'recycler') {
         console.log('LoginScreen: Navigating to recycler screens');
         router.replace('/(recycler-tabs)');
@@ -48,96 +68,131 @@ export default function LoginScreen() {
     }
   }, [user, router]);
 
-  const handlePhoneChange = (phoneNumber: string) => {
-    setPhone(phoneNumber);
+  // ===== EMAIL VALIDATION =====
+  // Basic email validation
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   };
 
-  const handlePhoneValidation = (isValid: boolean, error?: string) => {
-    setIsPhoneValid(isValid);
-    setPhoneError(error || '');
+  const handleEmailChange = (emailText: string) => {
+    setEmail(emailText);
+    const isValid = validateEmail(emailText);
+    setIsEmailValid(isValid);
+    setEmailError(isValid ? '' : 'Please enter a valid email address');
   };
 
+  // ===== USER ROLE DETECTION =====
+  // This function gets the user's role from Supabase user metadata (no database query needed!)
+  const getUserRoleFromMetadata = (user: any) => {
+    return user?.user_metadata?.role || 'customer';
+  };
+
+  // ===== MAIN LOGIN HANDLER =====
+  // This is the main function that handles the login process
+  // It validates inputs, calls Supabase login, and handles errors
   const handleLogin = async () => {
-    // Prepare validation data
-    const validationData: LoginValidationData = {
-      phone: phone,
-      password: password,
-    };
-
-    // Validate all fields
-    const validation = validateLogin(validationData);
-    
-    if (!validation.isValid) {
-      Alert.alert('Validation Error', validation.errors.join('\n'));
+    // Basic validation - check if fields are not empty and email is valid
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Validation Error', 'Please fill in both email and password');
       return;
     }
 
-    console.log('LoginScreen: Starting login process...');
-    setIsLoading(true);
-    
+    if (!isEmailValid) {
+      Alert.alert('Validation Error', 'Please enter a valid email address');
+      return;
+    }
+
     try {
-      console.log('LoginScreen: Calling login function...');
-      await login(phone, password, selectedRole as 'customer' | 'recycler' | undefined);
-      console.log('LoginScreen: Login function completed successfully');
-      // Navigation will be handled by useEffect when user state updates
-    } catch (error: any) {
-      console.error('LoginScreen: Login error occurred:', error);
+      setIsLoading(true);
+      console.log('LoginScreen: Attempting login with email:', email);
       
-      let message = 'Login failed. Please try again.';
-      let title = 'Login Error';
+      const result = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      });
       
-      if (error.message === 'ACCOUNT_NOT_FOUND') {
-        message = 'No account found with this phone number. Please check your phone number or create a new account.';
-      } else if (error.message === 'INVALID_PASSWORD') {
-        message = 'Incorrect password. Please try again.';
-      } else if (error.message === 'INVALID_CREDENTIALS') {
-        message = 'Invalid phone number or password. Please check your credentials.';
-      } else if (error.message?.includes('Authentication failed')) {
-        message = 'Session expired. Please log in again.';
-      } else if (error.message?.includes('Network')) {
-        message = 'Network error. Please check your internet connection.';
-      } else if (error.message?.includes('Access denied') || error.message?.includes('ROLE_MISMATCH')) {
-        title = 'Role Mismatch';
-        if (error.message?.includes('customer')) {
-          message = 'This account is registered as a customer. Please select "Customer Login" instead of "Recycler Login".';
-        } else if (error.message?.includes('recycler')) {
-          message = 'This account is registered as a recycler. Please select "Recycler Login" instead of "Customer Login".';
+      if (result.error) {
+        console.error('LoginScreen: Login failed:', result.error);
+        
+        // Handle specific error cases
+        let errorMessage = 'An unexpected error occurred';
+        if (result.error.message.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        } else if (result.error.message.includes('Email not confirmed')) {
+          errorMessage = 'Please check your email and confirm your account before signing in.';
+        } else if (result.error.message.includes('Too many requests')) {
+          errorMessage = 'Too many login attempts. Please wait a moment and try again.';
         } else {
-          message = 'This account is registered with a different role. Please log in using the correct role.';
+          errorMessage = result.error.message;
         }
-      } else if (error.message?.includes('Request timed out')) {
-        message = 'Request timed out. Please check your internet connection and try again.';
-      } else if (error.message?.includes('Unable to connect to the server')) {
-        message = 'Unable to connect to the server. Please check your internet connection and ensure the backend is running.';
-      } else if (error.message?.includes('Backend server is not accessible')) {
-        message = 'Backend server is not accessible. Please check your internet connection and ensure the backend is running on port 3000.';
+        
+        Alert.alert('Login Failed', errorMessage);
+      } else if (result.data.user) {
+        console.log('LoginScreen: Login successful');
+        
+        // Get user role from metadata (no database query needed!)
+        const userRole = result.data.user.user_metadata?.role || 'customer';
+        const userProfile = {
+          id: result.data.user.id,
+          email: result.data.user.email,
+          full_name: result.data.user.user_metadata?.full_name || '',
+          phone: result.data.user.user_metadata?.phone || '',
+          company_name: result.data.user.user_metadata?.company_name || '',
+          email_verified: result.data.user.email_confirmed_at ? true : false,
+          profile_completed: true, // Assume completed since they registered
+        };
+        
+        console.log('LoginScreen: User role from metadata:', userRole);
+        console.log('LoginScreen: User profile from metadata:', userProfile);
+        
+        // Create enhanced user object
+        const enhancedUser = {
+          ...result.data.user,
+          role: userRole,
+          profile: userProfile
+        };
+        
+        setUser(enhancedUser);
+        
+        // Show success message
+        Alert.alert('Success', `Login successful! Welcome back, ${userProfile.full_name || 'User'}!`);
+        setIsLoading(false);
+        
+        return;
       }
-      
-      console.log('LoginScreen: Showing error alert with message:', message);
-      Alert.alert(title, message);
+    } catch (error: any) {
+      console.error('LoginScreen: Login error:', error);
+      Alert.alert('Login Error', 'An unexpected error occurred. Please try again.');
     } finally {
-      console.log('LoginScreen: Setting loading to false');
       setIsLoading(false);
     }
   };
 
-  const handleRegister = () => {
-    // Pass the selected role to registration
-    router.push({
-      pathname: '/RegisterScreen',
-      params: { selectedRole }
-    });
-  };
-
+  // ===== NAVIGATION HANDLERS =====
   const handleBackToRoleSelection = () => {
+
+    
     router.push('/RoleSelectionScreen');
   };
 
   const handleForgotPassword = () => {
-    console.log('Forgot Password button clicked');
-    console.log('Navigating to ForgotPasswordScreen');
-    router.replace('/ForgotPasswordScreen');
+    router.push('/ForgotPasswordScreen');
   };
+
+  const handleRegister = () => {
+    router.push({
+      pathname: '/RegisterScreen',
+      params: { selectedRole: selectedRole || 'customer' }
+    });
+  };
+
+  // Check if user can login (all validations must pass)
+  const canLogin = 
+    email.trim() !== '' &&
+    password.trim() !== '' &&
+    isEmailValid &&
+    !isLoading;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -155,43 +210,60 @@ export default function LoginScreen() {
               <MaterialIcons name="arrow-back" size={24} color={COLORS.darkGreen} />
             </TouchableOpacity>
             
-            <Text style={styles.title}>
-              {selectedRole === 'recycler' ? 'Recycler Login' : 'Customer Login'}
-            </Text>
+            <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
-              Welcome back! Please sign in to continue
+              Sign in to your account to continue
             </Text>
           </View>
 
           {/* Form */}
           <View style={styles.form}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Phone Number</Text>
-              <PhoneNumberInput
-                value={phone}
-                onChangeText={handlePhoneChange}
-                onCountryChange={setCountryCode}
-                selectedCountryCode={countryCode.replace('+', '')}
-                placeholder="Enter your phone number"
-                error={phoneError || (phone.trim() === '' ? 'Phone number is required' : undefined)}
-                onValidationChange={handlePhoneValidation}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="lock" size={20} color={COLORS.gray} style={styles.inputIcon} />
+            {/* Email Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Email Address</Text>
+              <View style={[styles.inputWrapper, emailError ? styles.inputError : isEmailValid ? styles.inputSuccess : null]}>
+                                 <MaterialIcons 
+                   name="email" 
+                   size={20} 
+                   color={emailError ? COLORS.red : isEmailValid ? COLORS.green : COLORS.gray} 
+                 />
                 <TextInput
                   style={styles.input}
+                  placeholder="Enter your email (e.g., john.doe@example.com)"
+                  value={email}
+                  onChangeText={handleEmailChange}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+              </View>
+              {emailError ? (
+                <Text style={styles.errorText}>{emailError}</Text>
+              ) : null}
+            </View>
+
+            {/* Password Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.inputWrapper}>
+                <MaterialIcons 
+                  name="lock" 
+                  size={20} 
+                  color={COLORS.gray} 
+                />
+                <TextInput
+                  style={[styles.input, { color: COLORS.darkGreen }]}
+                  placeholder="Enter your password (min. 8 characters)"
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="Enter your password"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
                 />
                 <TouchableOpacity
-                  style={styles.eyeButton}
+                  style={styles.eyeIcon}
                   onPress={() => setShowPassword(!showPassword)}
                 >
                   <MaterialIcons 
@@ -203,27 +275,41 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.forgotPassword} onPress={handleForgotPassword}>
+            {/* Forgot Password Link */}
+            <TouchableOpacity 
+              style={styles.forgotPasswordContainer}
+              onPress={handleForgotPassword}
+            >
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
 
+            {/* Login Button */}
             <TouchableOpacity
-              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+              style={[styles.loginButton, !canLogin && styles.loginButtonDisabled]}
               onPress={handleLogin}
-              disabled={isLoading}
+              disabled={!canLogin || isLoading}
             >
-              <Text style={styles.loginButtonText}>
-                {isLoading ? 'Logging in...' : 'LOGIN'}
-              </Text>
+              {isLoading ? (
+                <Text style={styles.loginButtonText}>Signing In...</Text>
+              ) : (
+                <Text style={styles.loginButtonText}>Sign In</Text>
+              )}
             </TouchableOpacity>
-          </View>
 
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Don&apos;t have an account? </Text>
-            <TouchableOpacity onPress={handleRegister}>
-              <Text style={styles.registerText}>Sign Up</Text>
-            </TouchableOpacity>
+            {/* Divider */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Register Link */}
+            <View style={styles.registerContainer}>
+              <Text style={styles.registerText}>Don't have an account? </Text>
+              <TouchableOpacity onPress={handleRegister}>
+                <Text style={styles.registerLink}>Sign Up</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -269,7 +355,7 @@ const styles = StyleSheet.create({
   form: {
     gap: 20,
   },
-  inputGroup: {
+  inputContainer: {
     gap: 8,
   },
   label: {
@@ -277,27 +363,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.darkGreen,
   },
-  inputContainer: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.lightGray,
     borderRadius: 8,
     backgroundColor: COLORS.white,
+    paddingHorizontal: 12,
   },
-  inputIcon: {
-    marginLeft: 12,
-    marginRight: 8,
+  inputError: {
+    borderColor: COLORS.red,
+  },
+  inputSuccess: {
+    borderColor: COLORS.green,
   },
   input: {
     flex: 1,
     padding: 12,
     fontSize: 16,
+    color: COLORS.darkGreen,
   },
-  eyeButton: {
+  eyeIcon: {
     padding: 12,
   },
-  forgotPassword: {
+  errorText: {
+    color: COLORS.red,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  forgotPasswordContainer: {
     alignSelf: 'flex-end',
   },
   forgotPasswordText: {
@@ -319,16 +414,31 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  footer: {
+  divider: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 30,
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 20,
   },
-  footerText: {
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.lightGray,
+  },
+  dividerText: {
+    marginHorizontal: 10,
     color: COLORS.gray,
     fontSize: 16,
   },
+  registerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
   registerText: {
+    color: COLORS.gray,
+    fontSize: 16,
+  },
+  registerLink: {
     color: COLORS.orange,
     fontSize: 16,
     fontWeight: '600',

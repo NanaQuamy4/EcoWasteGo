@@ -1,15 +1,16 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import { COLORS } from '../../constants';
-import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function RecyclerUserTab() {
-  const { user, logout, deleteAccount } = useAuth();
-  const isVerified = user?.verification_status === 'verified';
+  const [user, setUser] = useState<any>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
 
   // Debug logging for user data
   useEffect(() => {
@@ -19,6 +20,74 @@ export default function RecyclerUserTab() {
       console.log('RecyclerUserTab: User object keys:', Object.keys(user));
     }
   }, [user]);
+
+  // Fetch current user data from Supabase
+  // Function to fetch user data
+  const fetchUserData = useCallback(async () => {
+    try {
+      console.log('RecyclerUserTab: Fetching current user data...');
+      setIsLoadingUser(true);
+
+      // Get current authenticated user
+      const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+
+      if (error) {
+        console.error('RecyclerUserTab: Error fetching user:', error);
+        setIsLoadingUser(false);
+        return;
+      }
+
+      if (!currentUser) {
+        console.log('RecyclerUserTab: No authenticated user found');
+        setIsLoadingUser(false);
+        return;
+      }
+
+      console.log('RecyclerUserTab: Current user found:', currentUser.id);
+      console.log('RecyclerUserTab: User metadata:', currentUser.user_metadata);
+
+      // Create enhanced user object with metadata
+      const enhancedUser = {
+        id: currentUser.id,
+        email: currentUser.email,
+        created_at: currentUser.created_at,
+        email_confirmed_at: currentUser.email_confirmed_at,
+        // Get data from user metadata
+        username: currentUser.user_metadata?.full_name || 'Recycler',
+        full_name: currentUser.user_metadata?.full_name || '',
+        phone: currentUser.user_metadata?.phone || '',
+        role: currentUser.user_metadata?.role || 'recycler',
+        company_name: currentUser.user_metadata?.company_name || '',
+        residential_address: currentUser.user_metadata?.residential_address || '',
+        truck_size: currentUser.user_metadata?.truck_size || '',
+        truck_number_plate: currentUser.user_metadata?.truck_number_plate || '',
+        is_verified: currentUser.user_metadata?.verification_status === 'approved',
+        verification_status: currentUser.user_metadata?.verification_status || 'incomplete',
+        profile_image: currentUser.user_metadata?.profile_photo_url || null,
+      };
+
+      console.log('RecyclerUserTab: Enhanced user object:', enhancedUser);
+      setUser(enhancedUser);
+      setIsLoadingUser(false);
+
+    } catch (error) {
+      console.error('RecyclerUserTab: Error in fetchUserData:', error);
+      setIsLoadingUser(false);
+    }
+  }, []);
+
+  // Fetch user data on component mount
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
+
+  // Refresh user data when screen comes into focus (e.g., returning from edit profile)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('RecyclerUserTab: Screen focused, refreshing user data...');
+      fetchUserData();
+    }, [fetchUserData])
+  );
 
   // Helper function to safely format creation date
   const formatCreationDate = (createdAt: string | undefined) => {
@@ -45,6 +114,9 @@ export default function RecyclerUserTab() {
       return 'N/A';
     }
   };
+
+  const isVerified = user?.is_verified || user?.verification_status === 'verified';
+
   const recycler = {
     name: user?.username || 'Recycler',
     email: user?.email || '',
@@ -52,7 +124,7 @@ export default function RecyclerUserTab() {
     status: user?.verification_status || 'unverified',
     totalPickups: isVerified ? 156 : 0,
     totalEarnings: isVerified ? '₵2,450.80' : '₵0.00',
-    memberSince: 'Mar 2023',
+    memberSince: formatCreationDate(user?.created_at),
     rating: isVerified ? 4.8 : 0,
     completedPickups: isVerified ? 142 : 0,
   };
@@ -65,6 +137,33 @@ export default function RecyclerUserTab() {
   const [notificationCount, setNotificationCount] = useState(3);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const router = useRouter();
+
+  // Mock functions (replacing useAuth)
+  const deleteAccount = async () => {
+    // Mock account deletion
+    console.log('Mock: Deleting account...');
+    return Promise.resolve();
+  };
+
+  const logout = async () => {
+    try {
+      console.log('RecyclerUserTab: Starting Supabase logout...');
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('RecyclerUserTab: Supabase logout error:', error);
+        throw error;
+      }
+      
+      console.log('RecyclerUserTab: Supabase logout successful');
+      return true;
+    } catch (error) {
+      console.error('RecyclerUserTab: Logout error:', error);
+      throw error;
+    }
+  };
 
   const handleStatusSwitch = (newStatus: string) => {
     // Disable role switching for recyclers - they should stay in recycler mode
@@ -200,6 +299,46 @@ export default function RecyclerUserTab() {
     setNotificationCount(0);
   };
 
+  if (isLoadingUser) {
+    return (
+      <View style={styles.container}>
+        <AppHeader 
+          onMenuPress={() => setDrawerOpen(true)} 
+          onNotificationPress={handleNotificationPress}
+          notificationCount={notificationCount}
+        />
+        <View style={[styles.content, { justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={styles.loadingText}>Loading user data...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Show login prompt if user is not authenticated
+  if (!user && !isLoadingUser) {
+    return (
+      <View style={styles.container}>
+        <AppHeader 
+          onMenuPress={() => setDrawerOpen(true)} 
+          onNotificationPress={handleNotificationPress}
+          notificationCount={notificationCount}
+        />
+        <View style={[styles.content, { justifyContent: 'center', alignItems: 'center' }]}>
+          <MaterialIcons name="account-circle" size={80} color={COLORS.darkGreen} />
+          <Text style={styles.userName}>Not Logged In</Text>
+          <Text style={styles.userEmail}>Please log in to view your profile</Text>
+          <TouchableOpacity 
+            style={[styles.actionButton, { marginTop: 20 }]}
+            onPress={() => router.push('/LoginScreen')}
+          >
+            <MaterialIcons name="login" size={20} color="white" />
+            <Text style={[styles.actionText, { color: 'white' }]}>Login</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <AppHeader 
@@ -207,7 +346,7 @@ export default function RecyclerUserTab() {
         onNotificationPress={handleNotificationPress}
         notificationCount={notificationCount}
       />
-      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={recycler} />
+             <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       
       <ScrollView 
         style={styles.content} 
@@ -218,11 +357,23 @@ export default function RecyclerUserTab() {
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.profileImageContainer}>
-            <MaterialIcons name="account-circle" size={80} color={COLORS.darkGreen} />
+            {user?.profile_image ? (
+              <Image 
+                source={{ uri: user.profile_image }} 
+                style={styles.profileImage} 
+              />
+            ) : (
+              <MaterialIcons name="account-circle" size={80} color={COLORS.darkGreen} />
+            )}
           </View>
           <Text style={styles.userName}>{recycler.name}</Text>
           <Text style={styles.userEmail}>{recycler.email}</Text>
           <Text style={styles.userPhone}>{recycler.phone}</Text>
+          
+          {/* Company Name for Recyclers */}
+          {user?.company_name && (
+            <Text style={styles.companyName}>{user.company_name}</Text>
+          )}
           
           {/* Account Creation Date */}
           <View style={styles.creationDateContainer}>
@@ -250,15 +401,13 @@ export default function RecyclerUserTab() {
             </Text>
             <TouchableOpacity 
               style={styles.completeRegistrationButton}
-              onPress={() => router.push('/recycler-screens/RecyclerRegistrationScreen' as any)}
+              onPress={() => router.push('/recycler-screens/RecyclerEditProfileScreen' as any)}
             >
               <MaterialIcons name="assignment" size={20} color={COLORS.white} />
               <Text style={styles.completeRegistrationButtonText}>Complete Registration</Text>
             </TouchableOpacity>
           </View>
         )}
-
-
 
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
@@ -285,7 +434,7 @@ export default function RecyclerUserTab() {
         <View style={styles.actionsContainer}>
           <TouchableOpacity 
             style={styles.actionButton}
-                            onPress={() => router.push('/recycler-screens/RecyclerEditProfileScreen' as any)}
+            onPress={() => router.push('/recycler-screens/RecyclerEditProfileScreen' as any)}
           >
             <MaterialIcons name="edit" size={20} color={COLORS.darkGreen} />
             <Text style={styles.actionText}>Edit Profile</Text>
@@ -301,7 +450,7 @@ export default function RecyclerUserTab() {
           
           <TouchableOpacity 
             style={styles.actionButton}
-                            onPress={() => router.push('/customer-screens/Help' as any)}
+            onPress={() => router.push('/customer-screens/Help' as any)}
           >
             <MaterialIcons name="help" size={20} color={COLORS.darkGreen} />
             <Text style={styles.actionText}>Help & Support</Text>
@@ -323,8 +472,6 @@ export default function RecyclerUserTab() {
             <Text style={[styles.actionText, { color: COLORS.red }]}>Delete Account</Text>
           </TouchableOpacity>
         </View>
-
-
 
         {/* Delete Account Modal */}
         {showDeletePrompt && (
@@ -407,6 +554,13 @@ const styles = StyleSheet.create({
   profileImageContainer: {
     marginBottom: 12,
   },
+  profileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: COLORS.darkGreen,
+  },
   userName: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -421,6 +575,12 @@ const styles = StyleSheet.create({
   userPhone: {
     fontSize: 16,
     color: COLORS.gray,
+    marginBottom: 6,
+  },
+  companyName: {
+    fontSize: 16,
+    color: COLORS.darkGreen,
+    fontWeight: '600',
     marginBottom: 6,
   },
   creationDateContainer: {
@@ -687,5 +847,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  loadingText: {
+    fontSize: 18,
+    color: COLORS.darkGreen,
+    fontWeight: 'bold',
   },
 }); 

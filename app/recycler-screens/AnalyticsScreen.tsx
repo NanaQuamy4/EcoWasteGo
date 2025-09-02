@@ -9,7 +9,15 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import recyclerStats from '../../utils/recyclerStats';
+// Mock recycler stats (replacing utils/recyclerStats)
+const recyclerStats = {
+  getTotalAvailableRequestsCount: () => 5,
+  isPaymentRequired: () => false,
+  getSubscriptionFeeString: () => '₵0.00',
+  getActivePickupsCount: () => 3,
+  getTodayEarnings: () => 45.80,
+  getCompletedPickupsCount: () => 8
+};
 
 const COLORS = {
   primary: '#4CAF50',

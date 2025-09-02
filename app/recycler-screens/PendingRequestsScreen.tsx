@@ -1,265 +1,383 @@
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, Image, RefreshControl, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { COLORS, DIMENSIONS } from '../../constants';
-import { apiService } from '../../services/apiService';
-import CommonHeader from '../components/CommonHeader';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS } from '../../constants';
 
-interface PendingRequest {
-  id: string;
-  customer_name: string;
-  customer_phone: string;
-  waste_type: string;
-  weight: number;
-  pickup_address: string;
-  description?: string;
-  created_at: string;
-  distance?: string;
-}
+// ===== MOCK DATA FOR PENDING REQUESTS SCREEN =====
+// This replaces the backend API calls with local mock data
+// In a real app, this would come from a database or waste collection service
+
+// Mock pending waste collection requests
+const mockPendingRequests = [
+  {
+    id: "req_001",
+    customer_id: "user_001",
+    customer_name: "John Doe",
+    customer_phone: "+233241234567",
+    customer_address: "123 Main Street, Accra Central",
+    waste_type: "Mixed Waste",
+    weight: 8,
+    special_instructions: "Please call before arrival",
+    status: "pending",
+    created_at: "2024-01-15T10:30:00Z",
+    estimated_pickup_time: "15:30",
+    distance: "2.3 km",
+    customer_rating: 4.8
+  },
+  {
+    id: "req_002",
+    customer_id: "user_002",
+    customer_name: "Jane Smith",
+    customer_phone: "+233241234568",
+    customer_address: "456 Oak Avenue, Accra Central",
+    waste_type: "Plastic",
+    weight: 5,
+    special_instructions: "Gate code: 1234",
+    status: "pending",
+    created_at: "2024-01-15T11:15:00Z",
+    estimated_pickup_time: "16:00",
+    distance: "3.1 km",
+    customer_rating: 4.6
+  },
+  {
+    id: "req_003",
+    customer_id: "user_003",
+    customer_name: "Mike Johnson",
+    customer_phone: "+233241234569",
+    customer_address: "789 Pine Road, Accra Central",
+    waste_type: "Paper & Cardboard",
+    weight: 12,
+    special_instructions: "Large quantity, need truck",
+    status: "pending",
+    created_at: "2024-01-15T12:00:00Z",
+    estimated_pickup_time: "16:30",
+    distance: "1.8 km",
+    customer_rating: 4.9
+  },
+  {
+    id: "req_004",
+    customer_id: "user_004",
+    customer_name: "Sarah Wilson",
+    customer_phone: "+233241234570",
+    customer_address: "321 Elm Street, Accra Central",
+    waste_type: "Glass & Metal",
+    weight: 6,
+    special_instructions: "Fragile items, handle carefully",
+    status: "pending",
+    created_at: "2024-01-15T12:45:00Z",
+    estimated_pickup_time: "17:00",
+    distance: "4.2 km",
+    customer_rating: 4.7
+  }
+];
 
 export default function PendingRequestsScreen() {
-  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
+  const router = useRouter();
+
+  // ===== LOCAL STATE MANAGEMENT =====
+  // These state variables manage the UI state and data
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
+  // ===== INITIALIZATION EFFECT =====
+  // This effect runs when the component first loads
   useEffect(() => {
-    fetchPendingRequests();
+    loadMockData();
   }, []);
 
-  const fetchPendingRequests = async () => {
+  // ===== MOCK DATA LOADING FUNCTION =====
+  // This replaces the backend API call to fetch pending requests
+  // It loads data from our mock data arrays
+  const loadMockData = async () => {
     try {
       setIsLoading(true);
-      setError(null);
       
-      // Get available collections (pending requests)
-      const response = await apiService.getWasteCollections();
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 800));
       
-      if (response && Array.isArray(response)) {
-        // Filter for pending requests and format them
-        const pending = response
-          .filter(collection => collection.status === 'pending')
-          .map(collection => ({
-            id: collection.id,
-            customer_name: `Customer ${collection.customer_id.substring(0, 8)}`, // Placeholder
-            customer_phone: '+233 XX XXX XXXX', // Placeholder
-            waste_type: collection.waste_type,
-            weight: collection.weight || 0,
-            pickup_address: collection.pickup_address || 'Location not specified',
-            description: collection.description,
-            created_at: collection.created_at,
-            distance: '2.3 km' // Mock distance
-          }));
-        
-        setPendingRequests(pending);
-      }
-    } catch (err) {
-      console.error('Error fetching pending requests:', err);
-      setError('Failed to fetch pending requests');
+      // Load mock pending requests
+      setPendingRequests([...mockPendingRequests]);
+      
+      console.log('PendingRequestsScreen: Mock data loaded successfully');
+    } catch (error) {
+      console.error('PendingRequestsScreen: Error loading mock data:', error);
+      // Fallback to default mock data
+      setPendingRequests(mockPendingRequests);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchPendingRequests();
-    setRefreshing(false);
+  // ===== MOCK ACTION HANDLERS =====
+  // These functions handle user actions
+  
+  // Accept a pending request
+  const handleAcceptRequest = async (requestId: string) => {
+    try {
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Update mock data status
+      const updatedRequests = pendingRequests.map(request => 
+        request.id === requestId 
+          ? { ...request, status: 'accepted' }
+          : request
+      );
+      
+      setPendingRequests(updatedRequests);
+      
+      console.log('PendingRequestsScreen: Request accepted successfully');
+      
+      Alert.alert(
+        'Request Accepted!',
+        'You have accepted this waste collection request. The customer will be notified.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error accepting request:', error);
+      Alert.alert('Error', 'Failed to accept request. Please try again.');
+    }
   };
 
-  const handleAcceptRequest = async (requestId: string) => {
-    Alert.alert(
-      'Accept Request',
-      'Are you sure you want to accept this pickup request?',
+  // Reject a pending request
+  const handleRejectRequest = async (requestId: string, reason: string) => {
+    if (!reason.trim()) {
+      Alert.alert('Reason Required', 'Please provide a reason for rejection.');
+      return;
+    }
+
+    try {
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Update mock data status
+      const updatedRequests = pendingRequests.map(request => 
+        request.id === requestId 
+          ? { ...request, status: 'rejected', rejection_reason: reason }
+          : request
+      );
+      
+      setPendingRequests(updatedRequests);
+      
+      console.log('PendingRequestsScreen: Request rejected successfully');
+      
+      Alert.alert(
+        'Request Rejected',
+        'You have rejected this waste collection request. The customer will be notified.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      Alert.alert('Error', 'Failed to reject request. Please try again.');
+    }
+  };
+
+  // Show rejection reason input
+  const showRejectionDialog = (requestId: string) => {
+    Alert.prompt(
+      'Rejection Reason',
+      'Please provide a reason for rejecting this request:',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Accept',
-          style: 'default',
-          onPress: async () => {
-            try {
-              const response = await apiService.updateWasteStatus(requestId, 'accepted');
-              
-              if (response) {
-                Alert.alert('Request Accepted', 'You have successfully accepted this pickup request.');
-                // Refresh the list
-                fetchPendingRequests();
-              } else {
-                Alert.alert('Error', 'Failed to accept request');
-              }
-            } catch (err) {
-              Alert.alert('Error', 'Failed to accept request');
+        { 
+          text: 'Reject', 
+          onPress: (reason) => {
+            if (reason) {
+              handleRejectRequest(requestId, reason);
             }
+          }
+        }
+      ],
+      'plain-text'
+    );
+  };
+
+  // Call customer
+  const handleCallCustomer = (customerPhone: string, customerName: string) => {
+    Alert.alert(
+      'Call Customer',
+      `Call ${customerName} at ${customerPhone}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Call', 
+          onPress: () => {
+            // In a real app, this would use Linking to make a phone call
+            console.log('Calling customer:', customerPhone);
+            Alert.alert('Call Customer', 'Phone call functionality would be implemented here.');
           }
         }
       ]
     );
   };
 
-  const handleRejectRequest = async (requestId: string) => {
-    Alert.prompt(
-      'Reject Request',
-      'Please provide a reason for rejection:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async (reason) => {
-            try {
-              // Reject the request via API with rejection reason
-              const response = await apiService.updateWasteStatus(requestId, 'cancelled', reason);
-              
-              if (response) {
-                Alert.alert('Request Rejected', `Request has been rejected${reason ? ` with reason: "${reason}"` : ''}.`);
-                // Refresh the list
-                fetchPendingRequests();
-              } else {
-                Alert.alert('Error', 'Failed to reject request');
-              }
-            } catch (err) {
-              Alert.alert('Error', 'Failed to reject request');
-            }
-          }
-        }
-      ],
-      'plain-text',
-      'Distance too far, unavailable resources, etc.'
+  // View request details
+  const handleViewRequestDetails = (request: any) => {
+    // In a real app, this would navigate to a detailed view
+    Alert.alert(
+      'Request Details',
+      `Customer: ${request.customer_name}\nAddress: ${request.customer_address}\nWaste Type: ${request.waste_type}\nWeight: ${request.weight} kg\nSpecial Instructions: ${request.special_instructions}`,
+      [{ text: 'OK' }]
     );
   };
 
-  const handleViewDetails = (request: PendingRequest) => {
-    // Navigate to request details screen
-    router.push({
-      pathname: '/recycler-screens/RequestDetails' as any,
-      params: { requestId: request.id }
+  // Refresh data
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadMockData();
+    setRefreshing(false);
+  };
+
+  // ===== UTILITY FUNCTIONS =====
+  // Format timestamp for display
+  const formatTimestamp = (timestamp: string): string => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
     });
   };
 
-  const renderRequestItem = ({ item }: { item: PendingRequest }) => (
+  // Get status color for display
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return COLORS.orange || '#FF9800';
+      case 'accepted':
+        return COLORS.green;
+      case 'rejected':
+        return COLORS.red;
+      default:
+        return COLORS.gray;
+    }
+  };
+
+  // ===== UI RENDER FUNCTIONS =====
+  // These functions render different parts of the UI
+  
+  // Render a single pending request item
+  const renderPendingRequest = ({ item }: { item: any }) => (
     <View style={styles.requestCard}>
       <View style={styles.requestHeader}>
         <View style={styles.customerInfo}>
-          <Image 
-            source={require('../../assets/images/_MG_2771.jpg')} 
-            style={styles.customerAvatar}
-            defaultSource={require('../../assets/images/_MG_2771.jpg')}
-          />
-          <View style={styles.customerDetails}>
-            <Text style={styles.customerName}>{item.customer_name}</Text>
-            <Text style={styles.customerPhone}>{item.customer_phone}</Text>
+          <Text style={styles.customerName}>{item.customer_name}</Text>
+          <View style={styles.ratingContainer}>
+            <MaterialIcons name="star" size={16} color="#FFD700" />
+            <Text style={styles.ratingText}>{item.customer_rating}</Text>
           </View>
         </View>
-        <View style={styles.distanceBadge}>
-          <Text style={styles.distanceText}>{item.distance}</Text>
+        <View style={styles.statusContainer}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+            <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+          </View>
         </View>
       </View>
-
+      
       <View style={styles.requestDetails}>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Waste Type:</Text>
-          <Text style={styles.detailValue}>{item.waste_type}</Text>
+          <MaterialIcons name="location-on" size={16} color={COLORS.gray} />
+          <Text style={styles.detailText}>{item.customer_address}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Weight:</Text>
-          <Text style={styles.detailValue}>{item.weight}kg</Text>
+          <MaterialIcons name="recycling" size={16} color={COLORS.gray} />
+          <Text style={styles.detailText}>{item.waste_type} • {item.weight} kg</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Location:</Text>
-          <Text style={styles.detailValue} numberOfLines={2}>{item.pickup_address}</Text>
+          <MaterialIcons name="access-time" size={16} color={COLORS.gray} />
+          <Text style={styles.detailText}>Requested: {formatTimestamp(item.created_at)}</Text>
         </View>
-        {item.description && (
+        <View style={styles.detailRow}>
+          <MaterialIcons name="directions-car" size={16} color={COLORS.gray} />
+          <Text style={styles.detailText}>{item.distance} away</Text>
+        </View>
+        {item.special_instructions && (
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Notes:</Text>
-            <Text style={styles.detailValue} numberOfLines={2}>{item.description}</Text>
+            <MaterialIcons name="info" size={16} color={COLORS.gray} />
+            <Text style={styles.detailText}>{item.special_instructions}</Text>
           </View>
         )}
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Requested:</Text>
-          <Text style={styles.detailValue}>
-            {new Date(item.created_at).toLocaleDateString()}
-          </Text>
-        </View>
       </View>
-
+      
       <View style={styles.actionButtons}>
         <TouchableOpacity 
-          style={styles.viewButton} 
-          onPress={() => handleViewDetails(item)}
+          style={styles.callButton}
+          onPress={() => handleCallCustomer(item.customer_phone, item.customer_name)}
         >
-          <Text style={styles.viewButtonText}>VIEW DETAILS</Text>
+          <MaterialIcons name="phone" size={20} color={COLORS.white} />
+          <Text style={styles.callButtonText}>Call</Text>
         </TouchableOpacity>
         
-        <View style={styles.decisionButtons}>
-          <TouchableOpacity 
-            style={[styles.decisionButton, styles.rejectButton]} 
-            onPress={() => handleRejectRequest(item.id)}
-          >
-            <Text style={styles.rejectButtonText}>REJECT</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.decisionButton, styles.acceptButton]} 
-            onPress={() => handleAcceptRequest(item.id)}
-          >
-            <Text style={styles.acceptButtonText}>ACCEPT</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity 
+          style={styles.detailsButton}
+          onPress={() => handleViewRequestDetails(item)}
+        >
+          <MaterialIcons name="info" size={20} color={COLORS.darkGreen} />
+          <Text style={styles.detailsButtonText}>Details</Text>
+        </TouchableOpacity>
+        
+        {item.status === 'pending' && (
+          <>
+            <TouchableOpacity 
+              style={styles.rejectButton}
+              onPress={() => showRejectionDialog(item.id)}
+            >
+              <MaterialIcons name="close" size={20} color={COLORS.white} />
+              <Text style={styles.rejectButtonText}>Reject</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.acceptButton}
+              onPress={() => handleAcceptRequest(item.id)}
+            >
+              <MaterialIcons name="check" size={20} color={COLORS.white} />
+              <Text style={styles.acceptButtonText}>Accept</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
-    </View>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyStateIcon}>📋</Text>
-      <Text style={styles.emptyStateTitle}>No Pending Requests</Text>
-      <Text style={styles.emptyStateMessage}>
-        There are currently no pending waste collection requests in your area.
-      </Text>
-      <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-        <Text style={styles.refreshButtonText}>REFRESH</Text>
-      </TouchableOpacity>
     </View>
   );
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <CommonHeader title="Pending Requests" />
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading pending requests...</Text>
-        </View>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading pending requests...</Text>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <CommonHeader title="Pending Requests" />
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Pending Requests</Text>
+      </View>
       
-      {error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorIcon}>❌</Text>
-          <Text style={styles.errorTitle}>Something went wrong</Text>
-          <Text style={styles.errorMessage}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchPendingRequests}>
-            <Text style={styles.retryButtonText}>TRY AGAIN</Text>
+      {pendingRequests.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateIcon}>📋</Text>
+          <Text style={styles.emptyStateTitle}>No Pending Requests</Text>
+          <Text style={styles.emptyStateMessage}>
+            There are currently no pending waste collection requests in your area.
+          </Text>
+          <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
+            <Text style={styles.refreshButtonText}>REFRESH</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={pendingRequests}
-          renderItem={renderRequestItem}
+          renderItem={renderPendingRequest}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
-          ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -267,6 +385,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 20,
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
   },
   loadingContainer: {
     flex: 1,
@@ -277,158 +411,138 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.gray,
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  errorIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.darkGreen,
-    marginBottom: 8,
-  },
-  errorMessage: {
-    fontSize: 16,
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  retryButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: DIMENSIONS.borderRadius,
-  },
-  retryButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
   listContainer: {
     padding: 16,
     paddingBottom: 32,
   },
   requestCard: {
     backgroundColor: COLORS.white,
-    borderRadius: DIMENSIONS.cardBorderRadius,
+    borderRadius: 10,
     padding: 16,
     marginBottom: 16,
     shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: 4,
+    elevation: 2,
   },
   requestHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   customerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  customerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  customerDetails: {
-    flex: 1,
-  },
   customerName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
-    marginBottom: 2,
+    marginRight: 10,
   },
-  customerPhone: {
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingText: {
     fontSize: 14,
-    color: COLORS.gray,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginLeft: 4,
   },
-  distanceBadge: {
-    backgroundColor: COLORS.lightBlue,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+  statusContainer: {
+    alignItems: 'flex-end',
   },
-  distanceText: {
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: COLORS.darkBlue,
+    color: COLORS.white,
   },
   requestDetails: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   detailRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  detailLabel: {
+  detailText: {
     fontSize: 14,
     color: COLORS.gray,
-    fontWeight: '500',
-    flex: 1,
-  },
-  detailValue: {
-    fontSize: 14,
-    color: COLORS.darkGreen,
-    fontWeight: '600',
-    flex: 2,
-    textAlign: 'right',
+    marginLeft: 8,
   },
   actionButtons: {
-    gap: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10,
   },
-  viewButton: {
+  callButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    width: '45%',
+  },
+  callButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  detailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.lightGreen,
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: DIMENSIONS.borderRadius,
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    width: '45%',
   },
-  viewButtonText: {
+  detailsButtonText: {
     color: COLORS.darkGreen,
     fontSize: 14,
-    fontWeight: '600',
-  },
-  decisionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  decisionButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: DIMENSIONS.borderRadius,
-    alignItems: 'center',
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
   rejectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.lightRed,
-    borderWidth: 1,
-    borderColor: COLORS.red,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    width: '45%',
   },
   rejectButtonText: {
     color: COLORS.red,
     fontSize: 14,
     fontWeight: 'bold',
+    marginLeft: 8,
   },
   acceptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    width: '45%',
   },
   acceptButtonText: {
     color: COLORS.white,
     fontSize: 14,
     fontWeight: 'bold',
+    marginLeft: 8,
   },
   emptyState: {
     flex: 1,
@@ -458,7 +572,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 8,
   },
   refreshButtonText: {
     color: COLORS.white,
@@ -466,3 +580,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+

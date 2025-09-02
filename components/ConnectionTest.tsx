@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import apiService from '../services/apiService';
+
+// ===== MOCK DATA FOR CONNECTION TEST =====
+// This replaces all backend API calls with local mock data
+// In a real app, this would test actual backend connections
 
 export default function ConnectionTest() {
   const [isLoading, setIsLoading] = useState(false);
@@ -13,24 +16,22 @@ export default function ConnectionTest() {
       setStatus('Testing connection...');
       setConnectionDetails('');
       
-      // Test the health endpoint using computer's IP address
-      const response = await fetch('http://10.132.53.210:3000/health');
-      const data = await response.json();
+      // ===== MOCK CONNECTION TEST =====
+      // This replaces the actual backend connection test with mock data
+      // In a real app, this would test actual network connectivity
       
-      if (response.ok) {
-        setStatus('✅ Backend connected successfully!');
-        setConnectionDetails(`Response: ${JSON.stringify(data, null, 2)}`);
-        Alert.alert('Success', 'Backend connection is working!');
-      } else {
-        setStatus('❌ Backend connection failed');
-        setConnectionDetails(`Status: ${response.status}, Response: ${JSON.stringify(data, null, 2)}`);
-        Alert.alert('Error', 'Backend connection failed');
-      }
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Mock successful connection
+      setStatus('✅ Mock backend connected successfully!');
+      setConnectionDetails(`Response: {"status": "ok", "message": "Mock backend is running", "timestamp": "${new Date().toISOString()}"}`);
+      Alert.alert('Success', 'Mock backend connection is working! (Frontend Only)');
     } catch (error) {
       console.error('Connection test error:', error);
       setStatus('❌ Connection error');
       setConnectionDetails(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      Alert.alert('Error', 'Failed to connect to backend. Make sure the server is running on port 3000.');
+      Alert.alert('Error', 'Failed to connect to mock backend.');
     } finally {
       setIsLoading(false);
     }
@@ -42,23 +43,22 @@ export default function ConnectionTest() {
       setStatus('Testing API service...');
       setConnectionDetails('');
       
-      // Test the API service by calling a public method
-      const isAuthenticated = apiService.isAuthenticated();
+      // ===== MOCK API SERVICE TEST =====
+      // This replaces the actual API service test with mock data
+      // In a real app, this would test actual API functionality
       
-      if (typeof isAuthenticated === 'boolean') {
-        setStatus('✅ API service working!');
-        setConnectionDetails(`Authentication status: ${isAuthenticated}`);
-        Alert.alert('Success', 'API service is working correctly!');
-      } else {
-        setStatus('❌ API service failed');
-        setConnectionDetails('Authentication check returned invalid type');
-        Alert.alert('Error', 'API service test failed');
-      }
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mock successful API service test
+      setStatus('✅ Mock API service working!');
+      setConnectionDetails(`Authentication status: false (Frontend Only)\nAPI Service: Mock Implementation\nBackend: Not Available`);
+      Alert.alert('Success', 'Mock API service is working correctly! (Frontend Only)');
     } catch (error) {
       console.error('API service test error:', error);
       setStatus('❌ API service error');
       setConnectionDetails(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      Alert.alert('Error', 'API service test failed');
+      Alert.alert('Error', 'Mock API service test failed');
     } finally {
       setIsLoading(false);
     }
@@ -70,31 +70,47 @@ export default function ConnectionTest() {
       setStatus('Testing detailed connection...');
       setConnectionDetails('');
       
-      const connectionStatus = await apiService.getConnectionStatus();
+      // ===== MOCK DETAILED CONNECTION TEST =====
+      // This replaces the actual detailed connection test with mock data
+      // In a real app, this would test actual network connectivity and endpoints
       
-      if (connectionStatus.isConnected) {
-        setStatus('✅ Connection test successful!');
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Mock connection status
+      const mockConnectionStatus = {
+        isConnected: true,
+        currentIP: '192.168.1.100',
+        workingIPs: ['192.168.1.100', '10.0.0.1'],
+        failedIPs: ['192.168.1.200'],
+        error: null
+      };
+      
+      if (mockConnectionStatus.isConnected) {
+        setStatus('✅ Mock connection test successful!');
         setConnectionDetails(
-          `Current IP: ${connectionStatus.currentIP}\n` +
-          `Working IPs: ${connectionStatus.workingIPs.join(', ')}\n` +
-          `Failed IPs: ${connectionStatus.failedIPs.join(', ')}`
+          `Current IP: ${mockConnectionStatus.currentIP}\n` +
+          `Working IPs: ${mockConnectionStatus.workingIPs.join(', ')}\n` +
+          `Failed IPs: ${mockConnectionStatus.failedIPs.join(', ')}\n` +
+          `Note: This is mock data (Frontend Only)`
         );
-        Alert.alert('Success', 'Connection test completed successfully!');
+        Alert.alert('Success', 'Mock connection test completed successfully! (Frontend Only)');
       } else {
-        setStatus('❌ Connection test failed');
+        setStatus('❌ Mock connection test failed');
         setConnectionDetails(
-          `Current IP: ${connectionStatus.currentIP}\n` +
-          `Working IPs: ${connectionStatus.workingIPs.join(', ')}\n` +
-          `Failed IPs: ${connectionStatus.failedIPs.join(', ')}\n` +
-          `Error: ${connectionStatus.error || 'Unknown error'}`
+          `Current IP: ${mockConnectionStatus.currentIP}\n` +
+          `Working IPs: ${mockConnectionStatus.workingIPs.join(', ')}\n` +
+          `Failed IPs: ${mockConnectionStatus.failedIPs.join(', ')}\n` +
+          `Error: ${mockConnectionStatus.error || 'Unknown error'}\n` +
+          `Note: This is mock data (Frontend Only)`
         );
-        Alert.alert('Error', 'Connection test failed. Check the details below.');
+        Alert.alert('Error', 'Mock connection test failed. Check the details below.');
       }
     } catch (error) {
       console.error('Detailed connection test error:', error);
       setStatus('❌ Detailed connection test error');
       setConnectionDetails(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      Alert.alert('Error', 'Detailed connection test failed');
+      Alert.alert('Error', 'Mock detailed connection test failed');
     } finally {
       setIsLoading(false);
     }

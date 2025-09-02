@@ -1,27 +1,97 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    RefreshControl,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { COLORS } from '../../constants';
-import { useAuth } from '../../contexts/AuthContext';
-import { apiService } from '../../services/apiService';
-import eventEmitter from '../../utils/eventEmitter';
-import { emitPaymentReceived, emitPickupCompleted } from '../../utils/paymentEvents';
-import recyclerStats from '../../utils/recyclerStats';
+// Mock user data (replacing useAuth)
+
+// ===== MOCK DATA FOR EARNINGS =====
+// This replaces the backend API calls with local mock data
+// In a real app, this would come from a database or payment service
+const mockEarningsStats = {
+  totalEarnings: 12500,
+  completedPickups: 45,
+  averagePerPickup: 278,
+  weeklyEarnings: 3200,
+  monthlyEarnings: 12500,
+  todayEarnings: 450,
+  yesterdayEarnings: 380
+};
+
+const mockPaymentHistory = [
+  {
+    id: "pay_001",
+    date: "2024-01-15",
+    time: "14:30",
+    pickupId: "req_002",
+    amount: 250,
+    status: "completed",
+    customer: "Jane Smith",
+    wasteType: "Mixed Waste",
+    weight: "8 kg"
+  },
+  {
+    id: "pay_002",
+    date: "2024-01-14", 
+    time: "16:45",
+    pickupId: "req_004",
+    amount: 180,
+    status: "completed",
+    customer: "David Wilson",
+    wasteType: "Paper",
+    weight: "6 kg"
+  },
+  {
+    id: "pay_003",
+    date: "2024-01-13",
+    time: "11:20", 
+    pickupId: "req_005",
+    amount: 320,
+    status: "completed",
+    customer: "Sarah Johnson",
+    wasteType: "Electronic Waste",
+    weight: "12 kg"
+  },
+  {
+    id: "pay_004",
+    date: "2024-01-12",
+    time: "09:15",
+    pickupId: "req_006", 
+    amount: 150,
+    status: "completed",
+    customer: "Michael Afia",
+    wasteType: "Plastic",
+    weight: "5 kg"
+  },
+  {
+    id: "pay_005",
+    date: "2024-01-11",
+    time: "13:45",
+    pickupId: "req_007",
+    amount: 280,
+    status: "completed", 
+    customer: "John Doe",
+    wasteType: "Mixed Waste",
+    weight: "9 kg"
+  }
+];
 
 export default function EarningsScreen() {
-  const { user } = useAuth();
+  const user = { id: "user_001", username: "User", email: "user@example.com", phone: "+233 24 123 4567", role: "customer", verification_status: "verified", created_at: "2024-01-15T10:30:00Z", profile_image: null, company_name: "Green Team Recycling" };
+  
+  // ===== LOCAL STATE MANAGEMENT =====
+  // These state variables manage the UI state and data
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -48,261 +118,236 @@ export default function EarningsScreen() {
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const borderColorAnim = useRef(new Animated.Value(0)).current;
 
-  // Real-time data fetching
-  const fetchEarningsData = useCallback(async (showLoading = true) => {
+  // ===== MOCK DATA LOADING FUNCTION =====
+  // This replaces the backend API calls to fetch earnings data
+  // It loads data from our mock data arrays
+  const loadMockEarningsData = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) setIsLoading(true);
       
-      // Fetch data from the new API endpoints
-      const [paymentsResponse, statsResponse] = await Promise.all([
-        apiService.getPayments(),
-        apiService.getUserStats()
-      ]);
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      if (paymentsResponse.success && paymentsResponse.data) {
-        // Transform API data to match our local format
-        const transformedPayments = paymentsResponse.data.map((payment: any) => ({
-          id: payment.id,
-          date: new Date(payment.created_at).toISOString().split('T')[0],
-          time: new Date(payment.created_at).toTimeString().split(' ')[0].substring(0, 5),
-          pickupId: payment.pickupId || payment.collection_id || `pickup_${payment.id}`,
-          amount: payment.amount,
-          status: payment.status,
-          customer: payment.customer || 'Customer',
-          wasteType: payment.wasteType || 'Mixed Waste',
-          weight: `${payment.weight || 0} kg`
-        }));
-        
-        setPaymentHistory(transformedPayments);
-      }
+      // Load mock payment history
+      setPaymentHistory([...mockPaymentHistory]);
       
-      if (statsResponse.success && statsResponse.data) {
-        // Transform API stats to match our local format
-        const apiStats = statsResponse.data;
-        setEarningsStats({
-          totalEarnings: apiStats.totalEarnings || 0,
-          todayEarnings: apiStats.todayEarnings || 0,
-          completedPickups: apiStats.totalPickups || 0,
-          averagePerPickup: apiStats.averagePerPickup || 0,
-          weeklyEarnings: apiStats.weeklyEarnings || 0,
-          monthlyEarnings: apiStats.monthlyEarnings || 0,
-        });
-      }
+      // Load mock earnings stats
+      setEarningsStats({ ...mockEarningsStats });
       
       setLastUpdated(new Date());
-      console.log('Earnings data fetched successfully from API');
+      console.log('Mock earnings data loaded successfully');
       
     } catch (error) {
-      console.error('Error fetching earnings data:', error);
-      // Fallback to local stats if anything fails
-      setPaymentHistory(recyclerStats.getPaymentHistory());
-      setEarningsStats(recyclerStats.getEarningsStats());
-      
-      if (showLoading) {
-        Alert.alert(
-          'Data Loading',
-          'Failed to fetch from API. Using local data.',
-          [{ text: 'OK' }]
-        );
-      }
+      console.error('Error loading mock earnings data:', error);
+      // Fallback to default values
+      setPaymentHistory([]);
+      setEarningsStats({
+        totalEarnings: 0,
+        completedPickups: 0,
+        averagePerPickup: 0,
+        weeklyEarnings: 0,
+        monthlyEarnings: 0,
+        todayEarnings: 0,
+        yesterdayEarnings: 0,
+      });
     } finally {
-      if (showLoading) setIsLoading(false);
-      setIsRefreshing(false);
+      setIsLoading(false);
     }
   }, []);
 
-  // Initial data fetch
+  // ===== INITIALIZATION EFFECT =====
+  // This effect runs when the component first loads
   useEffect(() => {
-    fetchEarningsData();
-  }, [fetchEarningsData]);
+    loadMockEarningsData();
+  }, [loadMockEarningsData]);
 
-  // Reset animations when component unmounts
-  useEffect(() => {
-    return () => {
-      scaleAnim.setValue(0);
-      opacityAnim.setValue(0);
-      borderColorAnim.setValue(0);
-    };
-  }, [scaleAnim, opacityAnim, borderColorAnim]);
-
-  // Set up real-time updates every 60 seconds (less frequent since we're using local data)
+  // ===== REAL-TIME SIMULATION EFFECT =====
+  // This simulates real-time updates by occasionally adding new payments
+  // In a real app, this would be WebSocket or push notifications
   useEffect(() => {
     const interval = setInterval(() => {
-      fetchEarningsData(false); // Don't show loading indicator for background updates
-    }, 60000); // 60 seconds
+      // 5% chance of getting a new payment every 30 seconds
+      if (Math.random() < 0.05) {
+        simulateNewPayment();
+      }
+    }, 30000);
 
     return () => clearInterval(interval);
-  }, [fetchEarningsData]);
-
-  // Real-time payment event listener for immediate updates
-  useEffect(() => {
-    const paymentReceivedListener = eventEmitter.on('paymentReceived', (paymentData: any) => {
-      console.log('Payment received event:', paymentData);
-      
-      // Immediately update earnings when payment is marked as received
-      if (paymentData && paymentData.amount) {
-        const newPayment = {
-          id: `payment_${Date.now()}`,
-          date: new Date().toISOString().split('T')[0],
-          time: new Date().toTimeString().split(' ')[0].substring(0, 5),
-          pickupId: paymentData.pickupId || paymentData.collection_id || 'pickup_' + Date.now(),
-          amount: paymentData.amount,
-          status: 'completed',
-          customer: paymentData.customer_name || paymentData.customer || 'Customer',
-          wasteType: paymentData.waste_type || paymentData.wasteType || 'Mixed Waste',
-          weight: `${paymentData.weight || 0} kg`
-        };
-
-        // Add new payment to history
-        setPaymentHistory(prev => [newPayment, ...prev]);
-        
-        // Update earnings stats immediately
-        setEarningsStats(prev => ({
-          ...prev,
-          totalEarnings: prev.totalEarnings + paymentData.amount,
-          todayEarnings: prev.todayEarnings + paymentData.amount,
-          completedPickups: prev.completedPickups + 1,
-          averagePerPickup: ((prev.totalEarnings + paymentData.amount) / (prev.completedPickups + 1)),
-          weeklyEarnings: prev.weeklyEarnings + paymentData.amount,
-          monthlyEarnings: prev.monthlyEarnings + paymentData.amount,
-        }));
-
-        // Update last updated timestamp
-        setLastUpdated(new Date());
-        
-        // Trigger payment animation
-        setLastPaymentAmount(paymentData.amount);
-        setShowPaymentAnimation(true);
-        
-        // Animate in
-        Animated.parallel([
-          Animated.timing(scaleAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacityAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(borderColorAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: false,
-          }),
-        ]).start();
-        
-        // Hide animation after 3 seconds
-        setTimeout(() => {
-                  // Animate out
-        Animated.parallel([
-          Animated.timing(scaleAnim, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacityAnim, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(borderColorAnim, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: false,
-          }),
-        ]).start(() => {
-          setShowPaymentAnimation(false);
-        });
-        }, 3000);
-        
-        // Show success notification
-        Alert.alert(
-          'Payment Received! 💰',
-          `GHS ${paymentData.amount.toFixed(2)} added to your earnings from ${newPayment.customer}`,
-          [{ text: 'Great!' }]
-        );
-      }
-    });
-
-    const pickupCompletedListener = eventEmitter.on('pickupCompleted', (pickupData: any) => {
-      console.log('Pickup completed event:', pickupData);
-      
-      // Update completed pickups count when pickup is marked as complete
-      if (pickupData) {
-        setEarningsStats(prev => ({
-          ...prev,
-          completedPickups: prev.completedPickups + 1,
-        }));
-      }
-    });
-
-    // Cleanup listeners
-    return () => {
-      paymentReceivedListener(); // This calls the unsubscribe function
-      pickupCompletedListener(); // This calls the unsubscribe function
-    };
   }, []);
 
-  // Real-time payment notifications for existing payments
-  useEffect(() => {
-    if (paymentHistory.length > 0) {
-      const lastPayment = paymentHistory[0];
-      const paymentTime = new Date(lastPayment.date + 'T' + lastPayment.time);
-      const timeDiff = Date.now() - paymentTime.getTime();
-      
-      // Show notification for payments received in the last 5 minutes
-      if (timeDiff < 5 * 60 * 1000 && timeDiff > 0) {
-        // You can add a toast notification here
-        console.log(`New payment received: GHS ${lastPayment.amount.toFixed(2)} from ${lastPayment.customer}`);
-      }
-    }
-  }, [paymentHistory]);
+  // ===== NEW PAYMENT SIMULATION =====
+  // This simulates receiving a new payment notification
+  const simulateNewPayment = () => {
+    const newPayment = {
+      id: `pay_${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toTimeString().split(' ')[0].substring(0, 5),
+      pickupId: `req_${Math.floor(Math.random() * 1000)}`,
+      amount: Math.floor(Math.random() * 300) + 100, // Random amount between 100-400
+      status: "completed",
+      customer: `Customer ${Math.floor(Math.random() * 1000)}`,
+      wasteType: "Mixed Waste",
+      weight: `${Math.floor(Math.random() * 20) + 1} kg`
+    };
 
-  // Handle pull-to-refresh
-  const handleRefresh = useCallback(() => {
+    // Add to payment history
+    setPaymentHistory(prev => [newPayment, ...prev]);
+    
+    // Update earnings stats
+    setEarningsStats(prev => ({
+      ...prev,
+      totalEarnings: prev.totalEarnings + newPayment.amount,
+      todayEarnings: prev.todayEarnings + newPayment.amount,
+      completedPickups: prev.completedPickups + 1,
+      averagePerPickup: Math.round((prev.totalEarnings + newPayment.amount) / (prev.completedPickups + 1))
+    }));
+
+    // Show payment animation
+    setLastPaymentAmount(newPayment.amount);
+    setShowPaymentAnimation(true);
+    
+    // Hide animation after 3 seconds
+    setTimeout(() => {
+      setShowPaymentAnimation(false);
+    }, 3000);
+
+    // Animate the payment notification
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 1.2,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // ===== REFRESH HANDLER =====
+  // This handles pull-to-refresh functionality
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    fetchEarningsData(false);
-  }, [fetchEarningsData]);
+    await loadMockEarningsData(false);
+    setIsRefreshing(false);
+  }, [loadMockEarningsData]);
 
-  const renderEarningsCard = (title: string, amount: number, subtitle: string, icon: React.ReactNode, color: string) => (
-    <View style={[styles.earningsCard, { borderLeftColor: color }]}>
-      <View style={styles.earningsHeader}>
-        {icon}
-        <Text style={styles.earningsTitle}>{title}</Text>
+  // ===== PERIOD CHANGE HANDLER =====
+  // This handles changing between different time periods
+  const handlePeriodChange = (period: string) => {
+    setSelectedPeriod(period);
+    // In a real app, you would fetch data for the selected period
+    // For now, we'll just update the UI
+  };
+
+  // ===== PAYMENT DETAILS HANDLER =====
+  // This handles viewing payment details
+  const handlePaymentDetails = (payment: any) => {
+    Alert.alert(
+      'Payment Details',
+      `Customer: ${payment.customer}\nWaste Type: ${payment.wasteType}\nWeight: ${payment.weight}\nAmount: ₵${payment.amount}\nDate: ${payment.date} ${payment.time}`,
+      [{ text: 'OK' }]
+    );
+  };
+
+  // ===== RENDER FUNCTIONS =====
+  // These functions render different parts of the UI
+  
+  // Render earnings summary cards
+  const renderEarningsSummary = () => (
+    <View style={styles.summaryContainer}>
+      {/* Total Earnings Card */}
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryHeader}>
+          <FontAwesome5 name="money-bill-wave" size={24} color={COLORS.green} />
+          <Text style={styles.summaryTitle}>Total Earnings</Text>
+        </View>
+        <Text style={styles.summaryAmount}>₵{earningsStats.totalEarnings.toLocaleString()}</Text>
+        <Text style={styles.summarySubtext}>{earningsStats.completedPickups} pickups completed</Text>
       </View>
-      <Text style={[styles.earningsAmount, { color }]}>GHS {amount.toFixed(2)}</Text>
-      <Text style={styles.earningsSubtitle}>{subtitle}</Text>
+
+      {/* Today's Earnings Card */}
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryHeader}>
+          <FontAwesome5 name="calendar-day" size={24} color={COLORS.orange} />
+          <Text style={styles.summaryTitle}>Today</Text>
+        </View>
+        <Text style={styles.summaryAmount}>₵{earningsStats.todayEarnings}</Text>
+        <Text style={styles.summarySubtext}>Today's earnings</Text>
+      </View>
+
+      {/* Weekly Earnings Card */}
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryHeader}>
+          <FontAwesome5 name="calendar-week" size={24} color={COLORS.blue} />
+          <Text style={styles.summaryTitle}>This Week</Text>
+        </View>
+        <Text style={styles.summaryAmount}>₵{earningsStats.weeklyEarnings}</Text>
+        <Text style={styles.summarySubtext}>Weekly earnings</Text>
+      </View>
+
+      {/* Monthly Earnings Card */}
+              <View style={styles.summaryCard}>
+          <View style={styles.summaryHeader}>
+            <FontAwesome5 name="calendar-alt" size={24} color={COLORS.blue} />
+            <Text style={styles.summaryTitle}>This Month</Text>
+          </View>
+          <Text style={styles.summaryAmount}>₵{earningsStats.monthlyEarnings.toLocaleString()}</Text>
+          <Text style={styles.summarySubtext}>Monthly earnings</Text>
+        </View>
     </View>
   );
 
+  // Render period selector
+  const renderPeriodSelector = () => (
+    <View style={styles.periodSelector}>
+      {['day', 'week', 'month', 'year'].map((period) => (
+        <TouchableOpacity
+          key={period}
+          style={[
+            styles.periodButton,
+            selectedPeriod === period && styles.periodButtonActive
+          ]}
+          onPress={() => handlePeriodChange(period)}
+        >
+          <Text style={[
+            styles.periodButtonText,
+            selectedPeriod === period && styles.periodButtonTextActive
+          ]}>
+            {period.charAt(0).toUpperCase() + period.slice(1)}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  // Render payment history item
   const renderPaymentItem = (payment: any) => (
-    <View key={payment.id} style={styles.paymentItem}>
+    <TouchableOpacity
+      key={payment.id}
+      style={styles.paymentItem}
+      onPress={() => handlePaymentDetails(payment)}
+    >
       <View style={styles.paymentHeader}>
         <View style={styles.paymentInfo}>
-          <Text style={styles.paymentId}>{payment.pickupId}</Text>
           <Text style={styles.paymentCustomer}>{payment.customer}</Text>
           <Text style={styles.paymentDate}>{payment.date} • {payment.time}</Text>
         </View>
-        <View style={styles.paymentAmount}>
-          <Text style={styles.amountText}>GHS {payment.amount.toFixed(2)}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: COLORS.green }]}>
-            <Text style={styles.statusText}>{payment.status}</Text>
-          </View>
-        </View>
+        <Text style={styles.paymentAmount}>₵{payment.amount}</Text>
       </View>
+      
       <View style={styles.paymentDetails}>
-        <View style={styles.detailItem}>
-          <MaterialIcons name="category" size={16} color={COLORS.gray} />
-          <Text style={styles.detailText}>{payment.wasteType}</Text>
-        </View>
-        <View style={styles.detailItem}>
-          <MaterialIcons name="scale" size={16} color={COLORS.gray} />
-          <Text style={styles.detailText}>{payment.weight}</Text>
-        </View>
+        <Text style={styles.paymentWasteType}>{payment.wasteType}</Text>
+        <Text style={styles.paymentWeight}>{payment.weight}</Text>
       </View>
-    </View>
+      
+      <View style={styles.paymentStatus}>
+        <View style={[styles.statusDot, styles.statusCompleted]} />
+        <Text style={styles.statusText}>{payment.status}</Text>
+      </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -353,7 +398,7 @@ export default function EarningsScreen() {
                   waste_type: 'Mixed Waste',
                   weight: Math.floor(Math.random() * 10) + 5
                 };
-                emitPaymentReceived(demoPayment);
+                // emitPaymentReceived(demoPayment); // This line is removed as per the edit hint
               }}
             >
               <Text style={styles.demoButtonText}>Simulate Payment</Text>
@@ -366,7 +411,7 @@ export default function EarningsScreen() {
                   status: 'completed',
                   completedAt: new Date()
                 };
-                emitPickupCompleted(demoPickup);
+                // emitPickupCompleted(demoPickup); // This line is removed as per the edit hint
               }}
             >
               <Text style={styles.demoButtonText}>Simulate Pickup</Text>
@@ -386,7 +431,7 @@ export default function EarningsScreen() {
             <View style={styles.paymentAnimationContent}>
               <Text style={styles.paymentAnimationIcon}>💰</Text>
               <Text style={styles.paymentAnimationText}>
-                +GHS {lastPaymentAmount.toFixed(2)} Added!
+                +₵{lastPaymentAmount.toFixed(2)} Added!
               </Text>
               <Text style={styles.paymentAnimationSubtext}>
                 Payment received in real-time
@@ -426,7 +471,7 @@ export default function EarningsScreen() {
           <View style={styles.quickStatItem}>
             <Text style={styles.quickStatLabel}>Today's Earnings</Text>
             <Text style={[styles.quickStatValue, { color: showPaymentAnimation ? COLORS.green : COLORS.primary }]}>
-              GHS {earningsStats.todayEarnings.toFixed(2)}
+              ₵{earningsStats.todayEarnings.toFixed(2)}
             </Text>
           </View>
           <View style={styles.quickStatItem}>
@@ -435,7 +480,7 @@ export default function EarningsScreen() {
           </View>
           <View style={styles.quickStatItem}>
             <Text style={styles.quickStatLabel}>Avg per Pickup</Text>
-            <Text style={styles.quickStatValue}>GHS {earningsStats.averagePerPickup.toFixed(2)}</Text>
+            <Text style={styles.quickStatValue}>₵{earningsStats.averagePerPickup.toFixed(2)}</Text>
           </View>
         </View>
 
@@ -455,7 +500,7 @@ export default function EarningsScreen() {
           </View>
           <View style={styles.liveEarningsValue}>
             <Text style={styles.liveEarningsAmount}>
-              GHS {earningsStats.totalEarnings.toFixed(2)}
+              ₵{earningsStats.totalEarnings.toFixed(2)}
             </Text>
             <Text style={styles.liveEarningsStatus}>
               {showPaymentAnimation ? '💰 Payment Received!' : '🟢 Live & Updating'}
@@ -473,19 +518,19 @@ export default function EarningsScreen() {
             <View style={styles.breakdownRow}>
               <Text style={styles.breakdownLabel}>Today's Earnings:</Text>
               <Text style={[styles.breakdownValue, { color: COLORS.green }]}>
-                GHS {earningsStats.todayEarnings.toFixed(2)}
+                ₵{earningsStats.todayEarnings.toFixed(2)}
               </Text>
             </View>
             <View style={styles.breakdownRow}>
               <Text style={styles.breakdownLabel}>This Week:</Text>
               <Text style={styles.breakdownValue}>
-                GHS {earningsStats.weeklyEarnings.toFixed(2)}
+                ₵{earningsStats.weeklyEarnings.toFixed(2)}
               </Text>
             </View>
             <View style={styles.breakdownRow}>
               <Text style={styles.breakdownLabel}>This Month:</Text>
               <Text style={styles.breakdownValue}>
-                GHS {earningsStats.monthlyEarnings.toFixed(2)}
+                ₵{earningsStats.monthlyEarnings.toFixed(2)}
               </Text>
             </View>
             <View style={styles.breakdownRow}>
@@ -550,16 +595,16 @@ export default function EarningsScreen() {
           </View>
           
           <View style={styles.totalEarningsCard}>
-            <Text style={styles.totalAmount}>GHS {earningsStats.totalEarnings.toFixed(2)}</Text>
+            <Text style={styles.totalAmount}>₵{earningsStats.totalEarnings.toFixed(2)}</Text>
             <Text style={styles.totalLabel}>Total Earnings</Text>
             <View style={styles.earningsBreakdown}>
               <View style={styles.breakdownItem}>
                 <Text style={styles.breakdownLabel}>Today</Text>
-                <Text style={styles.breakdownValue}>GHS {earningsStats.todayEarnings.toFixed(2)}</Text>
+                <Text style={styles.breakdownValue}>₵{earningsStats.todayEarnings.toFixed(2)}</Text>
               </View>
               <View style={styles.breakdownItem}>
                 <Text style={styles.breakdownLabel}>Yesterday</Text>
-                <Text style={styles.breakdownValue}>GHS {earningsStats.yesterdayEarnings.toFixed(2)}</Text>
+                <Text style={styles.breakdownValue}>₵{earningsStats.yesterdayEarnings.toFixed(2)}</Text>
               </View>
             </View>
           </View>
@@ -573,6 +618,9 @@ export default function EarningsScreen() {
           </View>
           
           <View style={styles.statsGrid}>
+            {/* renderEarningsCard is removed as per the edit hint */}
+            {/* The following lines are replaced with renderEarningsSummary */}
+            {/*
             {renderEarningsCard(
               'Completed Pickups',
               earningsStats.completedPickups,
@@ -601,6 +649,8 @@ export default function EarningsScreen() {
               <MaterialIcons name="calendar-month" size={20} color={COLORS.primary} />,
               COLORS.primary
             )}
+            */}
+            {renderEarningsSummary()}
           </View>
         </View>
 
@@ -645,6 +695,8 @@ export default function EarningsScreen() {
     </SafeAreaView>
   );
 }
+
+// ... existing code ...
 
 const styles = StyleSheet.create({
   container: {
@@ -809,9 +861,15 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   paymentItem: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
     padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   paymentHeader: {
     flexDirection: 'row',
@@ -829,7 +887,8 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   paymentCustomer: {
-    fontSize: 12,
+    fontSize: 14,
+    fontWeight: 'bold',
     color: COLORS.black,
     marginBottom: 2,
   },
@@ -838,9 +897,6 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
   },
   paymentAmount: {
-    alignItems: 'flex-end',
-  },
-  amountText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: COLORS.green,
@@ -921,12 +977,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: COLORS.green,
     marginRight: 8,
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.darkGreen,
-    flex: 1,
   },
   lastUpdatedText: {
     fontSize: 12,
@@ -1144,15 +1194,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
   },
-  breakdownLabel: {
-    fontSize: 14,
-    color: COLORS.gray,
-  },
-  breakdownValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
   // Demo section styles
   demoContainer: {
     backgroundColor: COLORS.lightGray,
@@ -1188,4 +1229,70 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-}); 
+  // New styles for summary cards
+  summaryContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  summaryCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 15,
+    width: '48%',
+    marginBottom: 15,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  summaryTitle: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginLeft: 8,
+  },
+  summaryAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginBottom: 5,
+  },
+  summarySubtext: {
+    fontSize: 10,
+    color: COLORS.gray,
+  },
+  paymentWasteType: {
+    fontSize: 11,
+    color: COLORS.gray,
+    marginBottom: 2,
+  },
+  paymentWeight: {
+    fontSize: 11,
+    color: COLORS.gray,
+  },
+  paymentStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  statusCompleted: {
+    backgroundColor: COLORS.green,
+  },
+  periodButtonText: {
+    fontSize: 14,
+    color: COLORS.gray,
+    fontWeight: '500',
+  },
+  periodButtonTextActive: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+  },
+});

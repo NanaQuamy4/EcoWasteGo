@@ -1,21 +1,22 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import { COLORS } from '../../constants';
-import { useAuth } from '../../contexts/AuthContext';
-import apiService from '../../services/apiService';
+import { supabase } from '../../lib/supabase';
 
 export default function UserScreen() {
-  const { user, logout, switchRole, deleteAccount, isLoading } = useAuth();
+  const [user, setUser] = useState<any>(null);
   const [userStats, setUserStats] = useState({
     totalPickups: 0,
     totalEarnings: 0,
     memberSince: 'Jan 2024',
   });
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
 
   // Debug logging for user data
   useEffect(() => {
@@ -25,6 +26,69 @@ export default function UserScreen() {
       console.log('UserScreen: User object keys:', Object.keys(user));
     }
   }, [user]);
+
+  // Function to fetch user data
+  const fetchUserData = useCallback(async () => {
+    try {
+      console.log('UserScreen: Fetching current user data...');
+      setIsLoadingUser(true);
+
+      // Get current authenticated user
+      const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+
+      if (error) {
+        console.error('UserScreen: Error fetching user:', error);
+        setIsLoadingUser(false);
+        return;
+      }
+
+      if (!currentUser) {
+        console.log('UserScreen: No authenticated user found');
+        setIsLoadingUser(false);
+        return;
+      }
+
+      console.log('UserScreen: Current user found:', currentUser.id);
+      console.log('UserScreen: User metadata:', currentUser.user_metadata);
+
+      // Create enhanced user object with metadata
+      const enhancedUser = {
+        id: currentUser.id,
+        email: currentUser.email,
+        created_at: currentUser.created_at,
+        email_confirmed_at: currentUser.email_confirmed_at,
+        // Get data from user metadata
+        username: currentUser.user_metadata?.full_name || 'User',
+        full_name: currentUser.user_metadata?.full_name || '',
+        phone: currentUser.user_metadata?.phone || '',
+        role: currentUser.user_metadata?.role || 'customer',
+        company_name: currentUser.user_metadata?.company_name || '',
+        verification_status: currentUser.email_confirmed_at ? 'verified' : 'unverified',
+        profile_image: currentUser.user_metadata?.profile_photo_url || null,
+      };
+
+      console.log('UserScreen: Enhanced user object:', enhancedUser);
+      setUser(enhancedUser);
+      setIsLoadingUser(false);
+
+    } catch (error) {
+      console.error('UserScreen: Error in fetchUserData:', error);
+      setIsLoadingUser(false);
+    }
+  }, []);
+
+  // Fetch user data on component mount
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
+
+  // Refresh user data when screen comes into focus (e.g., returning from edit profile)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('UserScreen: Screen focused, refreshing user data...');
+      fetchUserData();
+    }, [fetchUserData])
+  );
 
   // Helper function to safely format creation date
   const formatCreationDate = (createdAt: string | undefined) => {
@@ -52,17 +116,43 @@ export default function UserScreen() {
     }
   };
 
-  const [currentStatus, setCurrentStatus] = useState(user?.role === 'recycler' ? 'recycler' : 'user');
+  const [currentStatus, setCurrentStatus] = useState('user');
   const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
   const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
   const [showStatusSwitch, setShowStatusSwitch] = useState(false);
   const [notificationCount, setNotificationCount] = useState(3); // Mock notification count
 
+  // Mock functions (replacing useAuth)
+  const deleteAccount = async () => {
+    // Mock account deletion
+    console.log('Mock: Deleting account...');
+    return Promise.resolve();
+  };
+
+  const logout = async () => {
+    try {
+      console.log('UserScreen: Starting Supabase logout...');
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('UserScreen: Supabase logout error:', error);
+        throw error;
+      }
+      
+      console.log('UserScreen: Supabase logout successful');
+      return true;
+    } catch (error) {
+      console.error('UserScreen: Logout error:', error);
+      throw error;
+    }
+  };
+
   // Load user data when component mounts
   useEffect(() => {
     console.log('UserScreen: User state changed:', user);
-    console.log('UserScreen: Loading state:', isLoading);
     
     if (user) {
       console.log('UserScreen: User found, updating stats...');
@@ -72,20 +162,17 @@ export default function UserScreen() {
       setUserStats({
         totalPickups: 0,
         totalEarnings: 0,
-        memberSince: new Date(user.created_at).toLocaleDateString('en-US', { 
-          month: 'short', 
-          year: 'numeric' 
-        }),
+        memberSince: formatCreationDate(user.created_at),
       });
       
       // Update current status based on user role
       setCurrentStatus(user.role === 'recycler' ? 'recycler' : 'user');
-    } else if (!isLoading) {
-      console.log('UserScreen: No user and not loading, setting loading to false');
-      // User is not authenticated and loading is complete
+    } else {
+      console.log('UserScreen: No user, setting loading to false');
+      // User is not authenticated
       setIsLoadingStats(false);
     }
-  }, [user, isLoading]);
+  }, [user]);
 
   const handleStatusSwitch = async (newStatus: string) => {
     // Disable role switching for customers - they should stay in customer mode
@@ -222,7 +309,7 @@ export default function UserScreen() {
     setNotificationCount(0);
   };
 
-  if (isLoadingStats) {
+  if (isLoadingUser || isLoadingStats) {
     return (
       <View style={styles.container}>
         <AppHeader 
@@ -238,7 +325,7 @@ export default function UserScreen() {
   }
 
   // Show login prompt if user is not authenticated
-  if (!user && !isLoading) {
+  if (!user && !isLoadingUser) {
     return (
       <View style={styles.container}>
         <AppHeader 
@@ -262,9 +349,9 @@ export default function UserScreen() {
           <TouchableOpacity 
             style={[styles.actionButton, { marginTop: 10, backgroundColor: 'orange' }]}
             onPress={() => {
-              console.log('Debug: Current token:', apiService.getToken());
-              console.log('Debug: Is authenticated:', apiService.isAuthenticated());
-              Alert.alert('Debug Info', `Token: ${apiService.getToken()}\nAuthenticated: ${apiService.isAuthenticated()}`);
+              // Mock debug info since we no longer have apiService
+              const debugInfo = `User ID: ${user?.id || 'N/A'}\nRole: ${user?.role || 'N/A'}\nAuthenticated: ${!!user}\nToken: Mock Token (Frontend Only)`;
+              Alert.alert('Debug Info', debugInfo);
             }}
           >
             <Text style={[styles.actionText, { color: 'white' }]}>Debug Auth</Text>
@@ -281,20 +368,21 @@ export default function UserScreen() {
         onNotificationPress={handleNotificationPress}
         notificationCount={notificationCount}
       />
-      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={{
-        name: user?.username || 'User',
-        email: user?.email,
-        phone: user?.phone,
-        status: user?.role,
-        type: user?.role === 'recycler' ? 'recycler' : 'user'
-      }} />
+             <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.profileImageContainer}>
             <View style={styles.profileImageBackground}>
-              <MaterialIcons name="account-circle" size={80} color={COLORS.white} />
+              {user?.profile_image ? (
+                <Image 
+                  source={{ uri: user.profile_image }} 
+                  style={styles.profileImage} 
+                />
+              ) : (
+                <MaterialIcons name="account-circle" size={80} color={COLORS.white} />
+              )}
             </View>
             <View style={styles.verificationBadge}>
               <MaterialIcons name="verified" size={16} color={COLORS.white} />
@@ -320,8 +408,6 @@ export default function UserScreen() {
             </View>
           </View>
         </View>
-
-
 
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
@@ -432,8 +518,6 @@ export default function UserScreen() {
           </TouchableOpacity>
         </View>
 
-
-
         {/* Prompts */}
         {showLogoutPrompt && (
           <View style={styles.promptContainer}>
@@ -496,56 +580,72 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
     backgroundColor: COLORS.darkGreen,
-    borderRadius: 24,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
+    borderRadius: 28,
+    paddingVertical: 36,
+    paddingHorizontal: 28,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   profileImageContainer: {
     position: 'relative',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   profileImageBackground: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  profileImage: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+    resizeMode: 'cover',
   },
   verificationBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: 5,
+    right: 5,
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    width: 28,
-    height: 28,
+    borderRadius: 16,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: COLORS.darkGreen,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 6,
   },
   profileInfo: {
     alignItems: 'center',
   },
   userName: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: COLORS.white,
-    marginBottom: 6,
+    marginBottom: 8,
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   userEmail: {
     fontSize: 16,
@@ -640,15 +740,15 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
-    gap: 12,
+    marginBottom: 28,
+    gap: 16,
   },
   statCard: {
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingVertical: 24,
-    paddingHorizontal: 16,
+    borderRadius: 24,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
     flex: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
@@ -699,16 +799,18 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   actionsContainer: {
-    marginTop: 24,
+    marginTop: 28,
     backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+    borderRadius: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   actionRow: {
     flexDirection: 'row',
@@ -719,18 +821,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    borderRadius: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 22,
     flex: 1,
-    marginHorizontal: 6,
+    marginHorizontal: 8,
     borderWidth: 1,
     borderColor: '#F0F0F0',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+    marginBottom: 16,
   },
   actionIconContainer: {
     backgroundColor: COLORS.darkGreen,

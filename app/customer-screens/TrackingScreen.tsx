@@ -1,328 +1,385 @@
-import { Feather } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AppHeader from '../../components/AppHeader';
 import MapComponent from '../../components/MapComponent';
-import { COLORS, DIMENSIONS } from '../../constants';
-import { apiService } from '../../services/apiService';
-import CommonHeader from '../components/CommonHeader';
+import { COLORS } from '../../constants';
 
-interface TrackingData {
-  requestId: string;
-  recyclerId: string;
-  recyclerName: string;
-  recyclerPhone: string;
-  pickupAddress: string;
-  wasteType: string;
-  weight: number;
-  status: string;
-}
+// ===== MOCK DATA FOR TRACKING SCREEN =====
+// This replaces the backend API calls with local mock data
+// In a real app, this would come from a database or real-time tracking service
 
-interface PaymentSummary {
-  id: string;
-  requestId: string;
-  weight: string;
-  wasteType: string;
-  rate: string;
-  subtotal: string;
-  environmentalTax: string;
-  totalAmount: string;
-  status: 'pending' | 'accepted' | 'rejected';
-  createdAt: string;
-}
+// Mock waste collection data for tracking
+const mockWasteCollection = {
+  id: "req_001",
+  customer_id: "user_001",
+  recycler_id: "user_002",
+  waste_type: "Mixed Waste",
+  weight: 8,
+  pickup_address: "123 Main Street, Accra Central",
+  special_instructions: "Please call before arrival",
+  status: "in_progress",
+  created_at: "2024-01-15T10:30:00Z",
+  accepted_at: "2024-01-15T10:32:00Z",
+  started_at: "2024-01-15T10:40:00Z",
+  estimated_completion: "2024-01-15T11:00:00Z"
+};
+
+// Mock recycler location data
+const mockRecyclerLocation = {
+  latitude: 6.6734,
+  longitude: -1.5714,
+  heading: 45, // Direction in degrees
+  speed: 25, // km/h
+  lastUpdated: new Date().toISOString()
+};
+
+// Mock customer location data
+const mockCustomerLocation = {
+  latitude: 6.6834,
+  longitude: -1.5814,
+  address: "123 Main Street, Accra Central"
+};
+
+// Mock tracking updates
+const mockTrackingUpdates = [
+  {
+    id: "update_001",
+    type: "location",
+    message: "Recycler is 2.3 km away",
+    timestamp: "2024-01-15T10:42:00Z",
+    icon: "location-on"
+  },
+  {
+    id: "update_002",
+    type: "status", 
+    message: "Recycler started journey to pickup location",
+    timestamp: "2024-01-15T10:40:00Z",
+    icon: "directions-car"
+  },
+  {
+    id: "update_003",
+    type: "eta",
+    message: "Estimated arrival: 8 minutes",
+    timestamp: "2024-01-15T10:43:00Z",
+    icon: "access-time"
+  }
+];
 
 export default function TrackingScreen() {
-  const params = useLocalSearchParams();
-  const requestId = params.requestId as string;
-  const recyclerName = params.recyclerName as string;
-  const pickup = params.pickup as string;
-  
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    requestId?: string;
+    recyclerName?: string;
+    pickup?: string;
+  }>();
+
+  // ===== LOCAL STATE MANAGEMENT =====
+  // These state variables manage the UI state and tracking data
+  const [wasteCollection, setWasteCollection] = useState<any>(null);
+  const [recyclerLocation, setRecyclerLocation] = useState<any>(null);
+  const [customerLocation, setCustomerLocation] = useState<any>(null);
+  const [trackingUpdates, setTrackingUpdates] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [timeElapsed, setTimeElapsed] = useState(0);
-  const [hasReachedDestination, setHasReachedDestination] = useState(false);
+  const [estimatedTime, setEstimatedTime] = useState(0);
+  const [distance, setDistance] = useState(0);
+  const [currentStatus, setCurrentStatus] = useState('in_progress');
+  
+  // Add missing variables that were removed during refactoring
   const [showPopup, setShowPopup] = useState(false);
-  const [showPaymentButton, setShowPaymentButton] = useState(false);
-  const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
-  const [recyclerLocation, setRecyclerLocation] = useState({
-    latitude: 6.6734,
-    longitude: -1.5714,
-  });
-  const [destinationLocation, setDestinationLocation] = useState({
-    latitude: 6.6834,
-    longitude: -1.5814,
-  });
-  const [routeCoordinates, setRouteCoordinates] = useState<Array<{latitude: number, longitude: number}>>([]);
-  const [distanceToCustomer, setDistanceToCustomer] = useState(0);
-  const [etaToCustomer, setEtaToCustomer] = useState(0);
-  const [isTrackingActive, setIsTrackingActive] = useState(false);
+  const [trackingData, setTrackingData] = useState<any>(null);
+  const [hasReachedDestination, setHasReachedDestination] = useState(false);
+  const [isTrackingActive, setIsTrackingActive] = useState(true);
   const [hasArrived, setHasArrived] = useState(false);
   const [isWeightCalculation, setIsWeightCalculation] = useState(false);
-  const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
+  const [paymentSummary, setPaymentSummary] = useState<any>(null);
   const [isLoadingPayment, setIsLoadingPayment] = useState(false);
-
-  // Get tracking data when component mounts
-  useEffect(() => {
-    if (requestId) {
-      fetchTrackingData();
-      startTrackingUpdates();
-      startStatusPolling(); // Start polling for status updates
-      startPaymentPolling(); // Start polling for payment summary
-    }
-  }, [requestId]);
-
-  // Timer for elapsed time
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeElapsed(prev => prev + 1);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Simulate arrival after 10 seconds (for demo purposes)
-  useEffect(() => {
-    const destinationTimer = setTimeout(() => {
-      setHasReachedDestination(true);
-      setShowPopup(true);
-    }, 10000);
-
-    return () => clearTimeout(destinationTimer);
-  }, []);
-
-  // Poll for payment summary updates
-  const startPaymentPolling = () => {
-    const paymentInterval = setInterval(async () => {
-      if (hasArrived && !paymentSummary) {
-        await checkPaymentSummary();
-      }
-    }, 5000); // Check every 5 seconds after arrival
-
-    return () => clearInterval(paymentInterval);
+  const [locationInput, setLocationInput] = useState('');
+  const [showPaymentButton, setShowPaymentButton] = useState(false);
+  const [distanceToCustomer, setDistanceToCustomer] = useState(2.3);
+  const [etaToCustomer, setEtaToCustomer] = useState(8);
+  
+  // Add missing handler functions
+  const handlePopupOK = () => {
+    setShowPopup(false);
   };
-
-  // Check if payment summary has been sent by recycler
-  const checkPaymentSummary = async () => {
-    try {
-      setIsLoadingPayment(true);
-      // In a real app, this would call an API to check for payment summary
-      // For now, we'll simulate the check with mock data
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock payment summary data (in real app, this comes from backend)
-      const mockPaymentSummary: PaymentSummary = {
-        id: 'payment-1',
-        requestId: requestId,
-        weight: '8.5 kg',
-        wasteType: 'Plastic',
-        rate: 'GHS 1.20/kg',
-        subtotal: 'GHS 10.20',
-        environmentalTax: 'GHS 0.51',
-        totalAmount: 'GHS 10.71',
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      };
-      
-      setPaymentSummary(mockPaymentSummary);
-      setIsLoadingPayment(false);
-    } catch (error) {
-      console.error('Error checking payment summary:', error);
-      setIsLoadingPayment(false);
-    }
-  };
-
-  // Poll for status updates to detect arrival
-  const startStatusPolling = () => {
-    const statusInterval = setInterval(async () => {
-      try {
-        const response = await apiService.getWasteCollection(requestId);
-        if (response && response.status === 'in_progress' && !hasReachedDestination) {
-          // Recycler has arrived (status changed to 'in_progress')
-          setHasReachedDestination(true);
-          setShowPopup(true);
-          setIsTrackingActive(false);
-          
-          // Show arrival notification
-          Alert.alert(
-            '🚚 Recycler Has Arrived!',
-            `${trackingData?.recyclerName || 'Your recycler'} has reached your location and is ready to collect your waste.\n\nPlease prepare your waste for pickup.`,
-            [
-              { 
-                text: 'OK', 
-                onPress: () => {
-                  console.log('Customer acknowledged recycler arrival via status polling');
-                }
-              }
-            ]
-          );
-          
-          clearInterval(statusInterval); // Stop polling once arrived
-        }
-      } catch (error) {
-        console.error('Error polling status:', error);
-      }
-    }, 10000); // Poll every 10 seconds
-
-    return () => clearInterval(statusInterval);
-  };
-
-  const fetchTrackingData = async () => {
-    try {
-      const response = await apiService.getWasteCollection(requestId);
-      if (response) {
-        setTrackingData({
-          requestId: response.id,
-          recyclerId: response.recycler_id || 'mock-recycler-id', // Assuming recycler_id is available in the response
-          recyclerName: recyclerName || 'Recycler',
-          recyclerPhone: '+233 XX XXX XXXX', // In real app, get from recycler profile
-          pickupAddress: pickup || response.pickup_address || 'Location not specified',
-          wasteType: response.waste_type,
-          weight: response.weight || 0,
-          status: response.status
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching tracking data:', error);
-      // Use fallback data
-      setTrackingData({
-        requestId: requestId || 'mock-id',
-        recyclerId: 'mock-recycler-id', // Mock for recyclerId
-        recyclerName: recyclerName || 'Recycler',
-        recyclerPhone: '+233 XX XXX XXXX',
-        pickupAddress: pickup || 'Location not specified',
-        wasteType: 'Plastic',
-        weight: 10,
-        status: 'in_progress'
-      });
-    }
-  };
-
-  const startTrackingUpdates = () => {
-    setIsTrackingActive(true);
-    
-    // Simulate real-time location updates from recycler
-    // In a real app, this would come from WebSockets or real-time API calls
-    const trackingInterval = setInterval(() => {
-      // Simulate recycler moving towards customer
-      setRecyclerLocation(prev => {
-        const newLat = prev.latitude + (Math.random() - 0.5) * 0.001; // Small random movement
-        const newLng = prev.longitude + (Math.random() - 0.5) * 0.001;
-        
-        const newLocation = {
-          latitude: newLat,
-          longitude: newLng,
-        };
-        
-        // Update route coordinates
-        setRouteCoordinates(prev => [...prev, newLocation]);
-        
-        // Calculate distance and ETA
-        const distance = calculateDistance(newLocation, destinationLocation);
-        setDistanceToCustomer(distance);
-        
-        const etaMinutes = Math.round((distance / 30) * 60); // Assuming 30 km/h average speed
-        setEtaToCustomer(etaMinutes);
-        
-        // Check if recycler has arrived (within 50 meters)
-        checkArrival(distance);
-        
-        return newLocation;
-      });
-    }, 3000); // Update every 3 seconds
-    
-    // Cleanup interval on unmount
-    return () => clearInterval(trackingInterval);
-  };
-
-  const calculateDistance = (point1: {latitude: number, longitude: number}, point2: {latitude: number, longitude: number}) => {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (point2.latitude - point1.latitude) * Math.PI / 180;
-    const dLon = (point2.longitude - point1.longitude) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(point1.latitude * Math.PI / 180) * Math.cos(point2.latitude * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
-
-  const checkArrival = (dist: number) => {
-    if (dist < 0.05 && !hasArrived) { // Within 50 meters
-      setHasArrived(true);
-      setIsTrackingActive(false);
-      
-      // Show arrival notification
-      Alert.alert(
-        '🎉 Recycler Arrived!',
-        'The recycler has reached your location. They will now collect and weigh your waste to calculate the payment.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Update status to indicate weight calculation phase
-              setIsWeightCalculation(true);
-            }
-          }
-        ]
-      );
-    }
-  };
-
+  
   const handleCall = () => {
-    if (!trackingData) return;
-    
-    // Navigate to CallRecyclerScreen
-    router.push({
-      pathname: '/customer-screens/CallRecyclerScreen' as any,
-      params: { 
-        requestId: requestId,
-        recyclerName: trackingData.recyclerName,
-        recyclerPhone: trackingData.recyclerPhone,
-        pickup: trackingData.pickupAddress 
-      }
-    });
+    // Mock call functionality
+    Alert.alert('Call', 'Calling recycler...');
   };
   
   const handleText = () => {
-    if (!trackingData) return;
-    
-    // Navigate to TextRecyclerScreen
+    // Navigate to text recycler screen with recycler info
     router.push({
-      pathname: '/customer-screens/TextRecyclerScreen' as any,
-      params: { 
-        requestId: requestId,
-        recyclerName: trackingData.recyclerName,
-        recyclerPhone: trackingData.recyclerPhone,
-        pickup: trackingData.pickupAddress 
+      pathname: '/customer-screens/TextRecyclerScreen',
+      params: {
+        requestId: trackingData?.requestId || 'req_001',
+        recyclerName: trackingData?.recyclerName || 'GreenFleet GH',
+        recyclerPhone: '+233241234567', // Mock phone number
+        pickup: trackingData?.pickupAddress || '123 Main Street, Accra Central'
       }
     });
   };
   
   const handleCancel = () => {
+    Alert.alert('Cancel Pickup', 'Are you sure you want to cancel this pickup?', [
+      { text: 'No', style: 'cancel' },
+      { text: 'Yes', style: 'destructive', onPress: () => router.back() }
+    ]);
+  };
+  
+  const handleCheckPaymentDue = () => {
+    // Mock payment check
+    setIsLoadingPayment(true);
+    setTimeout(() => {
+      setIsLoadingPayment(false);
+      setPaymentSummary({
+        totalAmount: 20.00,
+        wasteType: 'Mixed Waste',
+        weight: 8
+      });
+    }, 1000);
+  };
+  
+
+
+  // ===== INITIALIZATION EFFECT =====
+  // This effect runs when the component first loads
+  useEffect(() => {
+    loadMockData();
+    startTracking();
+  }, []);
+
+  // Simulate recycler arriving after some time
+  useEffect(() => {
+    const arrivalTimer = setTimeout(() => {
+      setHasArrived(true);
+      setHasReachedDestination(true);
+      setIsTrackingActive(false);
+      setCurrentStatus('arrived');
+      
+      // Show arrival notification alert
+      Alert.alert(
+        '🎯 Recycler Has Arrived!',
+        'Your recycler is now at your location and ready to collect waste.',
+        [
+          {
+            text: 'OK',
+            onPress: () => console.log('User acknowledged recycler arrival')
+          }
+        ]
+      );
+    }, 10000); // 10 seconds delay
+    
+    return () => clearTimeout(arrivalTimer);
+  }, []);
+
+  // Clear arrival timer when navigating away
+  useEffect(() => {
+    return () => {
+      // This will clear any pending timers when component unmounts
+      // or when navigating to PaymentSummary
+    };
+  }, []);
+
+  // ===== MOCK DATA LOADING FUNCTION =====
+  // This replaces the backend API call to fetch tracking data
+  // It loads data from our mock data arrays
+  const loadMockData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Load mock waste collection data
+      setWasteCollection(mockWasteCollection);
+      
+      // Load mock location data
+      setRecyclerLocation(mockRecyclerLocation);
+      setCustomerLocation(mockCustomerLocation);
+      
+      // Load mock tracking updates
+      setTrackingUpdates([...mockTrackingUpdates]);
+      
+      // Set tracking data with recycler info from params
+      setTrackingData({
+        recyclerName: params.recyclerName || 'GreenFleet GH',
+        pickupAddress: params.pickup || '123 Main Street, Accra Central',
+        wasteType: mockWasteCollection.waste_type,
+        weight: mockWasteCollection.weight,
+        status: mockWasteCollection.status
+      });
+      
+      // Calculate initial distance and ETA
+      calculateDistanceAndETA();
+      
+      console.log('TrackingScreen: Mock data loaded successfully');
+    } catch (error) {
+      console.error('TrackingScreen: Error loading mock data:', error);
+      // Fallback to default mock data
+      setWasteCollection(mockWasteCollection);
+      setRecyclerLocation(mockRecyclerLocation);
+      setCustomerLocation(mockCustomerLocation);
+      setTrackingUpdates(mockTrackingUpdates);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ===== TRACKING SIMULATION =====
+  // This simulates real-time tracking updates
+  const startTracking = () => {
+    // Timer for elapsed time
+    const timeInterval = setInterval(() => {
+      setTimeElapsed(prev => prev + 1);
+    }, 1000);
+
+    // Simulate recycler movement every 10 seconds
+    const trackingInterval = setInterval(() => {
+      simulateRecyclerMovement();
+    }, 10000);
+
+    // Simulate new tracking updates every 30 seconds
+    const updateInterval = setInterval(() => {
+      simulateTrackingUpdates();
+    }, 30000);
+
+    return () => {
+      clearInterval(timeInterval);
+      clearInterval(trackingInterval);
+      clearInterval(updateInterval);
+    };
+  };
+
+  // ===== LOCATION CALCULATION FUNCTIONS =====
+  // These functions calculate distance and ETA
+  
+  // Calculate distance between two coordinates using Haversine formula
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // Calculate distance and ETA
+  const calculateDistanceAndETA = () => {
+    if (recyclerLocation && customerLocation) {
+      const calculatedDistance = calculateDistance(
+        recyclerLocation.latitude,
+        recyclerLocation.longitude,
+        customerLocation.latitude,
+        customerLocation.longitude
+      );
+      
+      setDistance(calculatedDistance);
+      
+      // Estimate time based on distance and speed
+      const estimatedMinutes = Math.round((calculatedDistance / recyclerLocation.speed) * 60);
+      setEstimatedTime(estimatedMinutes);
+    }
+  };
+
+  // ===== SIMULATION FUNCTIONS =====
+  // These functions simulate real-time updates
+  
+  // Simulate recycler movement towards customer
+  const simulateRecyclerMovement = () => {
+    if (recyclerLocation && customerLocation) {
+      // Move recycler closer to customer (simplified linear interpolation)
+      const progress = Math.min(timeElapsed / 600, 1); // Complete journey in 10 minutes
+      
+      const newLat = recyclerLocation.latitude + (customerLocation.latitude - recyclerLocation.latitude) * progress;
+      const newLon = recyclerLocation.longitude + (customerLocation.longitude - recyclerLocation.longitude) * progress;
+      
+      const newLocation = {
+        ...recyclerLocation,
+        latitude: newLat,
+        longitude: newLon,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      setRecyclerLocation(newLocation);
+      calculateDistanceAndETA();
+      
+      // Check if recycler has arrived
+      if (progress >= 0.95) {
+        setCurrentStatus('arrived');
+        addTrackingUpdate('arrival', 'Recycler has arrived at your location!');
+      }
+    }
+  };
+
+  // Simulate new tracking updates
+  const simulateTrackingUpdates = () => {
+    const updateTypes = [
+      { type: 'location', message: 'Recycler is getting closer', icon: 'my-location' },
+      { type: 'status', message: 'Making good progress', icon: 'trending-up' },
+      { type: 'eta', message: `Updated ETA: ${Math.max(estimatedTime - 2, 1)} minutes`, icon: 'access-time' }
+    ];
+    
+    const randomUpdate = updateTypes[Math.floor(Math.random() * updateTypes.length)];
+    addTrackingUpdate(randomUpdate.type, randomUpdate.message, randomUpdate.icon);
+  };
+
+  // Add new tracking update
+  const addTrackingUpdate = (type: string, message: string, icon?: string) => {
+    const newUpdate = {
+      id: `update_${Date.now()}`,
+      type,
+      message,
+      timestamp: new Date().toISOString(),
+      icon: icon || 'info'
+    };
+    
+    setTrackingUpdates(prev => [newUpdate, ...prev]);
+  };
+
+  // ===== ACTION HANDLERS =====
+  // These functions handle user actions
+  
+  // Cancel the pickup
+  const handleCancelPickup = () => {
     Alert.alert(
       'Cancel Pickup',
-      'Are you sure you want to cancel your pickup?',
+      'Are you sure you want to cancel this pickup?',
       [
-        {
-          text: 'No',
-          style: 'cancel',
-          onPress: () => {
-            // Stay on tracking screen - do nothing
-          }
-        },
-        {
-          text: 'Yes',
+        { text: 'No', style: 'cancel' },
+        { 
+          text: 'Yes, Cancel', 
           style: 'destructive',
           onPress: async () => {
             try {
-              // Update status to cancelled
-              await apiService.updateWasteStatus(requestId, 'cancelled');
+              // Simulate API call delay
+              await new Promise(resolve => setTimeout(resolve, 1000));
               
-              // Navigate back to SelectTruck screen with pickup parameter
-              router.push({
-                pathname: '/customer-screens/SelectTruck' as any,
-                params: { pickup: pickup }
-              });
+              // Update mock data status
+              if (wasteCollection) {
+                wasteCollection.status = 'cancelled';
+                setWasteCollection({ ...wasteCollection });
+              }
+              
+              setCurrentStatus('cancelled');
+              addTrackingUpdate('cancelled', 'Pickup cancelled by customer', 'cancel');
+              
+              Alert.alert(
+                'Pickup Cancelled',
+                'Your pickup has been cancelled successfully.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => router.back()
+                  }
+                ]
+              );
             } catch (error) {
               console.error('Error cancelling pickup:', error);
               Alert.alert('Error', 'Failed to cancel pickup. Please try again.');
@@ -333,65 +390,79 @@ export default function TrackingScreen() {
     );
   };
 
-  const handleCheckPaymentDue = async () => {
-    if (!paymentSummary) {
-      // No payment summary yet - show waiting message
-      Alert.alert(
-        '⏳ Payment Summary Not Ready',
-        'Your recycler is still calculating the weight and preparing your payment summary. Please wait a moment and try again.',
-        [
-          { text: 'OK' },
-          { 
-            text: 'Check Again', 
-            onPress: async () => {
-              setIsLoadingPayment(true);
-              await checkPaymentSummary();
-              setIsLoadingPayment(false);
-            }
+  // Contact recycler
+  const handleContactRecycler = () => {
+    Alert.alert(
+      'Contact Recycler',
+      'Call the recycler?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Call', 
+          onPress: () => {
+            // In a real app, this would use Linking to make a phone call
+            console.log('Calling recycler');
+            Alert.alert('Call Recycler', 'Phone call functionality would be implemented here.');
           }
-        ]
-      );
-      return;
-    }
-
-    // Payment summary exists - navigate to payment summary screen
-    router.push({
-      pathname: '/customer-screens/PaymentSummary' as any,
-      params: { 
-        requestId: requestId,
-        recyclerId: trackingData?.recyclerId || 'mock-recycler-id',
-        recyclerName: trackingData?.recyclerName || recyclerName,
-        pickup: trackingData?.pickupAddress || pickup,
-        paymentSummaryId: paymentSummary.id,
-        weight: paymentSummary.weight,
-        wasteType: paymentSummary.wasteType,
-        rate: paymentSummary.rate,
-        subtotal: paymentSummary.subtotal,
-        environmentalTax: paymentSummary.environmentalTax,
-        totalAmount: paymentSummary.totalAmount
-      }
-    });
+        }
+      ]
+    );
   };
 
-  const handlePopupOK = () => {
-    setShowPopup(false);
-    setShowPaymentButton(true);
+  // ===== UTILITY FUNCTIONS =====
+  // Format time display
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  if (!trackingData) {
+  // ===== UI RENDER FUNCTIONS =====
+  // These functions render different parts of the UI
+  
+  // Render tracking update item
+  const renderTrackingUpdate = (update: any) => (
+    <View key={update.id} style={styles.updateItem}>
+      <MaterialIcons 
+        name={update.icon as any} 
+        size={20} 
+        color={COLORS.darkGreen} 
+        style={styles.updateIcon} 
+      />
+      <View style={styles.updateContent}>
+        <Text style={styles.updateMessage}>{update.message}</Text>
+        <Text style={styles.updateTime}>
+          {new Date(update.timestamp).toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })}
+        </Text>
+      </View>
+    </View>
+  );
+
+  if (isLoading) {
     return (
-      <View style={styles.container}>
-        <CommonHeader title="Loading..." />
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading tracking information...</Text>
-        </View>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading tracking information...</Text>
+      </View>
+    );
+  }
+
+  if (!wasteCollection || !recyclerLocation || !customerLocation || !trackingData) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Failed to load tracking data</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadMockData}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <CommonHeader title="Track Pickup" />
+              <AppHeader />
       
       <View style={styles.content}>
         {/* Arrival Notification Modal */}
@@ -440,162 +511,148 @@ export default function TrackingScreen() {
           </View>
         </Modal>
 
-        {/* Live Tracking Map */}
-        <View style={styles.mapContainer}>
-          <View style={styles.mapHeader}>
-            <Text style={styles.mapTitle}>
-              {hasReachedDestination 
-                ? '🎯 Recycler Has Arrived!' 
-                : isTrackingActive 
-                ? '🚚 Live Tracking' 
-                : '📍 Pickup Location'
-              }
-            </Text>
-            <Text style={styles.mapSubtitle}>
-              {hasReachedDestination
-                ? 'Ready for waste collection • Navigation completed'
-                : isTrackingActive 
-                ? `${trackingData?.recyclerName || 'Recycler'} is on the way • ${distanceToCustomer.toFixed(1)} km away`
-                : 'Recycler location will appear here'
-              }
-            </Text>
-          </View>
-          
-          <MapComponent
-            markers={[
-              {
-                id: 'recycler',
-                coordinate: recyclerLocation,
-                title: hasReachedDestination 
-                  ? `${trackingData?.recyclerName || 'Recycler'} - Arrived!` 
-                  : trackingData?.recyclerName || 'Recycler',
-                description: hasReachedDestination 
-                  ? 'Ready to collect waste' 
-                  : 'Recycler current location',
-                type: 'recycler',
-              },
-              {
-                id: 'destination',
-                coordinate: destinationLocation,
-                title: 'Your Location',
-                description: trackingData?.pickupAddress,
-                type: 'destination',
-              },
-            ]}
-            route={{
-              coordinates: routeCoordinates.length > 0 ? routeCoordinates : [recyclerLocation, destinationLocation],
-              color: hasReachedDestination ? COLORS.green : COLORS.darkGreen,
-            }}
-            style={styles.trackingMap}
-            showUserLocation={true}
-          />
-          
-          {/* Arrival Indicator Overlay */}
-          {hasReachedDestination && (
-            <View style={styles.arrivalOverlay}>
-              <View style={styles.arrivalBadge}>
-                <Text style={styles.arrivalBadgeText}>🎯 ARRIVED</Text>
+        {/* Scrollable Content */}
+        <ScrollView 
+          style={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Live Tracking Map */}
+          <View style={styles.mapContainer}>
+            <View style={styles.mapHeader}>
+              <Text style={styles.mapTitle}>
+                {hasReachedDestination 
+                  ? '🎯 Recycler Has Arrived!' 
+                  : isTrackingActive 
+                  ? '🚚 Live Tracking' 
+                  : '📍 Pickup Location'
+                }
+              </Text>
+              <Text style={styles.mapSubtitle}>
+                {hasReachedDestination
+                  ? 'Ready for waste collection • Navigation completed'
+                  : isTrackingActive 
+                  ? `${trackingData?.recyclerName || 'Recycler'} is on the way • ${distanceToCustomer.toFixed(1)} km away`
+                  : 'Recycler location will appear here'
+                }
+              </Text>
+            </View>
+            
+            {/* Debug Info */}
+            <View style={styles.debugInfo}>
+              <Text style={styles.debugText}>
+                Recycler: {recyclerLocation ? `${recyclerLocation.latitude.toFixed(4)}, ${recyclerLocation.longitude.toFixed(4)}` : 'Loading...'}
+              </Text>
+              <Text style={styles.debugText}>
+                Customer: {customerLocation ? `${customerLocation.latitude.toFixed(4)}, ${customerLocation.longitude.toFixed(4)}` : 'Loading...'}
+              </Text>
+            </View>
+            
+            <View style={styles.mapWrapper}>
+              {recyclerLocation && customerLocation ? (
+                <MapComponent
+                  markers={[
+                    {
+                      id: 'recycler',
+                      coordinate: recyclerLocation,
+                      title: hasReachedDestination 
+                        ? `${trackingData?.recyclerName || 'Recycler'} - Arrived!` 
+                        : trackingData?.recyclerName || 'Recycler',
+                      description: hasReachedDestination 
+                        ? 'Ready to collect waste' 
+                        : 'Recycler current location',
+                      type: 'recycler',
+                    },
+                    {
+                      id: 'destination',
+                      coordinate: customerLocation,
+                      title: 'Your Location',
+                      description: customerLocation.address,
+                      type: 'destination',
+                    },
+                  ]}
+                  route={{
+                    coordinates: [recyclerLocation, customerLocation],
+                    color: hasReachedDestination ? COLORS.green : COLORS.darkGreen,
+                  }}
+                  style={{ flex: 1 }}
+                  showUserLocation={true}
+                />
+              ) : (
+                <View style={styles.mapFallback}>
+                  <Text style={styles.mapFallbackText}>Loading map...</Text>
+                  <Text style={styles.mapFallbackSubtext}>Please wait while we get your location</Text>
+                </View>
+              )}
+            </View>
+            
+            {/* Arrival Indicator Overlay */}
+            {hasReachedDestination && (
+              <View style={styles.arrivalOverlay}>
+                <View style={styles.arrivalBadge}>
+                  <Text style={styles.arrivalBadgeText}>🎯 ARRIVED</Text>
+                </View>
               </View>
-            </View>
-          )}
-        </View>
-
-        {/* Tracking Information Card */}
-        <View style={styles.trackingCard}>
-          <View style={styles.trackingHeader}>
-            <Feather name="truck" size={24} color={COLORS.darkGreen} />
-            <Text style={styles.trackingTitle}>Pickup Progress</Text>
-          </View>
-          
-          <View style={styles.trackingDetails}>
-            <View style={styles.detailRow}>
-              <Feather name="user" size={20} color={COLORS.gray} />
-              <Text style={styles.detailText}>{trackingData.recyclerName}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Feather name="map-pin" size={20} color={COLORS.gray} />
-              <Text style={styles.detailText}>{trackingData.pickupAddress}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Feather name="package" size={20} color={COLORS.gray} />
-              <Text style={styles.detailText}>{trackingData.wasteType} • {trackingData.weight}kg</Text>
-            </View>
-          </View>
-          
-          <View style={styles.trackingStats}>
-            <View style={styles.statItem}>
-              <Feather name="clock" size={20} color={COLORS.darkGreen} />
-              <Text style={styles.statValue}>{Math.floor(timeElapsed / 60)}:{(timeElapsed % 60).toString().padStart(2, '0')}</Text>
-              <Text style={styles.statLabel}>Time Elapsed</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Feather name="navigation" size={20} color={COLORS.darkGreen} />
-              <Text style={styles.statValue}>
-                {isTrackingActive ? `${distanceToCustomer.toFixed(1)} km` : '--'}
-              </Text>
-              <Text style={styles.statLabel}>Distance</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Feather name="target" size={20} color={COLORS.darkGreen} />
-              <Text style={styles.statValue}>
-                {isTrackingActive ? `${etaToCustomer} min` : '--'}
-              </Text>
-              <Text style={styles.statLabel}>ETA</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionButtons}>
-          {!hasArrived ? (
-            <>
-              <TouchableOpacity 
-                style={styles.actionButton} 
-                onPress={handleCall}
-              >
-                <Text style={styles.actionButtonText}>📞 Call Recycler</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.actionButton} 
-                onPress={handleText}
-              >
-                <Text style={styles.actionButtonText}>💬 Text Recycler</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <View style={styles.weightCalculationInfo}>
-              <Text style={styles.weightCalculationText}>
-                ⚖️ The recycler is now weighing your waste to calculate the payment amount.
-              </Text>
-              <Text style={styles.weightCalculationSubtext}>
-                You'll receive a payment summary shortly.
-              </Text>
-            </View>
-          )}
-          
-          <TouchableOpacity 
-            style={[
-              styles.checkPaymentButton, 
-              paymentSummary && styles.checkPaymentButtonActive
-            ]} 
-            onPress={handleCheckPaymentDue}
-            disabled={isLoadingPayment}
-          >
-            {isLoadingPayment ? (
-              <Text style={styles.checkPaymentButtonText}>⏳ Checking...</Text>
-            ) : paymentSummary ? (
-              <>
-                <Feather name="credit-card" size={20} color="#1C3301" />
-                <Text style={styles.checkPaymentButtonText}>💰 Payment Ready!</Text>
-              </>
-            ) : (
-              <>
-                <Feather name="credit-card" size={20} color="#1C3301" />
-                <Text style={styles.checkPaymentButtonText}>💰 Check Payment</Text>
-              </>
             )}
-          </TouchableOpacity>
+          </View>
+
+                  {/* Action Buttons - Below Map */}
+        <View style={styles.actionButtonsContainer}>
+          {/* First Row: Call, Text, Cancel */}
+          <View style={styles.actionButtonsRow}>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={handleCall}
+            >
+              <Text style={styles.actionButtonText}>📞 Call</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={handleText}
+            >
+              <Text style={styles.actionButtonText}>💬 Text</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.cancelButton}
+              onPress={handleCancel}
+            >
+              <Feather name="x-circle" size={20} color={COLORS.white} />
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Second Row: Check Payment (only when recycler arrives) */}
+          {hasArrived && (
+            <View style={styles.checkPaymentRow}>
+              <TouchableOpacity 
+                style={[
+                  styles.checkPaymentButton, 
+                  paymentSummary && styles.checkPaymentButtonActive
+                ]} 
+                onPress={() => router.push('/customer-screens/PaymentSummary')}
+                disabled={isLoadingPayment}
+              >
+                {isLoadingPayment ? (
+                  <Text style={styles.checkPaymentButtonText}>⏳ Checking...</Text>
+                ) : paymentSummary ? (
+                  <>
+                    <Feather name="credit-card" size={20} color="#1C3301" />
+                    <Text style={styles.checkPaymentButtonText}>💰 Payment Ready!</Text>
+                  </>
+                ) : (
+                  <>
+                    <Feather name="credit-card" size={20} color="#1C3301" />
+                    <Text style={styles.checkPaymentButtonText}>💰 Check Payment</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+          
+
 
           {/* Payment Status Indicator */}
           {hasArrived && (
@@ -613,16 +670,23 @@ export default function TrackingScreen() {
               )}
             </View>
           )}
-        </View>
+        </ScrollView>
 
-        {/* Cancel Button */}
-        <TouchableOpacity 
-          style={styles.cancelButton}
-          onPress={handleCancel}
-        >
-          <Feather name="x-circle" size={20} color={COLORS.white} />
-          <Text style={styles.cancelButtonText}>Cancel Pickup</Text>
-        </TouchableOpacity>
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={styles.navItem} onPress={() => router.push('/customer-screens/HomeScreen')}>
+            <Feather name="home" size={28} color="#22330B" />
+            <Text style={styles.navLabel}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => router.push('/customer-screens/history')}>
+            <Feather name="rotate-ccw" size={28} color="#22330B" />
+            <Text style={styles.navLabel}>History</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/user')}>
+            <Feather name="user" size={28} color="#22330B" />
+            <Text style={styles.navLabel}>User</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Payment Button (shown after arrival) */}
         {showPaymentButton && (
@@ -635,18 +699,7 @@ export default function TrackingScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Status Indicator */}
-        <View style={styles.statusIndicator}>
-          <View style={[styles.statusDot, { backgroundColor: isTrackingActive ? COLORS.darkGreen : COLORS.gray }]} />
-          <Text style={styles.statusText}>
-            {hasArrived 
-              ? (isWeightCalculation ? '⚖️ Calculating Weight...' : '🎯 Recycler Arrived!')
-              : isTrackingActive 
-                ? '🚚 Recycler En Route' 
-                : '⏳ Waiting for Recycler'
-            }
-          </Text>
-        </View>
+
       </View>
     </View>
   );
@@ -680,20 +733,20 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: DIMENSIONS.margin,
+    paddingHorizontal: 20,
     marginTop: 10,
     marginBottom: 20,
   },
-  mapContainer: {
-    backgroundColor: COLORS.lightGreen,
-    borderRadius: 20,
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-    minHeight: 300,
-    marginBottom: 20,
-  },
+     mapContainer: {
+     backgroundColor: COLORS.lightGreen,
+     borderRadius: 20,
+     shadowColor: COLORS.black,
+     shadowOpacity: 0.1,
+     shadowRadius: 8,
+     elevation: 5,
+     minHeight: 500,
+     marginBottom: 20,
+   },
   mapHeader: {
     alignItems: 'center',
     marginBottom: 20,
@@ -772,21 +825,37 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 20,
+    justifyContent: 'space-between',
+    marginTop: 10,
     marginBottom: 15,
+    gap: 8,
+  },
+  actionButtonsContainer: {
+    marginTop: 30,
+    marginBottom: 15,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 16,
+  },
+  checkPaymentRow: {
+    alignItems: 'center',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1C3301',
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    flex: 1,
+    marginHorizontal: 4,
   },
   callButton: {
     backgroundColor: '#1C3301',
@@ -804,15 +873,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FF6B6B',
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    marginTop: 10,
-    marginBottom: 10,
+    flex: 1,
+    marginHorizontal: 4,
   },
   cancelButtonText: {
     color: COLORS.white,
@@ -1022,5 +1091,131 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.darkGreen,
     marginTop: 5,
+  },
+  // Add missing styles that were referenced but not defined
+  updateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 8,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  updateIcon: {
+    width: 24,
+    height: 24,
+    marginRight: 12,
+    color: COLORS.darkGreen,
+  },
+  updateContent: {
+    flex: 1,
+  },
+  updateMessage: {
+    fontSize: 14,
+    color: COLORS.darkGreen,
+    marginBottom: 4,
+  },
+  updateTime: {
+    fontSize: 12,
+    color: COLORS.gray,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    padding: 20,
+  },
+  errorText: {
+    color: COLORS.darkGreen,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: COLORS.lightGreen,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  
+     mapWrapper: {
+     flex: 1,
+     minHeight: 450,
+   },
+  mapFallback: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  mapFallbackText: {
+    color: COLORS.darkGreen,
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+     mapFallbackSubtext: {
+     fontSize: 14,
+     color: COLORS.secondary,
+     textAlign: 'center',
+   },
+   
+   // Debug styles
+   debugInfo: {
+     backgroundColor: 'rgba(0,0,0,0.7)',
+     borderRadius: 8,
+     padding: 8,
+     marginBottom: 10,
+   },
+     debugText: {
+    color: COLORS.white,
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  
+  // Scroll container styles
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  
+  // Bottom Navigation styles
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderColor: '#E3F0D5',
+  },
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navLabel: {
+    color: '#22330B',
+    fontSize: 13,
+    marginTop: 2,
+    fontWeight: 'bold',
   },
 }); 

@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Alert,
     Image,
@@ -14,8 +14,11 @@ import {
     View,
 } from 'react-native';
 import { COLORS } from '../../constants';
-import { useAuth } from '../../contexts/AuthContext';
-import apiService from '../../services/apiService';
+// Mock user data (replacing useAuth)
+
+// ===== MOCK DATA FOR RECYCLER REGISTRATION =====
+// This replaces the backend API call with local mock data
+// In a real app, this would come from a database or real-time service
 
 interface FormData {
   companyName: string;
@@ -28,7 +31,7 @@ interface FormData {
 
 export default function RecyclerRegistrationScreen() {
   const router = useRouter();
-  const { user, refreshUser } = useAuth();
+  const user = { id: "user_001", username: "User", email: "user@example.com", phone: "+233 24 123 4567", role: "customer", verification_status: "verified", created_at: "2024-01-15T10:30:00Z", profile_image: null, company_name: "Green Team Recycling" };
   const [formData, setFormData] = useState<FormData>({
     companyName: '',
     residentialAddress: '',
@@ -39,6 +42,12 @@ export default function RecyclerRegistrationScreen() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Mock function (replacing useAuth)
+  const refreshUser = async () => {
+    console.log('Mock: Refreshing user data...');
+    return Promise.resolve();
+  };
 
   // Function to refresh user data
   const handleRefreshUserData = async () => {
@@ -54,12 +63,7 @@ export default function RecyclerRegistrationScreen() {
     }
   };
 
-  // Function to manually set company name for debugging
-  const handleSetCompanyName = () => {
-    const testCompanyName = 'Test Company Name';
-    console.log('RecyclerRegistrationScreen: Manually setting company name to:', testCompanyName);
-    setFormData(prev => ({ ...prev, companyName: testCompanyName }));
-  };
+
 
   // Pre-fill company name from user data
   useEffect(() => {
@@ -100,12 +104,11 @@ export default function RecyclerRegistrationScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        if (type === 'photo') {
-          setFormData(prev => ({ ...prev, profilePhoto: result.assets[0] }));
-        }
+        setFormData(prev => ({ ...prev, profilePhoto: result.assets[0] }));
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
 
@@ -149,8 +152,10 @@ export default function RecyclerRegistrationScreen() {
         {
           text: 'Skip for Now',
           onPress: () => {
+            // TEMPORARILY DISABLED - Let the app follow the intended flow
+            console.log('RecyclerRegistrationScreen: Auto-navigation DISABLED');
             // Navigate to recycler home screen
-            router.replace('/(recycler-tabs)');
+            // router.replace('/(recycler-tabs)');
           },
         },
       ]
@@ -158,36 +163,66 @@ export default function RecyclerRegistrationScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) return;
+    // Validate form data
+    if (!formData.companyName.trim()) {
+      Alert.alert('Error', 'Please enter your company name.');
+      return;
+    }
+    if (!formData.residentialAddress.trim()) {
+      Alert.alert('Error', 'Please enter your residential address.');
+      return;
+    }
+    if (!formData.areasOfOperation.trim()) {
+      Alert.alert('Error', 'Please enter your areas of operation.');
+      return;
+    }
+    if (!formData.truckNumberPlate.trim()) {
+      Alert.alert('Error', 'Please enter your truck number plate.');
+      return;
+    }
 
-    setIsSubmitting(true);
     try {
-      // Call API to complete registration
-      const response = await apiService.completeRecyclerRegistration({
-        companyName: formData.companyName,
-        residentialAddress: formData.residentialAddress,
-        areasOfOperation: formData.areasOfOperation,
-        truckNumberPlate: formData.truckNumberPlate,
-        truckSize: formData.truckSize,
-        profilePhotoUrl: formData.profilePhoto?.uri,
-      });
+      setIsSubmitting(true);
       
-      Alert.alert(
-        'Registration Completed!',
-        'Your registration has been completed successfully. You are now verified and can receive pickup requests.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.push('/(recycler-tabs)'),
-          },
-        ]
-      );
-    } catch (error: any) {
-      console.error('Registration completion error:', error);
-      Alert.alert(
-        'Error', 
-        error.message || 'Failed to complete registration. Please try again.'
-      );
+      // ===== MOCK API CALL =====
+      // This replaces the backend API call with local mock data
+      // In a real app, this would send data to a server
+      console.log('Submitting recycler registration with data:', formData);
+      
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Mock successful response
+      const mockResponse = {
+        success: true,
+        message: 'Registration submitted successfully!',
+        data: {
+          id: 'mock_registration_id',
+          status: 'pending',
+          submitted_at: new Date().toISOString()
+        }
+      };
+      
+      if (mockResponse.success) {
+        Alert.alert(
+          'Registration Submitted!',
+          'Your recycler registration has been submitted successfully. Our team will review your application and get back to you within 24-48 hours.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Navigate back to recycler home or show success screen
+                router.back();
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to submit registration. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error submitting registration:', error);
+      Alert.alert('Error', 'Failed to submit registration. Please check your connection and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -214,40 +249,34 @@ export default function RecyclerRegistrationScreen() {
             </Text>
           </TouchableOpacity>
 
-          {/* Debug Button to set company name */}
-          <TouchableOpacity 
-            style={[styles.debugButton, { marginTop: 10 }]} 
-            onPress={handleSetCompanyName}
-          >
-            <Text style={styles.debugButtonText}>
-              Debug: Set Company Name
-            </Text>
-          </TouchableOpacity>
-          
-          {/* Debug Info */}
-          <View style={styles.debugInfo}>
-            <Text style={styles.debugText}>User ID: {user?.id || 'None'}</Text>
-            <Text style={styles.debugText}>Role: {user?.role || 'None'}</Text>
-            <Text style={styles.debugText}>Company Name: {user?.company_name || 'None'}</Text>
-            <Text style={styles.debugText}>Form Company Name: {formData.companyName || 'Empty'}</Text>
-            <Text style={styles.debugText}>Form Residential Address: {formData.residentialAddress || 'Empty'}</Text>
-            <Text style={styles.debugText}>Form Areas of Operation: {formData.areasOfOperation || 'Empty'}</Text>
-            <Text style={styles.debugText}>Form Truck Number Plate: {formData.truckNumberPlate || 'Empty'}</Text>
-            <Text style={styles.debugText}>Form Truck Size: {formData.truckSize || 'Not Set'}</Text>
-            <Text style={styles.debugText}>Form Profile Photo: {formData.profilePhoto ? 'Selected' : 'Not Selected'}</Text>
-          </View>
+
         </View>
 
         <View style={styles.form}>
           {/* Company Name */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Company Name *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.companyName}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, companyName: text }))}
-              placeholder="Enter your company name"
-            />
+            <View style={[styles.inputContainer, styles.readOnlyInput]}>
+              <MaterialIcons 
+                name="business" 
+                size={20} 
+                color={COLORS.green} 
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={[styles.input, styles.readOnlyText]}
+                value={formData.companyName}
+                editable={false}
+                placeholder="Company name from registration"
+                autoCapitalize="words"
+              />
+              <View style={styles.readOnlyBadge}>
+                <Text style={styles.readOnlyBadgeText}>✓</Text>
+              </View>
+            </View>
+            <Text style={styles.helperText}>
+              Company name from your initial registration
+            </Text>
           </View>
 
           {/* Residential Address */}
@@ -257,7 +286,7 @@ export default function RecyclerRegistrationScreen() {
               style={styles.input}
               value={formData.residentialAddress}
               onChangeText={(text) => setFormData(prev => ({ ...prev, residentialAddress: text }))}
-              placeholder="Enter your residential address"
+              placeholder="Enter your complete residential address (e.g., 123 Main Street, Accra, Ghana)"
             />
           </View>
 
@@ -268,7 +297,7 @@ export default function RecyclerRegistrationScreen() {
               style={[styles.input, styles.textArea]}
               value={formData.areasOfOperation}
               onChangeText={(text) => setFormData(prev => ({ ...prev, areasOfOperation: text }))}
-              placeholder="List the areas you operate in (e.g., Kumasi Central, Adum, KNUST)"
+              placeholder="List all areas where you operate (e.g., Accra, Kumasi, Tema, Cape Coast)"
               multiline
               numberOfLines={3}
             />
@@ -281,7 +310,7 @@ export default function RecyclerRegistrationScreen() {
               style={styles.input}
               value={formData.truckNumberPlate}
               onChangeText={(text) => setFormData(prev => ({ ...prev, truckNumberPlate: text }))}
-              placeholder="Enter your truck number plate (e.g., GT-1234-21)"
+              placeholder="Enter your truck's license plate number (e.g., GT-1234-20)"
             />
           </View>
 
@@ -377,13 +406,49 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.darkGreen,
   },
-  input: {
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.lightGray,
     borderRadius: 8,
     padding: 12,
-    fontSize: 16,
     backgroundColor: COLORS.white,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+  },
+  readOnlyInput: {
+    borderColor: COLORS.lightGray,
+  },
+  readOnlyText: {
+    flex: 1,
+    paddingRight: 10,
+    fontSize: 16,
+    color: COLORS.gray,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  readOnlyBadge: {
+    backgroundColor: COLORS.green,
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  readOnlyBadgeText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  helperText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginTop: 4,
   },
   textArea: {
     height: 80,
@@ -480,4 +545,5 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     marginBottom: 2,
   },
+
 }); 

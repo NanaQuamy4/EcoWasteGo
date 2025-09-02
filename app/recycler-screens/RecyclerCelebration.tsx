@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Animated, Image, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
 
@@ -93,7 +93,7 @@ export default function RecyclerCelebration() {
           {/* Achievement Card */}
           <View style={styles.achievementCard}>
             <View style={styles.achievementHeader}>
-              <Text style={styles.achievementTitle}>🌱 Eco Hero Achievement</Text>
+              <Text style={styles.achievementTitle}>🏆 Eco Hero Achievement</Text>
             </View>
             
             <View style={styles.achievementContent}>

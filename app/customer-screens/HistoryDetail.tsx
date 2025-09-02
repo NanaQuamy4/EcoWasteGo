@@ -1,12 +1,37 @@
-import { useLocalSearchParams } from 'expo-router';
-import React from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Alert, Image, Linking, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, DIMENSIONS } from '../../constants';
-import { getStatusColor, getStatusText, parseWeight } from '../../constants/helpers';
 import CommonHeader from '../components/CommonHeader';
 
+// Local helper functions (replacing constants/helpers)
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'completed': return COLORS.green;
+    case 'cancelled': return COLORS.red;
+    case 'pending': return '#FF9800';
+    default: return COLORS.gray;
+  }
+};
+
+const getStatusText = (status: string) => {
+  switch (status) {
+    case 'completed': return 'Completed';
+    case 'cancelled': return 'Cancelled';
+    case 'pending': return 'Pending';
+    default: return status;
+  }
+};
+
+const parseWeight = (weight: string) => {
+  return parseFloat(weight.replace(' kg', ''));
+};
+
 export default function HistoryDetailScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams();
+  const [showDeletePrompt, setShowDeletePrompt] = useState(false);
+  const [deleteStep, setDeleteStep] = useState(1);
   
   // Extract parameters from navigation
   const id = params.id as string;

@@ -1,10 +1,27 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import { COLORS } from '../../constants';
-import recyclerStats from '../../utils/recyclerStats';
+// Mock recycler stats (replacing utils/recyclerStats)
+const recyclerStats = {
+  getTotalAvailableRequestsCount: () => 5,
+  isPaymentRequired: () => false,
+  getSubscriptionFeeString: () => '₵0.00',
+  getActivePickupsCount: () => 3,
+  getTodayEarnings: () => 45.80,
+  getWeeklySummary: () => ({ 
+    totalPickups: 25, 
+    totalEarnings: 375.50, 
+    weeklyGoal: 30,
+    fees: 15.00,
+    pickups: 25,
+    avgFee: 0.60
+  }),
+  paySubscriptionFees: () => {},
+  addCompletedPickup: (id: string, amount: number, details: any) => {}
+};
 
 export default function SubscriptionScreen() {
   const [isProcessing, setIsProcessing] = useState(false);

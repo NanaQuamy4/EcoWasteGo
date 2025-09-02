@@ -1,189 +1,231 @@
-import { Feather } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
+import { useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { COLORS } from '../constants';
+import { supabase } from '../lib/supabase';
 
 export default function ForgotPasswordScreen() {
-  const [phone, setPhone] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { forgotPassword } = useAuth();
+  const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [isEmailValid, setIsEmailValid] = useState(false);
 
-  useEffect(() => {
-    console.log('ForgotPasswordScreen rendered');
-  }, []);
-
-  function validatePhone(phone: string) {
-    const cleaned = phone.replace(/\D/g, '');
-    return cleaned.length >= 9 && cleaned.length <= 15;
-  }
-
-  const handleSendVerificationCode = async () => {
-    if (!phone.trim()) {
-      setPhoneError('Please enter your phone number.');
+  // Real Supabase forgot password function
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your email address');
       return;
     }
 
-    if (!validatePhone(phone)) {
-      setPhoneError('Please enter a valid phone number.');
+    if (!isEmailValid) {
+      Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
 
     setIsLoading(true);
-    setPhoneError('');
-
+    
     try {
-      await forgotPassword(phone);
+      console.log('ForgotPasswordScreen: Sending password reset email to:', email);
+      
+      // Send password reset email using Supabase
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'ecowastego://reset-password', // Deep link for password reset
+      });
+
+      if (error) {
+        console.error('ForgotPasswordScreen: Password reset error:', error);
+        Alert.alert('Error', error.message || 'Failed to send reset email. Please try again.');
+        return;
+      }
+
+      console.log('ForgotPasswordScreen: Password reset email sent successfully');
       
       Alert.alert(
-        'Verification Code Sent',
-        'We\'ve sent a 6-digit verification code to your phone number. Please check your SMS and enter the code.',
+        'Email Sent',
+        'If an account exists with this email, you will receive password reset instructions. Please check your email and follow the link to reset your password.',
         [
           {
             text: 'OK',
-            onPress: () => router.push({
-              pathname: '/VerificationScreen',
-              params: { phone: phone }
-            })
+            onPress: () => router.push('/LoginScreen')
           }
         ]
       );
-    } catch (error: any) {
-      console.error('Forgot password error:', error);
-      
-      let message = 'Failed to send verification code. Please try again.';
-      if (error.message === 'PHONE_NOT_FOUND') {
-        message = 'No account found with this phone number.';
-      } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
-        message = 'Network error. Please check your internet connection and try again.';
-      }
-      
-      Alert.alert('Error', message, [{ text: 'OK' }]);
+    } catch (error) {
+      console.error('ForgotPasswordScreen: Unexpected error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  function validateEmail(email: string) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
   return (
-    <View style={styles.container}>
-      <View style={styles.logoRow}>
-        <Image source={require('../assets/images/logo landscape.png')} style={styles.logo} />
-      </View>
-      
-      <View style={styles.contentContainer}>
-        <Text style={styles.title}>Forgotten Password?</Text>
-        <Text style={styles.subtitle}>Please Enter Your Phone Number To Receive a 6-Digit Verification Code</Text>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <MaterialIcons name="arrow-back" size={24} color={COLORS.darkGreen} />
+            </TouchableOpacity>
+            
+            <Text style={styles.title}>Forgot Password</Text>
+            <Text style={styles.subtitle}>
+              Enter your email address to reset your password
+            </Text>
+          </View>
 
-        <View style={styles.inputContainer}>
-          <Feather name="phone" size={20} color="#263A13" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your phone number"
-            value={phone}
-            onChangeText={text => { setPhone(text); setPhoneError(''); }}
-            placeholderTextColor="#999"
-            keyboardType="phone-pad"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-        
-        {phoneError ? (
-          <Text style={styles.errorText}>{phoneError}</Text>
-        ) : null}
+          {/* Form */}
+          <View style={styles.form}>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Email Address</Text>
+              <View style={styles.inputWrapper}>
+                <MaterialIcons 
+                  name="email" 
+                  size={20} 
+                  color={COLORS.gray} 
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your email address"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    setEmailError('');
+                    setIsEmailValid(validateEmail(text));
+                  }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+              {emailError ? (
+                <Text style={styles.errorText}>{emailError}</Text>
+              ) : null}
+            </View>
 
-        <TouchableOpacity 
-          style={[styles.sendButton, isLoading && styles.sendButtonDisabled]} 
-          onPress={handleSendVerificationCode}
-          disabled={isLoading}
-        >
-          <Text style={styles.sendButtonText}>
-            {isLoading ? 'Sending...' : 'Send Code'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+            <TouchableOpacity
+              style={[styles.submitButton, (!email.trim() || !isEmailValid || isLoading) && styles.submitButtonDisabled]}
+              onPress={handleForgotPassword}
+              disabled={!email.trim() || !isEmailValid || isLoading}
+            >
+              <Text style={styles.submitButtonText}>
+                {isLoading ? 'Sending...' : 'Send Reset Email'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.backToLogin}
+              onPress={() => router.push('/LoginScreen')}
+            >
+              <Text style={styles.backToLoginText}>Back to Login</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAF6',
-    paddingHorizontal: 20,
-    paddingTop: 60,
+    backgroundColor: COLORS.white,
   },
-  logoRow: {
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+  },
+  header: {
     alignItems: 'center',
+    marginTop: 40,
     marginBottom: 40,
   },
-  logo: {
-    width: 180,
-    height: 70,
-    resizeMode: 'contain',
-  },
-  contentContainer: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 20,
+  backButton: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    padding: 8,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#263A13',
-    marginBottom: 16,
+    color: COLORS.darkGreen,
     textAlign: 'center',
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#263A13',
+    color: COLORS.gray,
     textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 22,
+  },
+  form: {
+    gap: 20,
   },
   inputContainer: {
+    gap: 8,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.darkGreen,
+  },
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#263A13',
+    borderColor: COLORS.lightGray,
     borderRadius: 8,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: '#fff',
-    height: 50,
-    width: '100%',
-  },
-  inputIcon: {
-    marginRight: 12,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 12,
   },
   input: {
     flex: 1,
-    height: 48,
+    padding: 12,
     fontSize: 16,
-    color: '#263A13',
   },
   errorText: {
-    color: 'red',
-    marginBottom: 16,
-    fontSize: 14,
-    textAlign: 'center',
+    color: COLORS.red,
+    fontSize: 12,
+    marginTop: 4,
   },
-  sendButton: {
-    backgroundColor: '#1C3301',
-    borderRadius: 8,
-    paddingVertical: 14,
+  submitButton: {
+    backgroundColor: COLORS.darkGreen,
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
-    width: '100%',
     marginTop: 20,
   },
-  sendButtonDisabled: {
-    backgroundColor: '#A3C47C',
+  submitButtonDisabled: {
+    opacity: 0.6,
   },
-  sendButtonText: {
-    color: '#fff',
+  submitButtonText: {
+    color: COLORS.white,
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  backToLogin: {
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  backToLoginText: {
+    color: COLORS.orange,
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 

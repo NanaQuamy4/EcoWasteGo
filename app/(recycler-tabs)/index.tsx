@@ -1,14 +1,50 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
-import { useAuth } from '../../contexts/AuthContext';
-import { apiService } from '../../services/apiService';
-import recyclerStats from '../../utils/recyclerStats';
+
+// ===== MOCK DATA FOR RECYCLER HOME TAB =====
+// This replaces all backend API calls with local mock data
+// In a real app, this would come from a database or real-time service
+
+// Mock recycler profile data
+const mockRecyclerProfile = {
+  id: 'recycler_001',
+  is_available: true,
+  business_name: 'Green Team Recycling',
+  vehicle_type: 'Waste Collection Truck',
+  rating: 4.8,
+  total_collections: 156,
+  service_areas: ['Accra Central', 'Kumasi', 'Tema'],
+  city: 'Kumasi',
+  state: 'Ashanti'
+};
+
+// Mock user data (replacing useAuth)
+const mockUser = {
+  id: 'recycler_001',
+  username: 'Recycler',
+  email: 'recycler@example.com',
+  phone: '+233 24 123 4567',
+  verification_status: 'verified',
+  role: 'recycler',
+  created_at: '2024-01-15T10:30:00Z',
+  profile_image: null,
+  company_name: 'Green Team Recycling'
+};
+
+// Mock recycler stats (replacing utils/recyclerStats)
+const mockRecyclerStats = {
+  getTotalAvailableRequestsCount: () => 5,
+  isPaymentRequired: () => false,
+  getSubscriptionFeeString: () => '₵0.00',
+  getActivePickupsCount: () => 3,
+  getTodayEarnings: () => 45.80
+};
 
 export default function RecyclerHomeTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -23,7 +59,8 @@ export default function RecyclerHomeTab() {
     type: 'pickup' | 'recycler' | 'destination';
   }>>([]);
 
-  const { user } = useAuth();
+  // Use mock user data instead of useAuth
+  const user = mockUser;
   const isVerified = user?.verification_status === 'verified';
   const recycler = {
     name: user?.username || 'Recycler',
@@ -36,11 +73,11 @@ export default function RecyclerHomeTab() {
     memberSince: 'Mar 2023',
   };
 
-  // Update counts from shared stats
+  // Update counts from mock stats
   useEffect(() => {
     const updateCounts = () => {
       // Show total available requests (pending + active) to match RecyclerRequests screen
-      const newCount = recyclerStats.getTotalAvailableRequestsCount();
+      const newCount = mockRecyclerStats.getTotalAvailableRequestsCount();
       setRequests(newCount);
     };
     
@@ -53,14 +90,14 @@ export default function RecyclerHomeTab() {
 
   // Check for subscription payment requirement
   useEffect(() => {
-    if (recyclerStats.isPaymentRequired()) {
+    if (mockRecyclerStats.isPaymentRequired()) {
       Alert.alert(
         'Payment Required',
-        `You have outstanding subscription fees of ${recyclerStats.getSubscriptionFeeString()}. You must pay these fees before continuing to use the app.`,
+        `You have outstanding subscription fees of ${mockRecyclerStats.getSubscriptionFeeString()}. You must pay these fees before continuing to use the app.`,
         [
           {
             text: 'Pay Now',
-                            onPress: () => router.push('/recycler-screens/SubscriptionScreen')
+            onPress: () => router.push('/recycler-screens/SubscriptionScreen')
           },
           {
             text: 'Later',
@@ -71,24 +108,29 @@ export default function RecyclerHomeTab() {
     }
   }, []);
 
+  // ===== MOCK DATA LOADING FUNCTION =====
+  // This replaces the backend API call to load availability status
+  // It loads data from our mock data arrays
+  const loadMockAvailabilityStatus = async () => {
+    try {
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Use mock recycler profile data
+      if (mockRecyclerProfile && mockRecyclerProfile.is_available !== undefined) {
+        setIsOffline(!mockRecyclerProfile.is_available);
+      }
+    } catch (error) {
+      console.error('Error loading mock availability status:', error);
+      // Default to online if we can't load the status
+      setIsOffline(false);
+    }
+  };
+
   // Load current availability status
   useEffect(() => {
-    const loadAvailabilityStatus = async () => {
-      try {
-        // Get recycler profile to check availability status
-        const recyclerProfile = await apiService.getRecyclerDetails(user?.id || '');
-        if (recyclerProfile && recyclerProfile.is_available !== undefined) {
-          setIsOffline(!recyclerProfile.is_available);
-        }
-      } catch (error) {
-        console.error('Error loading availability status:', error);
-        // Default to online if we can't load the status
-        setIsOffline(false);
-      }
-    };
-
     if (isVerified && user?.id) {
-      loadAvailabilityStatus();
+      loadMockAvailabilityStatus();
     }
   }, [isVerified, user?.id]);
 
@@ -96,33 +138,24 @@ export default function RecyclerHomeTab() {
     const newStatus = !isOffline;
     
     try {
-      // Call backend API to update availability
-      const response = await apiService.updateRecyclerAvailability(!newStatus);
+      // Mock API call to update availability
+      console.log('Updating recycler availability to:', !newStatus);
       
-      if (response.success) {
-        setIsOffline(newStatus);
-        
-        Alert.alert(
-          newStatus ? 'Go Offline' : 'Go Online',
-          `You are now ${newStatus ? 'offline' : 'online'}. ${newStatus ? 'You will not receive new pickup requests.' : 'You are now available for pickup requests.'}`,
-          [
-            { text: 'OK' }
-          ]
-        );
-      } else {
-        Alert.alert(
-          'Error',
-          'Failed to update availability status. Please try again.',
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      console.error('Error updating availability:', error);
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Update local state
+      setIsOffline(newStatus);
+      
+      // Show success message
       Alert.alert(
-        'Error',
-        'Failed to update availability status. Please check your connection and try again.',
+        'Status Updated',
+        `You are now ${newStatus ? 'offline' : 'online'} and ${newStatus ? 'will not' : 'will'} receive new pickup requests.`,
         [{ text: 'OK' }]
       );
+    } catch (error) {
+      console.error('Error updating availability status:', error);
+      Alert.alert('Error', 'Failed to update availability status. Please try again.');
     }
   };
 
@@ -171,7 +204,7 @@ export default function RecyclerHomeTab() {
         onNotificationPress={handleNotificationPress}
         notificationCount={notificationCount}
       />
-      <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} user={recycler} />
+              <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       
       {/* Verification Prompt for Unverified Recyclers */}
       {!isVerified && (
@@ -254,11 +287,11 @@ export default function RecyclerHomeTab() {
           <Text style={styles.statLabel}>Available Requests</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{recyclerStats.getActivePickupsCount()}</Text>
+          <Text style={styles.statNumber}>{mockRecyclerStats.getActivePickupsCount()}</Text>
           <Text style={styles.statLabel}>Active Pickups</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>₵{recyclerStats.getTodayEarnings().toFixed(2)}</Text>
+          <Text style={styles.statNumber}>₵{mockRecyclerStats.getTodayEarnings().toFixed(2)}</Text>
           <Text style={styles.statLabel}>Today&apos;s Earnings</Text>
         </View>
       </View>

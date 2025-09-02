@@ -1,264 +1,304 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
-} from 'react-native';
-import { COLORS, DIMENSIONS } from '../../constants';
-import { RecyclerProfile } from '../../constants/api';
-import { apiService } from '../../services/apiService';
-import { locationSearchService } from '../../services/locationSearchService';
+import { Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS } from '../../constants';
 
-interface RecyclerData {
-  id: string;
-  business_name?: string;
-  vehicle_type?: string;
-  rating: number;
-  total_collections: number;
-  is_available: boolean;
-  service_areas?: string[];
-  city?: string;
-  state?: string;
-  address?: string;
-  profile_image?: string;
-  distance?: number;
-  eta?: string;
-  rate?: string;
-}
+// ===== MOCK DATA FOR SELECT TRUCK SCREEN =====
+// This replaces the backend API calls with local mock data
+// In a real app, this would come from a database or recycler service
 
-export default function SelectTruckScreen() {
-  const params = useLocalSearchParams();
-  const pickup = params.pickup as string;
-  const latitude = params.latitude as string;
-  const longitude = params.longitude as string;
-  const requestId = params.requestId as string; // New parameter for rejected requests
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'Big Truck' | 'Small Truck'>('all');
-  const [recyclers, setRecyclers] = useState<RecyclerData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [customerLocation, setCustomerLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [isRetryRequest, setIsRetryRequest] = useState(false);
+// Mock available recyclers data matching the image design
+const mockAvailableRecyclers = [
+  {
+    id: "recycler_001",
+    name: "John Doe",
+    phone: "+233241234568",
+    rating: 4.8,
+    completedPickups: 156,
+    vehicleType: "Big Truck",
+    rate: "GHS 1.20/kg",
+    distance: "0.5 km",
+    estimatedArrival: "15 min",
+    isAvailable: true
+  },
+  {
+    id: "recycler_002",
+    name: "Jane Smith",
+    phone: "+233241234569",
+    rating: 4.6,
+    completedPickups: 89,
+    vehicleType: "Small Truck",
+    rate: "GHS 1.15/kg",
+    distance: "1.2 km",
+    estimatedArrival: "25 min",
+    isAvailable: true
+  },
+  {
+    id: "recycler_003",
+    name: "Mike Johnson",
+    phone: "+233241234570",
+    rating: 4.9,
+    completedPickups: 320,
+    vehicleType: "Big Truck",
+    rate: "GHS 1.25/kg",
+    distance: "0.8 km",
+    estimatedArrival: "10 min",
+    isAvailable: true
+  }
+];
 
-  // Calculate distance between two coordinates using Haversine formula
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
+// Mock pickup request data
+const mockPickupRequest = {
+  id: "req_001",
+  customer_id: "user_001",
+  waste_type: "Mixed Waste",
+  weight: 8,
+  pickup_address: "123 Main Street, Accra Central",
+  special_instructions: "Please call before arrival",
+  status: "pending",
+  created_at: "2024-01-15T10:30:00Z"
+};
 
-  // Calculate ETA based on distance and traffic conditions
-  const calculateETA = (distance: number): string => {
-    // More realistic ETA calculation considering:
-    // - City traffic: 20-40 km/h average
-    // - Distance-based time adjustments
-    // - Traffic light delays
-    
-    let avgSpeed = 25; // km/h - conservative city speed
-    
-    // Adjust speed based on distance (longer distances might use highways)
-    if (distance > 5) {
-      avgSpeed = 35; // km/h for longer distances
-    } else if (distance < 1) {
-      avgSpeed = 15; // km/h for very short distances (more traffic lights)
-    }
-    
-    // Add traffic delay factor (20% extra time for city conditions)
-    const trafficDelay = 1.2;
-    const timeInHours = (distance / avgSpeed) * trafficDelay;
-    const timeInMinutes = Math.round(timeInHours * 60);
-    
-    if (timeInMinutes < 1) return 'Less than 1 min';
-    if (timeInMinutes < 60) return `${timeInMinutes} mins`;
-    
-    const hours = Math.floor(timeInMinutes / 60);
-    const minutes = timeInMinutes % 60;
-    
-    if (minutes === 0) return `${hours}h`;
-    return `${hours}h ${minutes}m`;
-  };
-
-  // Get customer's current location from passed coordinates or pickup address
-  const getCustomerLocation = async () => {
-    try {
-      // If coordinates are passed directly, use them
-      if (latitude && longitude) {
-        setCustomerLocation({
-          latitude: parseFloat(latitude),
-          longitude: parseFloat(longitude)
-        });
-      } else if (pickup && pickup !== 'Unknown Location') {
-        // Fallback: Try to get coordinates from the pickup address
-        const location = await locationSearchService.searchLocations(pickup);
-        if (location.length > 0) {
-          setCustomerLocation(location[0].coordinate);
-        }
-      }
-    } catch (error) {
-      console.error('Error getting customer location:', error);
-    }
-  };
-
-  // Fetch available recyclers
-  const fetchRecyclers = async () => {
-    try {
-      setLoading(true);
-      
-      let recyclersData: RecyclerProfile[] = [];
-      
-      // Use the new API method that excludes rejected recyclers
-      try {
-        recyclersData = await apiService.getAvailableRecyclersExcludingRejected(pickup);
-      } catch (error) {
-        console.warn('Failed to fetch recyclers excluding rejected ones, falling back to all recyclers:', error);
-        // Fallback to regular recycler fetch if the new method fails
-        if (pickup && pickup !== 'Unknown Location') {
-          try {
-            recyclersData = await apiService.searchRecyclersByLocation(pickup);
-          } catch (fallbackError) {
-            console.warn('Location-based search failed, falling back to all recyclers:', fallbackError);
-            recyclersData = await apiService.getRecyclers();
-          }
-        } else {
-          recyclersData = await apiService.getRecyclers();
-        }
-      }
-      
-      // Filter only available recyclers
-      const availableRecyclers = recyclersData.filter(recycler => recycler.is_available);
-      
-      // If we have customer location, calculate distances and ETA
-      if (customerLocation) {
-        const recyclersWithDistance = availableRecyclers.map((recycler, index) => {
-          // Generate realistic recycler positions around the customer
-          // In a real app, these would come from the recycler's actual location
-          const angle = (index * 137.5) % 360; // Golden angle for better distribution
-          const radius = 0.3 + (index % 5) * 0.4; // 0.3 to 2.3 km radius for more realistic city distances
-          
-          const recyclerLat = customerLocation.latitude + (radius * Math.cos(angle * Math.PI / 180)) / 111;
-          const recyclerLon = customerLocation.longitude + (radius * Math.sin(angle * Math.PI / 180)) / (111 * Math.cos(customerLocation.latitude * Math.PI / 180));
-          
-          const distance = calculateDistance(
-            customerLocation.latitude,
-            customerLocation.longitude,
-            recyclerLat,
-            recyclerLon
-          );
-          
-          const eta = calculateETA(distance);
-          
-          // Generate realistic rates based on distance and vehicle type
-          let baseRate = 1.0;
-          if (recycler.vehicle_type === 'Big Truck') {
-            baseRate = 0.8; // Big trucks are more efficient, cheaper per kg
-          } else if (recycler.vehicle_type === 'Small Truck') {
-            baseRate = 1.2; // Small trucks are more expensive per kg
-          }
-          
-          const distanceMultiplier = 1 + (distance * 0.08); // 8% increase per km
-          const rate = baseRate * distanceMultiplier;
-          
-          return {
-            ...recycler,
-            distance: Math.round(distance * 10) / 10, // Round to 1 decimal place
-            eta,
-            rate: `GHS ${rate.toFixed(2)}/kg`
-          };
-        });
-        
-        // Sort by distance (closest first)
-        recyclersWithDistance.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-        
-        setRecyclers(recyclersWithDistance);
-      } else {
-        // If no location, just show recyclers without distance
-        const recyclersWithMockData = availableRecyclers.map((recycler, index) => ({
-          ...recycler,
-          distance: undefined,
-          eta: 'Unknown',
-          rate: `GHS ${(1.0 + (index * 0.05)).toFixed(2)}/kg` // Slight variation based on index
-        }));
-        
-        setRecyclers(recyclersWithMockData);
-      }
-    } catch (error) {
-      console.error('Error fetching recyclers:', error);
-      Alert.alert(
-        'Error',
-        'Failed to load recyclers. Please check your connection and try again.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    getCustomerLocation();
-  }, [pickup, latitude, longitude]);
-
-  useEffect(() => {
-    if (customerLocation !== null) {
-      fetchRecyclers();
-    }
-  }, [customerLocation]);
-
-  // Check if this is a retry request (coming from rejection)
-  useEffect(() => {
-    if (requestId) {
-      setIsRetryRequest(true);
-    }
-  }, [requestId]);
-
-  const filteredRecyclers = recyclers.filter(recycler => {
-    if (selectedFilter === 'all') return true;
-    return recycler.vehicle_type === selectedFilter;
-  });
-
-  const handleFilterPress = (filter: 'all' | 'Big Truck' | 'Small Truck') => {
+export default function SelectTruck() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    requestId?: string;
+    pickup?: string;
+    wasteType?: string;
+    weight?: string;
+  }>();
+  
+  // Add missing state variables that were removed during refactoring
+  const [selectedFilter, setSelectedFilter] = useState('all');
+  
+  // Filter handler function
+  const handleFilterPress = (filter: string) => {
     setSelectedFilter(filter);
   };
 
-  const handleTruckPress = (recycler: RecyclerData) => {
-    const params: any = {
-      recyclerId: recycler.id,
-      pickup: pickup,
-      distance: recycler.distance?.toString() || '',
-      eta: recycler.eta || '',
-      rate: recycler.rate || ''
-    };
+  // ===== LOCAL STATE MANAGEMENT =====
+  // These state variables manage the UI state and data
+  const [recyclers, setRecyclers] = useState<any[]>([]);
+  const [filteredRecyclers, setFilteredRecyclers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedRecycler, setSelectedRecycler] = useState<any>(null);
+  const [pickupRequest, setPickupRequest] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'distance' | 'rating' | 'rate'>('distance');
 
-    // If this is a retry request, pass the requestId
-    if (requestId) {
-      params.requestId = requestId;
-      params.isRetry = 'true';
+  // ===== INITIALIZATION EFFECT =====
+  // This effect runs when the component first loads
+  useEffect(() => {
+    loadMockData();
+  }, []);
+
+  // ===== FILTER EFFECT =====
+  // This effect runs when selectedFilter changes
+  useEffect(() => {
+    if (recyclers.length > 0) {
+      if (selectedFilter === 'all') {
+        setFilteredRecyclers(recyclers);
+      } else {
+        const filtered = recyclers.filter(recycler => 
+          recycler.vehicleType === selectedFilter
+        );
+        setFilteredRecyclers(filtered);
+      }
     }
+  }, [selectedFilter, recyclers]);
 
+  // ===== MOCK DATA LOADING FUNCTION =====
+  // This replaces the backend API call to fetch available recyclers
+  // It loads data from our mock data arrays
+  const loadMockData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Load mock recyclers data
+      setRecyclers([...mockAvailableRecyclers]);
+      setFilteredRecyclers([...mockAvailableRecyclers]);
+      
+      // Load mock pickup request data
+      const request = {
+        ...mockPickupRequest,
+        pickup_address: params.pickup || mockPickupRequest.pickup_address,
+        waste_type: params.wasteType || mockPickupRequest.waste_type,
+        weight: parseFloat(params.weight || mockPickupRequest.weight.toString()),
+        id: params.requestId || mockPickupRequest.id
+      };
+      
+      setPickupRequest(request);
+      console.log('SelectTruck: Mock data loaded successfully');
+    } catch (error) {
+      console.error('SelectTruck: Error loading mock data:', error);
+      // Fallback to default mock data
+      setRecyclers(mockAvailableRecyclers);
+      setFilteredRecyclers(mockAvailableRecyclers);
+      setPickupRequest(mockPickupRequest);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ===== FILTERING AND SORTING FUNCTIONS =====
+  // These functions handle data filtering and sorting
+  
+  // Filter recyclers based on search query
+  const filterRecyclers = (query: string) => {
+    setSearchQuery(query);
+    
+    if (!query.trim()) {
+      setFilteredRecyclers(recyclers);
+      return;
+    }
+    
+    const filtered = recyclers.filter(recycler =>
+      recycler.name.toLowerCase().includes(query.toLowerCase()) ||
+      recycler.vehicleType.toLowerCase().includes(query.toLowerCase()) ||
+      recycler.specialties.some((specialty: string) => 
+        specialty.toLowerCase().includes(query.toLowerCase())
+      )
+    );
+    
+    setFilteredRecyclers(filtered);
+  };
+
+  // Sort recyclers by different criteria
+  const sortRecyclers = (criteria: 'distance' | 'rating' | 'rate') => {
+    setSortBy(criteria);
+    
+    const sorted = [...filteredRecyclers].sort((a, b) => {
+      switch (criteria) {
+        case 'distance':
+          return parseFloat(a.distance) - parseFloat(b.distance);
+        case 'rating':
+          return b.rating - a.rating;
+        case 'rate':
+          return parseFloat(a.rate.replace('₵', '')) - parseFloat(b.rate.replace('₵', ''));
+        default:
+          return 0;
+      }
+    });
+    
+    setFilteredRecyclers(sorted);
+  };
+
+  // ===== ACTION HANDLERS =====
+  // These functions handle user actions
+  
+  // Select a recycler for pickup
+  const handleSelectRecycler = (recycler: any) => {
+    // Navigate directly to recycler profile details screen
     router.push({
-      pathname: '/customer-screens/RecyclerProfileDetails' as any,
-      params: params
+      pathname: '/customer-screens/RecyclerProfileDetails',
+      params: { 
+        recyclerId: recycler.id,
+        recyclerName: recycler.name,
+        recyclerRating: recycler.rating.toString(),
+        recyclerDistance: recycler.distance,
+        vehicleType: recycler.vehicleType,
+        rate: recycler.rate,
+        requestId: pickupRequest?.id
+      }
     });
   };
 
-  const handleRefresh = () => {
-    fetchRecyclers();
+  // Call recycler
+  const handleCallRecycler = (recycler: any) => {
+    Alert.alert(
+      'Call Recycler',
+      `Call ${recycler.name} at ${recycler.phone}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Call', 
+          onPress: () => {
+            // In a real app, this would use Linking to make a phone call
+            console.log('Calling recycler:', recycler.phone);
+            Alert.alert('Call Recycler', 'Phone call functionality would be implemented here.');
+          }
+        }
+      ]
+    );
   };
 
-  if (loading) {
+  // View recycler profile
+  const handleViewProfile = (recycler: any) => {
+    router.push({
+      pathname: '/customer-screens/RecyclerProfileDetails',
+      params: { recyclerId: recycler.id }
+    });
+  };
+
+  // ===== UI RENDER FUNCTIONS =====
+  // These functions render different parts of the UI
+  
+  // Render a single recycler item matching the image design
+  const renderRecyclerItem = ({ item }: { item: any }) => (
+    <View style={styles.recyclerCard}>
+      <View style={styles.recyclerRow}>
+        {/* Left side - Truck icon */}
+        <View style={styles.truckIconContainer}>
+          <Image
+            source={
+              item.vehicleType === 'Big Truck'
+                ? require('../../assets/images/truck.png')
+                : require('../../assets/images/small truck.png')
+            }
+            style={styles.truckIcon}
+            resizeMode="contain"
+          />
+        </View>
+        
+        {/* Right side - Recycler details */}
+        <View style={styles.recyclerDetails}>
+          <Text style={styles.recyclerName}>{item.name}</Text>
+          <Text style={styles.vehicleTypeText}>{item.vehicleType}</Text>
+          <Text style={styles.rateText}>Rate: {item.rate}</Text>
+          <View style={styles.ratingRow}>
+            <Text style={styles.ratingText}>Rating: {item.rating}</Text>
+            <View style={styles.starsContainer}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Text key={star} style={styles.starIcon}>
+                  {star <= Math.floor(item.rating) ? '★' : '☆'}
+                </Text>
+              ))}
+            </View>
+          </View>
+        </View>
+      </View>
+      
+      {/* Bottom section with price and select button */}
+      <View style={styles.cardBottom}>
+        <Text style={styles.priceText}>{item.rate}</Text>
+        <TouchableOpacity 
+          style={styles.selectButton}
+          onPress={() => handleSelectRecycler(item)}
+        >
+          <Text style={styles.selectButtonText}>Select</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Finding available recyclers...</Text>
+        <Text style={styles.loadingText}>Loading available recyclers...</Text>
+      </View>
+    );
+  }
+
+  if (!pickupRequest) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Failed to load pickup request</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadMockData}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -319,48 +359,7 @@ export default function SelectTruckScreen() {
           </View>
         </View>
 
-        {/* Pickup Point */}
-        <View style={styles.pickupSection}>
-          <Text style={styles.pickupLabel}>Pickup Point:</Text>
-          <Text style={styles.pickupLocation}>{pickup}</Text>
-          {customerLocation && (
-            <Text style={styles.coordinatesText}>
-              📍 {customerLocation.latitude.toFixed(6)}, {customerLocation.longitude.toFixed(6)}
-            </Text>
-          )}
-          <TouchableOpacity 
-            style={styles.changeLocationButton}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.changeLocationText}>📍 Change Location</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Results Summary */}
-        <View style={styles.resultsSummary}>
-          <View style={styles.resultsLeft}>
-            <Text style={styles.resultsText}>
-              {filteredRecyclers.length} recycler{filteredRecyclers.length !== 1 ? 's' : ''} available
-            </Text>
-            {customerLocation && (
-              <Text style={styles.sortingInfo}>
-                📍 Sorted by distance (closest first)
-              </Text>
-            )}
-          </View>
-          <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
-            <Text style={styles.refreshButtonText}>🔄 Refresh</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Helpful Instructions */}
-        {customerLocation && filteredRecyclers.length > 0 && (
-          <View style={styles.instructionsContainer}>
-            <Text style={styles.instructionsText}>
-              💡 <Text style={styles.instructionsBold}>Tip:</Text> Choose the recycler closest to you for faster service and lower costs!
-            </Text>
-          </View>
-        )}
       </View>
 
       {/* Pickups Banner */}
@@ -370,31 +369,25 @@ export default function SelectTruckScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Retry Request Banner */}
-      {isRetryRequest && (
-        <View style={styles.retryBanner}>
-          <Text style={styles.retryBannerText}>
-            🔄 Retry Request - Previous recycler excluded from options
-          </Text>
-          <Text style={styles.retryBannerSubtext}>
-            Select a new recycler for your pickup request
-          </Text>
-        </View>
-      )}
+
 
       {/* Scrollable Recyclers */}
-      <ScrollView style={styles.scrollArea} contentContainerStyle={{ paddingBottom: 32 }}>
-        {filteredRecyclers.length === 0 ? (
+      <FlatList
+        data={filteredRecyclers}
+        renderItem={renderRecyclerItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        ListEmptyComponent={() => (
           <View style={styles.noResultsContainer}>
             <Text style={styles.noResultsText}>🚛 No Recyclers Found</Text>
             <Text style={styles.noResultsSubtext}>
-              {loading ? 'Searching for recyclers...' : 
+              {isLoading ? 'Searching for recyclers...' : 
                selectedFilter !== 'all' ? 
                `No ${selectedFilter.toLowerCase()}s available in this area` :
                'No recyclers are currently available in this area'}
             </Text>
             
-            {!loading && (
+            {!isLoading && (
               <>
                 <Text style={styles.suggestionText}>
                   💡 What you can try:
@@ -411,17 +404,12 @@ export default function SelectTruckScreen() {
                 <View style={styles.actionButtonsContainer}>
                   <TouchableOpacity 
                     style={styles.tryAgainButton}
-                    onPress={handleRefresh}
+                    onPress={loadMockData}
                   >
                     <Text style={styles.tryAgainButtonText}>🔄 Try Again</Text>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity 
-                    style={styles.changeLocationButton}
-                    onPress={() => router.back()}
-                  >
-                    <Text style={styles.changeLocationButtonText}>📍 Change Location</Text>
-                  </TouchableOpacity>
+
                 </View>
                 
                 {selectedFilter !== 'all' && (
@@ -435,87 +423,8 @@ export default function SelectTruckScreen() {
               </>
             )}
           </View>
-        ) : (
-          filteredRecyclers.map((recycler, index) => (
-            <View key={recycler.id} style={[
-              styles.truckCard,
-              ...(index === 0 && recycler.distance ? [styles.closestTruckCard] : [])
-            ]}>
-              {/* Closest Recycler Badge */}
-              {index === 0 && recycler.distance && (
-                <View style={styles.closestBadge}>
-                  <Text style={styles.closestBadgeText}>🚀 Closest</Text>
-                </View>
-              )}
-              
-              <View style={styles.truckRow}>
-                <Image 
-                  source={
-                    recycler.vehicle_type === 'Small Truck' 
-                      ? require('../../assets/images/small truck.png')
-                      : require('../../assets/images/truck.png')
-                  } 
-                  style={styles.truckImage} 
-                />
-                <View style={styles.truckDetails}>
-                  <Text style={styles.truckName}>
-                    {recycler.business_name || `Recycler ${index + 1}`}
-                  </Text>
-                  <Text style={styles.truckType}>
-                    {recycler.vehicle_type || 'Recycling Truck'}
-                  </Text>
-                  
-                  {/* Distance and ETA - Moved to top for better visibility */}
-                  {recycler.distance && (
-                    <View style={styles.distanceContainer}>
-                      <View style={styles.distanceRow}>
-                        <Text style={styles.distanceLabel}>📍 Distance:</Text>
-                        <Text style={styles.distanceValue}>
-                          {recycler.distance} km
-                        </Text>
-                      </View>
-                      <View style={styles.etaRow}>
-                        <Text style={styles.etaLabel}>⏱️ ETA:</Text>
-                        <Text style={styles.etaValue}>
-                          {recycler.eta}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                  
-                  <Text style={styles.truckCapacity}>Rate: {recycler.rate}</Text>
-                  
-                  <View style={styles.ratingContainer}>
-                    <Text style={styles.ratingText}>Rating: {recycler.rating.toFixed(1)}</Text>
-                    <Text style={styles.ratingStars}>
-                      {'★'.repeat(Math.floor(recycler.rating))}
-                    </Text>
-                  </View>
-                  
-                  <Text style={styles.collectionsText}>
-                    📦 {recycler.total_collections} past collections
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.truckActions}>
-                <View style={styles.priceContainer}>
-                  <Text style={styles.priceText}>{recycler.rate}</Text>
-                  {recycler.distance && (
-                    <Text style={styles.distanceSmall}>{recycler.distance} km</Text>
-                  )}
-                </View>
-                <TouchableOpacity
-                  style={styles.selectButton}
-                  onPress={() => handleTruckPress(recycler)}
-                >
-                  <Text style={styles.selectButtonText}>Select</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
         )}
-      </ScrollView>
+      />
     </View>
   );
 }
@@ -579,19 +488,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     transform: [{ translateY: -20 }],
   },
-  pickupText: {
-    fontSize: 16,
-    color: COLORS.gray,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
+
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 10,
     marginHorizontal: 4,
     borderWidth: 1,
     borderColor: COLORS.lightGray,
@@ -615,10 +519,10 @@ const styles = StyleSheet.create({
   },
   truckCard: {
     backgroundColor: COLORS.white,
-    marginHorizontal: DIMENSIONS.padding,
+    marginHorizontal: 20,
     marginBottom: 12,
     padding: 16,
-    borderRadius: DIMENSIONS.cardBorderRadius,
+    borderRadius: 20,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -628,7 +532,7 @@ const styles = StyleSheet.create({
   closestTruckCard: {
     borderWidth: 3,
     borderColor: COLORS.primary,
-    borderRadius: DIMENSIONS.cardBorderRadius + 2,
+    borderRadius: 22,
     marginTop: 10, // Add some space above the closest truck
   },
   closestBadge: {
@@ -654,7 +558,7 @@ const styles = StyleSheet.create({
   truckImage: {
     width: 100,
     height: 100,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 10,
     marginRight: 12,
   },
   truckDetails: {
@@ -681,11 +585,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  ratingText: {
-    fontSize: 14,
-    color: COLORS.gray,
-    marginRight: 8,
-  },
   ratingStars: {
     fontSize: 14,
     color: COLORS.primary,
@@ -695,107 +594,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  priceText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
   selectButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
     paddingVertical: 8,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 10,
   },
   selectButtonText: {
     color: COLORS.white,
     fontWeight: 'bold',
   },
-  pickupSection: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: DIMENSIONS.padding,
-    marginBottom: 12,
-    padding: 16,
-    borderRadius: DIMENSIONS.cardBorderRadius,
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-    alignItems: 'center',
-  },
-  pickupLabel: {
-    fontSize: 16,
-    color: COLORS.gray,
-    marginBottom: 4,
-  },
-  pickupLocation: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 8,
-  },
-  changeLocationButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: DIMENSIONS.borderRadius,
-  },
-  changeLocationText: {
-    color: COLORS.white,
-    fontWeight: 'bold',
-  },
-  changeLocationButtonText: {
-    color: COLORS.white,
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  coordinatesText: {
-    fontSize: 14,
-    color: COLORS.gray,
-    marginBottom: 8,
-    fontFamily: 'monospace',
-  },
-  resultsSummary: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginHorizontal: DIMENSIONS.padding,
-    marginBottom: 12,
-    padding: 12,
-    backgroundColor: COLORS.white,
-    borderRadius: DIMENSIONS.borderRadius,
-    shadowColor: COLORS.black,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  resultsLeft: {
-    flex: 1,
-  },
-  resultsText: {
-    fontSize: 16,
-    color: COLORS.gray,
-  },
-  sortingInfo: {
-    fontSize: 14,
-    color: COLORS.gray,
-    marginTop: 4,
-  },
-  refreshButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: DIMENSIONS.borderRadius,
-  },
-  refreshButtonText: {
-    color: COLORS.white,
-    fontWeight: 'bold',
-  },
+
   noResultsContainer: {
-    marginHorizontal: DIMENSIONS.padding,
+    marginHorizontal: 20,
     marginTop: 20,
     padding: 24,
     backgroundColor: COLORS.white,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 10,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -846,7 +661,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 10,
     alignItems: 'center',
   },
   tryAgainButtonText: {
@@ -858,7 +673,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.lightGray,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 10,
     alignItems: 'center',
     alignSelf: 'stretch',
   },
@@ -926,11 +741,11 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
   },
   instructionsContainer: {
-    marginHorizontal: DIMENSIONS.padding,
+    marginHorizontal: 20,
     marginBottom: 12,
     padding: 12,
     backgroundColor: COLORS.white,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 10,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -951,9 +766,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingVertical: 10,
     alignItems: 'center',
-    marginHorizontal: DIMENSIONS.padding,
+    marginHorizontal: 20,
     marginBottom: 12,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 10,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -963,7 +778,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     paddingHorizontal: 20,
     paddingVertical: 8,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 10,
   },
   pickupsButtonText: {
     fontSize: 16,
@@ -974,9 +789,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.lightGray,
     paddingVertical: 10,
     alignItems: 'center',
-    marginHorizontal: DIMENSIONS.padding,
+    marginHorizontal: 20,
     marginBottom: 12,
-    borderRadius: DIMENSIONS.borderRadius,
+    borderRadius: 10,
     shadowColor: COLORS.black,
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -993,5 +808,100 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray,
     textAlign: 'center',
+  },
+  // New styles for recycler cards matching the image design
+  recyclerCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  recyclerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  truckIconContainer: {
+    marginRight: 16,
+  },
+  truckIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 10,
+  },
+  recyclerDetails: {
+    flex: 1,
+  },
+  recyclerName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
+  vehicleTypeText: {
+    fontSize: 14,
+    color: COLORS.gray,
+    marginBottom: 4,
+  },
+  rateText: {
+    fontSize: 14,
+    color: COLORS.gray,
+    marginBottom: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  ratingText: {
+    fontSize: 14,
+    color: COLORS.gray,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    marginLeft: 8,
+  },
+  starIcon: {
+    fontSize: 14,
+    color: COLORS.primary,
+    marginLeft: 2,
+  },
+  cardBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  priceText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: COLORS.darkGreen,
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: COLORS.darkGreen,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

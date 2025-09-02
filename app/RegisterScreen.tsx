@@ -1,31 +1,30 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import PhoneNumberInput from '../components/PhoneNumberInput';
 import { COLORS } from '../constants';
-import { useAuth } from '../contexts/AuthContext';
-import { apiService } from '../services/apiService';
-import { handleRegistrationError, SignupValidationData, validateSignup } from '../utils/validation';
+import { supabase } from '../lib/supabase';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { selectedRole } = useLocalSearchParams<{ 
     selectedRole?: string;
   }>();
-  const { register, user } = useAuth();
   
+  // ===== LOCAL STATE MANAGEMENT =====
+  // These state variables manage the form inputs and validation
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -35,47 +34,49 @@ export default function RegisterScreen() {
     companyName: '', // For recyclers
   });
   const [countryCode, setCountryCode] = useState('+233'); // Default to Ghana
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [emailError, setEmailError] = useState('');
-  const [phoneError, setPhoneError] = useState('');
   const [isPhoneValid, setIsPhoneValid] = useState(false);
-  
-  // Field-specific error states for duplicate checking
-  const [fieldErrors, setFieldErrors] = useState({
-    email: '',
-    phone: '',
-    username: '',
-    companyName: ''
-  });
   
   // Privacy policy agreement states
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [disagreeToTerms, setDisagreeToTerms] = useState(true);
 
-
-
+  // Debug logging for role parameter
+  console.log('RegisterScreen: selectedRole from params:', selectedRole);
+  
   const isRecycler = selectedRole === 'recycler';
+  
+  // Set default role if none provided (fallback to customer)
+  const userRole = selectedRole || 'customer';
 
-
-
-  // Navigate based on user role after registration
+  // ===== NAVIGATION EFFECT =====
+  // This effect automatically navigates users to the correct screen after registration
+  // TEMPORARILY DISABLED - Let the app follow the intended flow
   useEffect(() => {
-    if (user) {
-      const userRole = user.role || 'customer';
+    // The user object is no longer managed by AuthContext, so this effect is no longer relevant
+    // if (user) {
+    //   const userRole = user.role || 'customer';
+    //   console.log('RegisterScreen: User registered with role:', userRole);
+    //   console.log('RegisterScreen: Auto-navigation DISABLED - staying on registration screen');
       
-      if (userRole === 'recycler') {
-        // Always go to recycler home first, verification prompt will be shown there
-        router.replace('/(recycler-tabs)');
-      } else {
-        router.replace('/(tabs)');
-      }
-    }
-  }, [user, router]);
+    //   // TEMPORARILY DISABLED - Let the app follow the intended flow
+    //   // if (userRole === 'recycler') {
+    //   //   // Always go to recycler home first, verification prompt will be shown there
+    //   //   router.replace('/(recycler-tabs)');
+    //   // } else {
+    //   //   router.replace('/(tabs)');
+    //   // }
+    // }
+  }, [router]);
 
+  // ===== VALIDATION FUNCTIONS =====
+  // These functions handle form validation
+  
+  // Validate password strength
   const validatePassword = (password: string) => {
     const minLength = 8;
     const hasUpperCase = /[A-Z]/.test(password);
@@ -96,89 +97,64 @@ export default function RegisterScreen() {
     };
   };
 
+  // Handle password input changes
   const handlePasswordChange = (password: string) => {
     setFormData(prev => ({ ...prev, password }));
+    
+    // Clear previous password errors
+    setPasswordError('');
+    
+    // Validate password strength
     const validation = validatePassword(password);
-    setPasswordError(validation.errors.join(', '));
+    if (!validation.isValid) {
+      setPasswordError(validation.errors.join(', '));
+    }
   };
-
-  const handleConfirmPasswordChange = (confirmPassword: string) => {
-    setFormData(prev => ({ ...prev, confirmPassword }));
+  
+  // Add missing handler functions
+  const handleCompanyNameChange = (companyName: string) => {
+    setFormData(prev => ({ ...prev, companyName }));
   };
-
+  
   const handleFullNameChange = (fullName: string) => {
     setFormData(prev => ({ ...prev, fullName }));
-    // Clear username error when user starts typing
-    if (fieldErrors.username) {
-      setFieldErrors(prev => ({ ...prev, username: '' }));
-    }
   };
-
+  
   const handleEmailChange = (email: string) => {
     setFormData(prev => ({ ...prev, email }));
-    // Clear email error when user starts typing
-    if (fieldErrors.email) {
-      setFieldErrors(prev => ({ ...prev, email: '' }));
-    }
+    
+    // Clear previous email errors
+    setEmailError('');
     
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (email && !emailRegex.test(email)) {
+    if (email.trim() !== '' && !emailRegex.test(email)) {
       setEmailError('Please enter a valid email address');
-    } else {
-      setEmailError('');
     }
   };
-
+  
   const handlePhoneChange = (phone: string) => {
     setFormData(prev => ({ ...prev, phone }));
-    // Clear phone error when user starts typing
-    if (fieldErrors.phone) {
-      setFieldErrors(prev => ({ ...prev, phone: '' }));
+    
+    // Clear phone validation when user starts typing
+    if (phone.trim() !== '') {
+      setIsPhoneValid(false);
     }
   };
-
-  const handleCompanyNameChange = (companyName: string) => {
-    setFormData(prev => ({ ...prev, companyName }));
-    // Clear company name error when user starts typing
-    if (fieldErrors.companyName) {
-      setFieldErrors(prev => ({ ...prev, companyName: '' }));
-    }
-  };
-
-  // Helper function to suggest email corrections
-  const suggestEmailCorrection = (email: string): string | null => {
-    const commonMistakes = [
-      { pattern: /@gmail\.comn$/, suggestion: email.replace(/@gmail\.comn$/, '@gmail.com'), message: 'Remove the extra "n"' },
-      { pattern: /@gmail\.con$/, suggestion: email.replace(/@gmail\.con$/, '@gmail.com'), message: 'Change "con" to "com"' },
-      { pattern: /@gmail\.co$/, suggestion: email + 'm', message: 'Add "m" to complete ".com"' },
-      { pattern: /@gmail\.c$/, suggestion: email + 'om', message: 'Add "om" to complete ".com"' },
-      { pattern: /@gmail\.$/, suggestion: email + 'com', message: 'Add "com" to complete the domain' },
-      { pattern: /@gmai\.com$/, suggestion: email.replace(/@gmai\.com$/, '@gmail.com'), message: 'Add "l" to "gmai"' },
-      { pattern: /@gmal\.com$/, suggestion: email.replace(/@gmal\.com$/, '@gmail.com'), message: 'Add "i" to "gmal"' },
-      { pattern: /@gmil\.com$/, suggestion: email.replace(/@gmil\.com$/, '@gmail.com'), message: 'Add "a" to "gmil"' },
-      { pattern: /@hotmai\.com$/, suggestion: email.replace(/@hotmai\.com$/, '@hotmail.com'), message: 'Add "l" to "hotmai"' },
-      { pattern: /@yahoo\.co$/, suggestion: email + 'm', message: 'Add "m" to complete ".com"' },
-    ];
-
-    for (const mistake of commonMistakes) {
-      if (mistake.pattern.test(email)) {
-        return `Did you mean "${mistake.suggestion}"? (${mistake.message})`;
-      }
-    }
-    return null;
-  };
-
-  const handlePhoneValidation = (isValid: boolean, error?: string) => {
+  
+  const handlePhoneValidation = (isValid: boolean) => {
     setIsPhoneValid(isValid);
-    setPhoneError(error || '');
   };
-
+  
+  const handleConfirmPasswordChange = (confirmPassword: string) => {
+    setFormData(prev => ({ ...prev, confirmPassword }));
+  };
+  
   const handleAgreeToTerms = () => {
     setAgreeToTerms(true);
     setDisagreeToTerms(false);
   };
-
+  
   const handleDisagreeToTerms = () => {
     setDisagreeToTerms(true);
     setAgreeToTerms(false);
@@ -186,129 +162,104 @@ export default function RegisterScreen() {
 
 
 
+  // ===== MAIN REGISTRATION HANDLER =====
+  // This function handles the complete registration process
   const handleRegister = async () => {
-    // Clear previous validation errors
-    setValidationErrors([]);
-
-    // Check terms agreement
-    if (!agreeToTerms) {
-      Alert.alert('Required', 'You must agree to the Terms and Conditions to continue.');
+    // Validate all required fields
+    if (!canRegister) {
+      Alert.alert('Validation Error', 'Please fill in all required fields correctly');
       return;
     }
 
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address.');
-      return;
-    }
-
-    // Prepare validation data
-    const validationData: SignupValidationData = {
-      email: formData.email,
-      phoneNumber: formData.phone,
-      countryCode: countryCode,
-      password: formData.password,
-      confirmPassword: formData.confirmPassword,
-      fullName: formData.fullName,
-      companyName: isRecycler ? formData.companyName : undefined,
-    };
-
-    // Validate all fields
-    const validation = validateSignup(validationData);
-    
-    if (!validation.isValid) {
-      setValidationErrors(validation.errors);
-      Alert.alert('Validation Error', validation.errors.join('\n'));
-      return;
-    }
-
-    // Additional validation for recyclers
-    if (isRecycler && !formData.companyName.trim()) {
-      Alert.alert('Error', 'Company name is required for recyclers');
-      return;
-    }
-
-    // Validate phone number
-    if (!isPhoneValid) {
-      Alert.alert('Invalid Phone', phoneError || 'Please enter a valid phone number.');
-      return;
-    }
-
-    setIsLoading(true);
-    console.log('Starting registration process...');
-    
     try {
-      // Send SMS verification code first
-      const response = await apiService.sendSMSVerificationCode(
-        formData.phone, 
-        selectedRole as 'customer' | 'recycler'
-      );
-
-      if (response.success) {
-        // Navigate to verification screen with form data
-        router.push({
-          pathname: '/SMSVerificationScreen',
-          params: {
-            phoneNumber: formData.phone,
-            userType: selectedRole,
-            formData: JSON.stringify({
-              email: formData.email,
-              password: formData.password,
-              username: formData.fullName,
-              phone: validation.formattedPhone || formData.phone,
-              role: selectedRole,
-              companyName: isRecycler ? formData.companyName : undefined,
-            }),
-            isRegistration: 'true' // Flag to indicate this is for registration
-          }
-        });
-      } else {
-        throw new Error(response.message || 'Failed to send verification code');
-      }
-    } catch (error: any) {
-      console.error('Registration error:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
+      setIsLoading(true);
+      console.log('RegisterScreen: Starting registration process...');
+      console.log('RegisterScreen: Form data:', {
+        email: formData.email,
+        fullName: formData.fullName,
+        phone: formData.phone,
+        countryCode: countryCode,
+        fullPhoneNumber: `${countryCode}${formData.phone}`,
+        role: userRole,
+        companyName: formData.companyName
       });
       
-      // Use enhanced error handling
-      const registrationError = handleRegistrationError(error);
+      console.log('RegisterScreen: isRecycler:', isRecycler);
+      console.log('RegisterScreen: selectedRole from params:', selectedRole);
       
-      // Set field-specific errors for better user feedback
-      if (registrationError.code === 'EMAIL_EXISTS') {
-        setFieldErrors(prev => ({ ...prev, email: 'This email is already registered' }));
-      } else if (registrationError.code === 'PHONE_EXISTS') {
-        setFieldErrors(prev => ({ ...prev, phone: 'This phone number is already registered' }));
-      } else if (registrationError.code === 'USERNAME_EXISTS') {
-        setFieldErrors(prev => ({ ...prev, username: 'This username is already taken' }));
-      } else if (registrationError.code === 'COMPANY_EXISTS') {
-        setFieldErrors(prev => ({ ...prev, companyName: 'This company name already exists' }));
-      }
+      // Combine country code with phone number for full international format
+      const fullPhoneNumber = `${countryCode}${formData.phone}`;
       
-      // Show appropriate alert based on error type
-      if (registrationError.code === 'EMAIL_EXISTS' || 
-          registrationError.code === 'PHONE_EXISTS' || 
-          registrationError.code === 'USERNAME_EXISTS' ||
-          registrationError.code === 'COMPANY_EXISTS') {
+      console.log('RegisterScreen: Full phone number:', fullPhoneNumber);
+      
+      // Prepare the Supabase signUp payload
+      const signUpPayload = {
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.fullName,
+            phone: fullPhoneNumber,
+            role: userRole,
+            company_name: formData.companyName,
+          },
+        },
+      };
+      
+      console.log('RegisterScreen: Supabase signUp payload:', JSON.stringify(signUpPayload, null, 2));
+      
+      // Call Supabase auth signUp
+      const { data, error } = await supabase.auth.signUp(signUpPayload);
+
+      if (error) {
+        console.error('RegisterScreen: Registration failed:', error);
+        console.error('RegisterScreen: Full error object:', JSON.stringify(error, null, 2));
+        console.error('RegisterScreen: Error details:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+          details: (error as any).details,
+          hint: (error as any).hint,
+        });
+        
+        // Handle specific error cases
+        let errorMessage = 'An unexpected error occurred';
+        if (error.message.includes('User already registered')) {
+          errorMessage = 'An account with this email already exists. Please sign in instead.';
+        } else if (error.message.includes('Invalid email')) {
+          errorMessage = 'Please enter a valid email address.';
+        } else if (error.message.includes('Password')) {
+          errorMessage = 'Password must be at least 6 characters long.';
+        } else if (error.message.includes('Database error saving new user')) {
+          errorMessage = 'Database error during registration. Please try again or contact support.';
+        } else {
+          errorMessage = error.message;
+        }
+        
+        Alert.alert('Registration Failed', errorMessage);
+      } else if (data.user) {
+        console.log('RegisterScreen: Registration successful for user:', data.user.id);
+        console.log('RegisterScreen: User object:', JSON.stringify(data.user, null, 2));
+        console.log('RegisterScreen: User metadata:', JSON.stringify(data.user.user_metadata, null, 2));
         
         Alert.alert(
-          'Account Already Exists', 
-          registrationError.userFriendlyMessage,
+          'Registration Successful!', 
+          'Please check your inbox for email verification before signing in.',
           [
-            { text: 'Try Again', style: 'default' },
-            { text: 'Go to Login', style: 'default', onPress: () => router.push('/LoginScreen') }
+            {
+              text: 'OK',
+              onPress: () => {
+                // Navigate back to login screen
+                router.push('/LoginScreen');
+              }
+            }
           ]
         );
-      } else if (registrationError.code === 'NETWORK_ERROR') {
-        Alert.alert('Network Error', registrationError.userFriendlyMessage);
-      } else {
-        Alert.alert('Registration Failed', registrationError.userFriendlyMessage);
       }
+    } catch (error: any) {
+      console.error('RegisterScreen: Registration error:', error);
+      Alert.alert('Registration Failed', 'An unexpected error occurred. Please try again.');
     } finally {
-      console.log('Registration process completed');
       setIsLoading(false);
     }
   };
@@ -371,26 +322,22 @@ export default function RegisterScreen() {
                   <MaterialIcons 
                     name="business" 
                     size={20} 
-                    color={formData.companyName.trim() !== '' && !fieldErrors.companyName ? COLORS.green : COLORS.gray} 
+                    color={formData.companyName.trim() !== '' ? COLORS.green : COLORS.gray} 
                     style={styles.inputIcon}
                   />
                   <TextInput
                     style={[
                       styles.input, 
-                      (formData.companyName.trim() === '' || fieldErrors.companyName) && styles.inputError,
-                      formData.companyName.trim() !== '' && !fieldErrors.companyName && { borderColor: COLORS.green }
+                      formData.companyName.trim() === '' && styles.inputError,
+                      formData.companyName.trim() !== '' && { borderColor: COLORS.green }
                     ]}
                     value={formData.companyName}
                     onChangeText={handleCompanyNameChange}
-                    placeholder="Enter company name"
+                    placeholder="Enter your company name (e.g., Green Waste Solutions Ltd.)"
                     autoCapitalize="words"
                   />
                 </View>
-                {fieldErrors.companyName ? (
-                  <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{fieldErrors.companyName}</Text>
-                  </View>
-                ) : null}
+
               </View>
             )}
 
@@ -400,26 +347,22 @@ export default function RegisterScreen() {
                 <MaterialIcons 
                   name="person" 
                   size={20} 
-                  color={formData.fullName.trim() !== '' && !fieldErrors.username ? COLORS.green : COLORS.gray} 
+                  color={formData.fullName.trim() !== '' ? COLORS.green : COLORS.gray} 
                   style={styles.inputIcon} 
                 />
                 <TextInput
                   style={[
                     styles.input, 
-                    (formData.fullName.trim() === '' || fieldErrors.username) && styles.inputError,
-                    formData.fullName.trim() !== '' && !fieldErrors.username && { borderColor: COLORS.green }
+                    formData.fullName.trim() === '' && styles.inputError,
+                    formData.fullName.trim() !== '' && { borderColor: COLORS.green }
                   ]}
                   value={formData.fullName}
                   onChangeText={handleFullNameChange}
-                  placeholder={isRecycler ? "Enter your full name" : "Enter your full name"}
+                  placeholder="Enter your full name (e.g., John Doe)"
                   autoCapitalize="words"
                 />
               </View>
-              {fieldErrors.username ? (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorText}>{fieldErrors.username}</Text>
-                </View>
-              ) : null}
+
             </View>
 
             <View style={styles.inputGroup}>
@@ -428,18 +371,18 @@ export default function RegisterScreen() {
                 <MaterialIcons 
                   name="email" 
                   size={20} 
-                  color={formData.email.trim() !== '' && !emailError && !fieldErrors.email ? COLORS.green : COLORS.gray} 
+                  color={formData.email.trim() !== '' && !emailError ? COLORS.green : COLORS.gray} 
                   style={styles.inputIcon} 
                 />
                 <TextInput
                   style={[
                     styles.input, 
-                    (formData.email.trim() === '' || emailError || fieldErrors.email) && styles.inputError,
-                    formData.email.trim() !== '' && !emailError && !fieldErrors.email && { borderColor: COLORS.green }
+                    (formData.email.trim() === '' || emailError) && styles.inputError,
+                    formData.email.trim() !== '' && !emailError && { borderColor: COLORS.green }
                   ]}
                   value={formData.email}
                   onChangeText={handleEmailChange}
-                  placeholder="Enter your email address"
+                  placeholder="Enter your email address (e.g., john.doe@example.com)"
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -451,17 +394,6 @@ export default function RegisterScreen() {
                   <Text style={styles.errorText}>{emailError}</Text>
                 </View>
               ) : null}
-              {fieldErrors.email ? (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorText}>{fieldErrors.email}</Text>
-                  <TouchableOpacity
-                    style={styles.quickFixButton}
-                    onPress={() => router.push('/LoginScreen')}
-                  >
-                    <Text style={styles.quickFixText}>Login Instead</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
             </View>
 
             <View style={styles.inputGroup}>
@@ -471,21 +403,16 @@ export default function RegisterScreen() {
                 onChangeText={handlePhoneChange}
                 onCountryChange={setCountryCode}
                 selectedCountryCode={countryCode.replace('+', '')}
-                placeholder="Enter your phone number"
-                error={phoneError || fieldErrors.phone || (formData.phone.trim() === '' ? 'Phone number is required' : undefined)}
+                placeholder="Enter your phone number (e.g., 0241234567)"
+                error={formData.phone.trim() === '' ? 'Phone number is required' : undefined}
                 onValidationChange={handlePhoneValidation}
               />
-              {fieldErrors.phone ? (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorText}>{fieldErrors.phone}</Text>
-                  <TouchableOpacity
-                    style={styles.quickFixButton}
-                    onPress={() => router.push('/LoginScreen')}
-                  >
-                    <Text style={styles.quickFixText}>Login Instead</Text>
-                  </TouchableOpacity>
+              {formData.phone.trim() !== '' && isPhoneValid && (
+                <View style={styles.successContainer}>
+                  <MaterialIcons name="check-circle" size={16} color={COLORS.green} />
+                  <Text style={styles.successText}>Valid phone number</Text>
                 </View>
-              ) : null}
+              )}
             </View>
 
 
@@ -497,10 +424,10 @@ export default function RegisterScreen() {
               <View style={styles.inputContainer}>
                 <MaterialIcons name="lock" size={20} color={COLORS.gray} style={styles.inputIcon} />
                 <TextInput
-                  style={[styles.input, (formData.password.trim() === '' || passwordError) && styles.inputError]}
+                  style={[styles.input, { color: COLORS.darkGreen }, (formData.password.trim() === '' || passwordError) && styles.inputError]}
                   value={formData.password}
                   onChangeText={handlePasswordChange}
-                  placeholder="Create a password"
+                  placeholder="Create a strong password (min. 8 characters)"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                 />
@@ -525,10 +452,10 @@ export default function RegisterScreen() {
               <View style={styles.inputContainer}>
                 <MaterialIcons name="lock" size={20} color={COLORS.gray} style={styles.inputIcon} />
                 <TextInput
-                  style={[styles.input, (formData.confirmPassword.trim() === '' || formData.password !== formData.confirmPassword) && styles.inputError]}
+                  style={[styles.input, { color: COLORS.darkGreen }, (formData.confirmPassword.trim() === '' || formData.password !== formData.confirmPassword) && styles.inputError]}
                   value={formData.confirmPassword}
                   onChangeText={handleConfirmPasswordChange}
-                  placeholder="Confirm your password"
+                  placeholder="Confirm your password (must match above)"
                   secureTextEntry={!showConfirmPassword}
                   autoCapitalize="none"
                 />
@@ -677,6 +604,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 12,
     fontSize: 16,
+    color: COLORS.darkGreen,
   },
   inputError: {
     borderColor: '#FF6B6B',
@@ -695,6 +623,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 4,
+  },
+  successContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  successText: {
+    color: COLORS.green,
+    fontSize: 12,
+    marginLeft: 4,
   },
   quickFixButton: {
     backgroundColor: COLORS.orange,
