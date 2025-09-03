@@ -545,5 +545,4 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     marginBottom: 2,
   },
-
-}); 
+});

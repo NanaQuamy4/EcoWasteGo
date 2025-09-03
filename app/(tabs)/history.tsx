@@ -189,6 +189,4 @@ const styles = StyleSheet.create({
     elevation: 4,
     width: 230,
   },
-}); 
-
-}); 
+});

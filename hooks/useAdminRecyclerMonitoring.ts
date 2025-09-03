@@ -224,7 +224,3 @@ export function useAdminRecyclerMonitoring() {
     getAvailableRecyclers
   };
 }
-
-    getAvailableRecyclers
-  };
-}

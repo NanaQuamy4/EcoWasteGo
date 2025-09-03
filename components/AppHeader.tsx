@@ -137,14 +137,3 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
 }); 
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    lineHeight: 12,
-  },
-}); 

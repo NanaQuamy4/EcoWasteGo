@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
 import { useOnlineRecyclers } from '../../hooks/useRecyclerOnlineStatus';
-import { PickupRequestStatus, validateAndUpdateStatus } from '../../lib/pickupRequestStatus';
 import { supabase } from '../../lib/supabase';
 
 // ===== INTERFACES =====
@@ -78,6 +77,7 @@ export default function SelectTruck() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // ===== HELPER FUNCTIONS =====
   const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -113,10 +113,21 @@ export default function SelectTruck() {
   // ===== FETCH AVAILABLE RECYCLERS =====
   const fetchAvailableRecyclers = useCallback(async () => {
     try {
+      console.log('SelectTruck: Starting fetchAvailableRecyclers...');
       setLoadingAvailable(true);
       
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 8000) // 8 second timeout
+      );
+      
+      console.log('SelectTruck: Calling get_available_recyclers_for_requests RPC...');
+      const rpcPromise = supabase.rpc('get_available_recyclers_for_requests');
+      
       // Use the new function that excludes busy recyclers
-      const { data, error } = await supabase.rpc('get_available_recyclers_for_requests');
+      const { data, error } = await Promise.race([rpcPromise, timeoutPromise]) as any;
+      
+      console.log('SelectTruck: RPC response - data:', data, 'error:', error);
       
       if (error) {
         console.error('Error fetching available recyclers:', error);
@@ -154,24 +165,23 @@ export default function SelectTruck() {
       }));
       
       setAvailableRecyclers(transformedData);
+      console.log(`SelectTruck: Found ${transformedData.length} available recyclers (not busy)`);
+      console.log('SelectTruck: Available recyclers data:', transformedData);
     } catch (error) {
-      console.error('Error in fetchAvailableRecyclers:', error);
-      // Fallback to regular online recyclers
-      const fallbackRecyclers: Recycler[] = onlineRecyclers.map(recycler => ({
-        ...recycler,
-        truckSize: recycler.truckSize as 'small' | 'big',
-        fullName: recycler.fullName,
-        phone: recycler.phone,
-        rating: recycler.rating,
-        isAvailable: recycler.isAvailable,
-        isOnline: recycler.isOnline,
-        lastSeenAt: recycler.lastSeenAt,
-        heartbeatAt: recycler.heartbeatAt,
-        status: recycler.status,
-        pendingRequestsCount: 0
-      }));
-      setAvailableRecyclers(fallbackRecyclers);
+      console.error('SelectTruck: Error in fetchAvailableRecyclers:', error);
+      
+      // Set empty array on error to show "no recyclers available" message
+      setAvailableRecyclers([]);
+      
+      // Log the specific error for debugging
+      if (error instanceof Error) {
+        console.error('SelectTruck: Fetch error details:', error.message);
+        if (error.message === 'Request timeout') {
+          console.error('SelectTruck: Request timed out after 8 seconds');
+        }
+      }
     } finally {
+      console.log('SelectTruck: fetchAvailableRecyclers completed');
       setLoadingAvailable(false);
     }
   }, [onlineRecyclers]);
@@ -180,8 +190,18 @@ export default function SelectTruck() {
   const transformedRecyclers = useMemo(() => {
     if (!userLocation || !pickupRequest) return [];
     
-    return availableRecyclers
-      .filter(recycler => recycler.isAvailable && recycler.isOnline)
+    console.log('SelectTruck: Filtering available recyclers:', availableRecyclers.map(r => ({
+      name: r.fullName,
+      isAvailable: r.isAvailable,
+      isOnline: r.isOnline
+    })));
+    
+    const filtered = availableRecyclers
+      .filter(recycler => recycler.isAvailable && recycler.isOnline);
+    
+    console.log('SelectTruck: After filtering (isAvailable && isOnline):', filtered.length, 'recyclers');
+    
+    return filtered
       .map((recycler): Recycler => {
         // Mock recycler location (in real app, get from recycler profile)
         const recyclerLat = userLocation.latitude + (Math.random() - 0.5) * 0.1;
@@ -232,18 +252,24 @@ export default function SelectTruck() {
   const filteredRecyclers = useMemo(() => {
     let filtered = transformedRecyclers;
     
+    console.log('SelectTruck: Before truck filter:', filtered.length, 'recyclers');
+    
     // Apply truck type filter
     if (selectedFilter !== 'all') {
       filtered = filtered.filter(recycler => 
         recycler.truckSize === selectedFilter.toLowerCase()
       );
+      console.log('SelectTruck: After truck filter:', filtered.length, 'recyclers');
     }
     
+    console.log('SelectTruck: Final filtered recyclers:', filtered.map(r => r.fullName));
     return filtered;
   }, [transformedRecyclers, selectedFilter]);
 
   // ===== INITIALIZATION EFFECT =====
   useEffect(() => {
+    if (isInitialized) return; // Prevent re-initialization
+    
     const initializeScreen = async () => {
       try {
         setLoading(true);
@@ -267,48 +293,30 @@ export default function SelectTruck() {
           });
         }
 
-        // Create or load pickup request
-        let request: PickupRequest;
+        // Create pickup request data (but don't save to database yet)
+        // The request will only be created when customer confirms with a recycler
+        const requestData: PickupRequest = {
+          id: '', // Will be generated when request is actually created
+          customer_id: user.id,
+          recycler_id: undefined, // Will be set when recycler is selected
+          pickup_address: params.pickup || 'Selected Location',
+          pickup_latitude: params.latitude ? parseFloat(params.latitude) : undefined,
+          pickup_longitude: params.longitude ? parseFloat(params.longitude) : undefined,
+          waste_type: params.wasteType || 'Mixed Waste',
+          waste_quantity: parseInt(params.wasteQuantity || '1'),
+          estimated_weight: parseFloat(params.weight || '5'),
+          status: 'draft', // Draft status - not yet submitted
+          preferred_pickup_date: new Date().toISOString().split('T')[0],
+          preferred_pickup_time: new Date().toTimeString().split(' ')[0].substring(0, 5),
+          estimated_price: 0, // Will be calculated when recycler is selected
+          payment_status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
         
-        if (params.requestId) {
-          // Load existing request
-          const { data, error } = await supabase
-            .from('pickup_requests')
-            .select('*')
-            .eq('id', params.requestId)
-            .single();
-            
-          if (error) throw error;
-          request = data;
-        } else {
-          // Create new request
-          const newRequest = {
-            customer_id: user.id,
-            pickup_address: params.pickup || 'Selected Location',
-            pickup_latitude: params.latitude ? parseFloat(params.latitude) : null,
-            pickup_longitude: params.longitude ? parseFloat(params.longitude) : null,
-            waste_type: params.wasteType || 'Mixed Waste',
-            waste_quantity: parseInt(params.wasteQuantity || '1'),
-            estimated_weight: parseFloat(params.weight || '5'),
-            status: 'pending',
-            preferred_pickup_date: new Date().toISOString().split('T')[0],
-            preferred_pickup_time: new Date().toTimeString().split(' ')[0].substring(0, 5),
-            estimated_price: 0, // Will be calculated when recycler is selected
-            payment_status: 'pending'
-          };
-
-          const { data, error } = await supabase
-            .from('pickup_requests')
-            .insert([newRequest])
-            .select()
-            .single();
-            
-          if (error) throw error;
-          request = data;
-        }
-        
-        setPickupRequest(request);
-        console.log('SelectTruck: Pickup request loaded:', request);
+        setPickupRequest(requestData);
+        console.log('SelectTruck: Pickup request data prepared (not yet created):', requestData);
+        setIsInitialized(true);
         
       } catch (error) {
         console.error('SelectTruck: Error initializing:', error);
@@ -319,14 +327,34 @@ export default function SelectTruck() {
     };
 
     initializeScreen();
-  }, [params]);
+  }, [isInitialized, params.requestId, params.latitude, params.longitude, params.pickup, params.wasteType, params.wasteQuantity, params.weight]);
 
   // ===== FETCH AVAILABLE RECYCLERS EFFECT =====
   useEffect(() => {
     if (currentUser && userLocation) {
+      console.log(`SelectTruck: Total online recyclers: ${onlineRecyclers.length}`);
+      console.log(`SelectTruck: Online recyclers status:`, onlineRecyclers.map(r => ({ 
+        name: r.fullName, 
+        isOnline: r.isOnline, 
+        isAvailable: r.isAvailable 
+      })));
       fetchAvailableRecyclers();
     }
-  }, [currentUser, userLocation, fetchAvailableRecyclers]);
+  }, [currentUser, userLocation, fetchAvailableRecyclers, onlineRecyclers]);
+
+  // ===== LOADING TIMEOUT EFFECT =====
+  useEffect(() => {
+    if (loadingAvailable) {
+      // Set a maximum loading time of 15 seconds
+      const timeout = setTimeout(() => {
+        console.log('Loading timeout reached, stopping loading state');
+        setLoadingAvailable(false);
+        setAvailableRecyclers([]); // Show empty state
+      }, 15000);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [loadingAvailable]);
 
   // ===== FILTER AND SORT HANDLERS =====
   const handleFilterPress = useCallback((filter: string) => {
@@ -340,7 +368,7 @@ export default function SelectTruck() {
   // ===== ACTION HANDLERS =====
   const handleSelectRecycler = useCallback(async (recycler: Recycler) => {
     if (!pickupRequest) {
-      Alert.alert('Error', 'No pickup request found');
+      Alert.alert('Error', 'No pickup request data found');
       return;
     }
 
@@ -349,27 +377,28 @@ export default function SelectTruck() {
       const distance = parseFloat(recycler.distance?.replace(' km', '') || '0');
       const finalPrice = calculatePrice(recycler.truckSize, pickupRequest.estimated_weight, distance);
 
-      // Validate and update status using the new status management
-      const result = await validateAndUpdateStatus(
-        supabase,
-        pickupRequest.id,
-        'assigned' as PickupRequestStatus,
-        pickupRequest.status as PickupRequestStatus
-      );
+      // Create the actual pickup request in the database
+      const newRequest = {
+        customer_id: pickupRequest.customer_id,
+        recycler_id: recycler.id, // Assign the selected recycler
+        pickup_address: pickupRequest.pickup_address,
+        pickup_latitude: pickupRequest.pickup_latitude,
+        pickup_longitude: pickupRequest.pickup_longitude,
+        waste_type: pickupRequest.waste_type,
+        waste_quantity: pickupRequest.waste_quantity,
+        estimated_weight: pickupRequest.estimated_weight,
+        status: 'pending', // Set to pending - waiting for recycler acceptance
+        preferred_pickup_date: pickupRequest.preferred_pickup_date,
+        preferred_pickup_time: pickupRequest.preferred_pickup_time,
+        estimated_price: finalPrice,
+        payment_status: 'pending'
+      };
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to update request status');
-      }
-
-      // Update pickup request with selected recycler (separate from status update)
-      const { error } = await supabase
+      const { data: createdRequest, error } = await supabase
         .from('pickup_requests')
-        .update({
-          recycler_id: recycler.id,
-          estimated_price: finalPrice,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', pickupRequest.id);
+        .insert([newRequest])
+        .select()
+        .single();
 
       if (error) throw error;
 
@@ -384,7 +413,7 @@ export default function SelectTruck() {
           recyclerPhone: recycler.phone,
           vehicleType: recycler.truckSize,
           rate: recycler.rate,
-          requestId: pickupRequest.id,
+          requestId: createdRequest.id, // Use the newly created request ID
           estimatedPrice: finalPrice.toString(),
           estimatedArrival: recycler.estimatedArrival
         }
@@ -592,12 +621,14 @@ export default function SelectTruck() {
         contentContainerStyle={{ paddingBottom: 32 }}
         ListEmptyComponent={() => (
           <View style={styles.noResultsContainer}>
-            <Text style={styles.noResultsText}>🚛 No Recyclers Found</Text>
+            <Text style={styles.noResultsText}>🚛 No Recyclers Available</Text>
             <Text style={styles.noResultsSubtext}>
               {recyclersLoading ? 'Loading recyclers...' : 
                selectedFilter !== 'all' ? 
-               `No ${selectedFilter.toLowerCase()} trucks available in this area` :
-               'No recyclers are currently available in this area'}
+               `No ${selectedFilter.toLowerCase()} trucks available at the moment` :
+               onlineRecyclers.length > 0 ? 
+               'All recyclers are currently busy with other pickups. Please try again later.' :
+               'No recyclers are currently online. Please try again later.'}
             </Text>
             
             {!recyclersLoading && (
@@ -613,6 +644,16 @@ export default function SelectTruck() {
                   )}
                   <Text style={styles.suggestionItem}>• Contact support if issue persists</Text>
                 </View>
+                
+                <TouchableOpacity 
+                  style={styles.tryAgainButton}
+                  onPress={() => {
+                    // Refresh the recyclers list
+                    fetchAvailableRecyclers();
+                  }}
+                >
+                  <Text style={styles.tryAgainButtonText}>🔄 Try Again Later</Text>
+                </TouchableOpacity>
                 
                 {selectedFilter !== 'all' && (
                   <TouchableOpacity 
@@ -882,6 +923,20 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     marginBottom: 8,
     lineHeight: 20,
+  },
+  tryAgainButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 12,
+    alignSelf: 'stretch',
+  },
+  tryAgainButtonText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   showAllButton: {
     backgroundColor: COLORS.lightGray,

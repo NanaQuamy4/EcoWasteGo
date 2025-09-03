@@ -191,65 +191,11 @@ export default function HomeScreen() {
         };
       });
     
-    // Add some sample recyclers if no online recyclers are available
-    if (transformedRecyclers.length === 0) {
-      const sampleRecyclers: Recycler[] = [
-        {
-          id: 'sample-1',
-          full_name: 'Kwame Asante',
-          company_name: 'Asante Recycling Services',
-          residential_address: 'Accra Central, Ghana',
-          areas_of_operation: 'Accra and surrounding areas',
-          truck_size: 'big',
-          truck_number_plate: 'GR-1234-A',
-          verification_status: 'approved',
-          is_available: true,
-          profile_photo_url: null,
-          created_at: new Date().toISOString(),
-          coordinate: { latitude: 5.6037, longitude: -0.1870 },
-          distance: '0.8 km',
-          rating: 4.8,
-          estimatedTime: '12 mins'
-        },
-        {
-          id: 'sample-2',
-          full_name: 'Ama Osei',
-          company_name: 'Osei Waste Management',
-          residential_address: 'Kumasi Central, Ghana',
-          areas_of_operation: 'Kumasi and surrounding areas',
-          truck_size: 'small',
-          truck_number_plate: 'GR-5678-B',
-          verification_status: 'approved',
-          is_available: true,
-          profile_photo_url: null,
-          created_at: new Date().toISOString(),
-          coordinate: { latitude: 6.6885, longitude: -1.6244 },
-          distance: '1.2 km',
-          rating: 4.6,
-          estimatedTime: '18 mins'
-        },
-        {
-          id: 'sample-3',
-          full_name: 'Kofi Mensah',
-          company_name: 'Mensah Eco Services',
-          residential_address: 'Takoradi Port, Ghana',
-          areas_of_operation: 'Takoradi and surrounding areas',
-          truck_size: 'big',
-          truck_number_plate: 'GR-9012-C',
-          verification_status: 'approved',
-          is_available: true,
-          profile_photo_url: null,
-          created_at: new Date().toISOString(),
-          coordinate: { latitude: 4.8845, longitude: -1.7554 },
-          distance: '2.1 km',
-          rating: 4.9,
-          estimatedTime: '25 mins'
-        }
-      ];
-      setNearbyRecyclers(sampleRecyclers);
-    } else {
-      setNearbyRecyclers(transformedRecyclers);
-    }
+    // Set the real recyclers (no mock data fallback)
+    setNearbyRecyclers(transformedRecyclers);
+    
+    // Log the actual number of recyclers found
+    console.log(`Found ${transformedRecyclers.length} real online recyclers`);
     
     // console.log('Recyclers loaded:', transformedRecyclers.length || 3, 'recyclers');
   }, [onlineRecyclers]);

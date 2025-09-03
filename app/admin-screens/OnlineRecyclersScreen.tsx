@@ -461,15 +461,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-    fontSize: 18,
-    color: COLORS.gray,
-    marginTop: 16,
-    fontWeight: 'bold',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.gray,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-});

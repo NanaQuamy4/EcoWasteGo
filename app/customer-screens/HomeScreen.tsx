@@ -772,7 +772,3 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
 });
-
-    borderColor: COLORS.primary,
-  },
-});

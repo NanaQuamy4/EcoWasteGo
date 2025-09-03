@@ -878,6 +878,4 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: 'rgba(34, 51, 11, 0.1)',
   },
-}); 
-
-}); 
+});

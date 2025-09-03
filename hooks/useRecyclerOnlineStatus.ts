@@ -141,12 +141,22 @@ export function useOnlineRecyclers() {
     
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_online_recyclers');
+      setError(null);
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000) // 10 second timeout
+      );
+      
+      const rpcPromise = supabase.rpc('get_online_recyclers');
+      
+      const { data, error } = await Promise.race([rpcPromise, timeoutPromise]) as any;
 
       if (error) {
         console.error('Error fetching online recyclers:', error);
         if (mountedRef.current) {
           setError(error.message);
+          setRecyclers([]); // Set empty array on error
         }
         return;
       }
@@ -166,11 +176,17 @@ export function useOnlineRecyclers() {
         }));
 
         setRecyclers(formattedRecyclers);
+        console.log(`Successfully fetched ${formattedRecyclers.length} online recyclers`);
+      } else if (mountedRef.current) {
+        // No data returned, set empty array
+        setRecyclers([]);
+        console.log('No online recyclers found');
       }
     } catch (err) {
       console.error('Error fetching online recyclers:', err);
       if (mountedRef.current) {
         setError(err instanceof Error ? err.message : 'Unknown error');
+        setRecyclers([]); // Set empty array on error
       }
     } finally {
       if (mountedRef.current) {

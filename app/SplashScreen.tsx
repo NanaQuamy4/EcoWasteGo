@@ -180,9 +180,4 @@ const styles = StyleSheet.create({
     height: 200,
     resizeMode: 'contain',
   },
-
-}); 
-    resizeMode: 'contain',
-  },
-
-}); 
+});

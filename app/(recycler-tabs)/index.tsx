@@ -6,7 +6,7 @@ import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
-import { useAutoOfflineManager } from '../../hooks/useAutoOfflineManager';
+// import { useAutoOfflineManager } from '../../hooks/useAutoOfflineManager'; // Disabled - recycler has manual control
 import { useNotificationCount } from '../../hooks/useNotificationCount';
 import { useRecyclerHeartbeat } from '../../hooks/useRecyclerHeartbeat';
 import { useCurrentRecyclerStatus } from '../../hooks/useRecyclerOnlineStatus';
@@ -66,8 +66,8 @@ export default function RecyclerHomeTab() {
   const { status: onlineStatus, loading: statusLoading, refetch: refetchStatus } = useCurrentRecyclerStatus();
   const { startHeartbeat, stopHeartbeat, setOffline, getStatus } = useRecyclerHeartbeat();
   
-  // Auto-offline manager (runs the auto-offline check periodically)
-  useAutoOfflineManager();
+  // Auto-offline manager disabled - recycler has full manual control
+  // useAutoOfflineManager();
 
   // Create recycler object from real data
   const recycler = {
@@ -154,23 +154,40 @@ export default function RecyclerHomeTab() {
     if (!onlineStatus) return;
 
     const newOnlineStatus = !onlineStatus.isOnline;
-    const newAvailability = newOnlineStatus; // When online, also be available
     
     console.log('Toggle clicked - Current status:', onlineStatus);
-    console.log('Toggle clicked - New status:', { isOnline: newOnlineStatus, isAvailable: newAvailability });
+    console.log('Toggle clicked - New status:', { isOnline: newOnlineStatus });
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       if (newOnlineStatus) {
-        // Going online - start heartbeat and set as available
+        // Going online - check pending requests first
+        const { data: pendingRequests, error: requestsError } = await supabase
+          .from('pickup_requests')
+          .select('id')
+          .eq('recycler_id', user.id)
+          .in('status', ['accepted', 'in_progress', 'confirmed']);
+
+        if (requestsError) {
+          console.error('Error checking pending requests:', requestsError);
+          Alert.alert('Error', 'Failed to check your request status. Please try again.');
+          return;
+        }
+
+        const pendingCount = pendingRequests?.length || 0;
+        const shouldBeAvailable = pendingCount < 5; // Available if less than 5 pending requests
+        
+        console.log(`Going online - Pending requests: ${pendingCount}, Will be available: ${shouldBeAvailable}`);
+        
+        // Start heartbeat and set online status
         startHeartbeat();
         const { error } = await supabase
           .from('recyclers')
           .update({ 
             is_online: true,
-            is_available: true,
+            is_available: shouldBeAvailable, // Set availability based on pending requests
             last_seen_at: new Date().toISOString()
           })
           .eq('id', user.id);
@@ -182,6 +199,17 @@ export default function RecyclerHomeTab() {
         }
         
         console.log('Successfully went online');
+        
+        // Show appropriate message based on availability
+        const statusMessage = shouldBeAvailable 
+          ? 'online and available for new requests'
+          : `online but busy (${pendingCount} pending requests) - you'll be available when you complete some requests`;
+        
+        Alert.alert(
+          'Status Updated',
+          `You are now ${statusMessage}.`,
+          [{ text: 'OK' }]
+        );
       } else {
         // Going offline - stop heartbeat and set as unavailable
         stopHeartbeat();
@@ -202,6 +230,11 @@ export default function RecyclerHomeTab() {
         }
         
         console.log('Successfully went offline');
+        Alert.alert(
+          'Status Updated',
+          'You are now offline and not available for pickup requests.',
+          [{ text: 'OK' }]
+        );
       }
       
       // Refresh the status to get the latest data
@@ -209,12 +242,6 @@ export default function RecyclerHomeTab() {
         refetchStatus();
       }, 500);
       
-      // Show success message
-      Alert.alert(
-        'Status Updated',
-        `You are now ${newOnlineStatus ? 'online and available' : 'offline'} for pickup requests.`,
-        [{ text: 'OK' }]
-      );
     } catch (error) {
       console.error('Error updating online status:', error);
       Alert.alert('Error', 'Failed to update online status. Please try again.');

@@ -600,4 +600,4 @@ const styles = StyleSheet.create({
   hiddenImage: {
     opacity: 0,
   },
-}); 
+});

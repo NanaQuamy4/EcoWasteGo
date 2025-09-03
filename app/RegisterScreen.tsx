@@ -750,27 +750,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-
-}); 
-  },
-  registerButtonText: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 30,
-  },
-  footerText: {
-    color: COLORS.gray,
-    fontSize: 16,
-  },
-  loginText: {
-    color: COLORS.orange,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-
-}); 
+});
