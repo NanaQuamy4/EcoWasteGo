@@ -85,7 +85,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 3. Create admin function to force set recycler offline
 CREATE OR REPLACE FUNCTION admin_force_recycler_offline(p_recycler_id UUID)
 RETURNS VOID AS $$
+DECLARE
+  current_admin_id UUID;
 BEGIN
+  -- Get the current admin user ID
+  current_admin_id := auth.uid();
+  
   UPDATE recyclers 
   SET 
     is_online = false,
@@ -94,18 +99,22 @@ BEGIN
     last_seen_at = NOW()
   WHERE id = p_recycler_id;
   
-  -- Log the admin action
-  INSERT INTO admin_notifications (
-    title,
-    message,
-    type,
-    created_at
-  ) VALUES (
-    'Admin Action',
-    'Admin forced recycler offline: ' || p_recycler_id,
-    'admin_action',
-    NOW()
-  );
+  -- Log the admin action only if we have a valid admin_id
+  IF current_admin_id IS NOT NULL THEN
+    INSERT INTO admin_notifications (
+      admin_id,
+      title,
+      message,
+      type,
+      created_at
+    ) VALUES (
+      current_admin_id,
+      'Admin Action',
+      'Admin forced recycler offline: ' || p_recycler_id,
+      'admin_action',
+      NOW()
+    );
+  END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -227,3 +236,4 @@ COMMENT ON FUNCTION admin_get_online_recyclers_summary() IS 'Admin function to g
 COMMENT ON FUNCTION admin_force_recycler_offline(UUID) IS 'Admin function to force a recycler offline';
 COMMENT ON FUNCTION admin_get_recycler_activity_log(INTEGER) IS 'Admin function to get recycler activity log for specified hours';
 COMMENT ON VIEW admin_recyclers_monitoring IS 'Admin view for monitoring all recyclers with their online status';
+

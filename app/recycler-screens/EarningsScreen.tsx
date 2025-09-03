@@ -159,7 +159,7 @@ export default function EarningsScreen() {
   // This effect runs when the component first loads
   useEffect(() => {
     loadMockEarningsData();
-  }, [loadMockEarningsData]);
+  }, []); // Remove loadMockEarningsData dependency to prevent infinite loop
 
   // ===== REAL-TIME SIMULATION EFFECT =====
   // This simulates real-time updates by occasionally adding new payments

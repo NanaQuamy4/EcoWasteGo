@@ -15,7 +15,8 @@ interface RecyclerStatus {
   heartbeatAt: string;
   sessionId: string | null;
   createdAt: string;
-  statusCategory: 'Unverified' | 'Offline' | 'Inactive' | 'Busy' | 'Available';
+  statusCategory: 'Unverified' | 'Offline' | 'Inactive' | 'Busy' | 'Busy (5+ Requests)' | 'Available';
+  pendingRequestsCount?: number;
 }
 
 interface RecyclerSummary {
@@ -24,6 +25,7 @@ interface RecyclerSummary {
   onlineRecyclers: number;
   availableRecyclers: number;
   busyRecyclers: number;
+  busyWithRequestsRecyclers: number;
   offlineRecyclers: number;
   inactiveRecyclers: number;
   unverifiedRecyclers: number;
@@ -70,7 +72,8 @@ export function useAdminRecyclerMonitoring() {
           heartbeatAt: recycler.heartbeat_at,
           sessionId: recycler.session_id,
           createdAt: recycler.created_at,
-          statusCategory: recycler.status_category
+          statusCategory: recycler.status_category,
+          pendingRequestsCount: recycler.pending_requests_count || 0
         }));
 
         setRecyclers(formattedRecyclers);
@@ -101,6 +104,7 @@ export function useAdminRecyclerMonitoring() {
           onlineRecyclers: summaryData.online_recyclers,
           availableRecyclers: summaryData.available_recyclers,
           busyRecyclers: summaryData.busy_recyclers,
+          busyWithRequestsRecyclers: summaryData.busy_with_requests_recyclers,
           offlineRecyclers: summaryData.offline_recyclers,
           inactiveRecyclers: summaryData.inactive_recyclers,
           unverifiedRecyclers: summaryData.unverified_recyclers
@@ -217,6 +221,10 @@ export function useAdminRecyclerMonitoring() {
     getActivityLog,
     getRecyclersByStatus,
     getOnlineRecyclers,
+    getAvailableRecyclers
+  };
+}
+
     getAvailableRecyclers
   };
 }

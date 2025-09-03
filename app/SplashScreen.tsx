@@ -66,6 +66,10 @@ export default function SplashScreen() {
             console.log('SplashScreen: Checking if user is admin...');
             console.log('SplashScreen: User email:', user.email);
             console.log('SplashScreen: Admin email from config:', ADMIN_EMAIL);
+            console.log('SplashScreen: User email type:', typeof user.email);
+            console.log('SplashScreen: Admin email type:', typeof ADMIN_EMAIL);
+            console.log('SplashScreen: User email length:', user.email?.length);
+            console.log('SplashScreen: Admin email length:', ADMIN_EMAIL?.length);
             console.log('SplashScreen: Email comparison result:', isAdminUser(user.email));
             
             if (isAdminUser(user.email)) {
@@ -174,6 +178,10 @@ const styles = StyleSheet.create({
   logo: {
     width: 200,
     height: 200,
+    resizeMode: 'contain',
+  },
+
+}); 
     resizeMode: 'contain',
   },
 

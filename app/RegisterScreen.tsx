@@ -2,16 +2,16 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import PhoneNumberInput from '../components/PhoneNumberInput';
 import { COLORS } from '../constants';
@@ -186,6 +186,28 @@ export default function RegisterScreen() {
       
       console.log('RegisterScreen: isRecycler:', isRecycler);
       console.log('RegisterScreen: selectedRole from params:', selectedRole);
+      
+      // Check if email already exists in the opposite role table
+      console.log('RegisterScreen: Checking for existing email in opposite role...');
+      const { data: existingUsers, error: checkError } = await supabase
+        .from(isRecycler ? 'customers' : 'recyclers')
+        .select('email')
+        .eq('email', formData.email);
+
+      if (checkError) {
+        console.error('RegisterScreen: Error checking existing email:', checkError);
+        Alert.alert('Error', 'Failed to validate email. Please try again.');
+        return;
+      }
+
+      if (existingUsers && existingUsers.length > 0) {
+        const oppositeRole = isRecycler ? 'customer' : 'recycler';
+        Alert.alert(
+          'Email Already Registered', 
+          `This email is already registered as a ${oppositeRole}. Please use a different email or sign in with your existing account.`
+        );
+        return;
+      }
       
       // Combine country code with phone number for full international format
       const fullPhoneNumber = `${countryCode}${formData.phone}`;
@@ -708,6 +730,28 @@ const styles = StyleSheet.create({
   },
   registerButtonDisabled: {
     opacity: 0.6,
+  },
+  registerButtonText: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 30,
+  },
+  footerText: {
+    color: COLORS.gray,
+    fontSize: 16,
+  },
+  loginText: {
+    color: COLORS.orange,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+}); 
   },
   registerButtonText: {
     color: COLORS.white,

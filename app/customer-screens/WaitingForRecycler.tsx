@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
+import { supabase } from '../../lib/supabase';
 
 interface RecyclerInfo {
   id: string;
@@ -11,6 +12,18 @@ interface RecyclerInfo {
   distance: string;
   phone: string;
   vehicleType: string;
+  estimatedPrice?: string;
+  estimatedArrival?: string;
+}
+
+interface PickupRequest {
+  id: string;
+  status: string;
+  pickup_address: string;
+  waste_type: string;
+  estimated_weight: number;
+  recycler_id?: string;
+  created_at: string;
 }
 
 export default function WaitingForRecycler() {
@@ -21,46 +34,118 @@ export default function WaitingForRecycler() {
     recyclerName?: string;
     recyclerRating?: string;
     recyclerDistance?: string;
+    recyclerPhone?: string;
+    estimatedPrice?: string;
+    estimatedArrival?: string;
   }>();
 
   const [recyclerInfo, setRecyclerInfo] = useState<RecyclerInfo | null>(null);
+  const [pickupRequest, setPickupRequest] = useState<PickupRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   // Use refs to prevent infinite loops
   const confirmationTimerRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
+  const statusCheckIntervalRef = useRef<number | null>(null);
 
-  // Load recycler info from params
-  useEffect(() => {
-    const recyclerData: RecyclerInfo = {
-      id: params.recyclerId || 'recycler_001',
-      name: params.recyclerName || 'GreenFleet GH',
-      rating: parseFloat(params.recyclerRating || '4.8'),
-      distance: params.recyclerDistance || '0.5 km',
-      phone: '+233241234568',
-      vehicleType: 'Big Truck'
-    };
-    
-    setRecyclerInfo(recyclerData);
-    setLoading(false);
-  }, [params.recyclerId, params.recyclerName, params.recyclerRating, params.recyclerDistance]);
+  // Load initial data
+  const loadInitialData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  // Timer effect and auto-confirmation
+      // Load recycler info from params
+      const recyclerData: RecyclerInfo = {
+        id: params.recyclerId || 'recycler_001',
+        name: params.recyclerName || 'GreenFleet GH',
+        rating: parseFloat(params.recyclerRating || '4.8'),
+        distance: params.recyclerDistance || '0.5 km',
+        phone: params.recyclerPhone || '+233241234568',
+        vehicleType: 'Big Truck',
+        estimatedPrice: params.estimatedPrice,
+        estimatedArrival: params.estimatedArrival
+      };
+      
+      setRecyclerInfo(recyclerData);
+
+      // Load pickup request from database
+      if (params.requestId) {
+        const { data: requestData, error } = await supabase
+          .from('pickup_requests')
+          .select('*')
+          .eq('id', params.requestId)
+          .single();
+
+        if (error) throw error;
+        setPickupRequest(requestData);
+      }
+
+    } catch (err) {
+      console.error('Error loading initial data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, [params]);
+
+  // Check pickup request status
+  const checkRequestStatus = useCallback(async () => {
+    if (!params.requestId) return;
+
+    try {
+      const { data: requestData, error } = await supabase
+        .from('pickup_requests')
+        .select('*')
+        .eq('id', params.requestId)
+        .single();
+
+      if (error) throw error;
+
+      setPickupRequest(requestData);
+
+      // Check if recycler has accepted the request
+      if (requestData.status === 'accepted' || requestData.status === 'in_progress') {
+        setShowConfirmation(true);
+        // Clear status check interval since request is accepted
+        if (statusCheckIntervalRef.current) {
+          clearInterval(statusCheckIntervalRef.current);
+          statusCheckIntervalRef.current = null;
+        }
+      } else if (requestData.status === 'cancelled' || requestData.status === 'rejected') {
+        // Handle cancellation or rejection
+        Alert.alert(
+          'Request Cancelled',
+          `This pickup request has been ${requestData.status === 'rejected' ? 'rejected by the recycler' : 'cancelled'}.`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      }
+
+    } catch (err) {
+      console.error('Error checking request status:', err);
+    }
+  }, [params.requestId, router]);
+
+  // Load initial data
   useEffect(() => {
-    if (!recyclerInfo) return; // Don't start timer until recycler info is loaded
+    loadInitialData();
+  }, [loadInitialData]);
+
+  // Timer effect and status checking
+  useEffect(() => {
+    if (!recyclerInfo || !pickupRequest) return; // Don't start until data is loaded
     
     // Start timer
     intervalRef.current = setInterval(() => {
       setTimeElapsed(prev => prev + 1);
     }, 1000);
 
-    // Auto-show confirmation after 5 seconds
-    confirmationTimerRef.current = setTimeout(() => {
-      setShowConfirmation(true);
-      // User will manually choose when to navigate to tracking screen
-    }, 5000);
+    // Check request status every 3 seconds
+    statusCheckIntervalRef.current = setInterval(() => {
+      checkRequestStatus();
+    }, 3000);
 
     // Cleanup function
     return () => {
@@ -68,12 +153,12 @@ export default function WaitingForRecycler() {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      if (confirmationTimerRef.current) {
-        clearTimeout(confirmationTimerRef.current);
-        confirmationTimerRef.current = null;
+      if (statusCheckIntervalRef.current) {
+        clearInterval(statusCheckIntervalRef.current);
+        statusCheckIntervalRef.current = null;
       }
     };
-  }, [recyclerInfo]); // Run when recyclerInfo changes
+  }, [recyclerInfo, pickupRequest, checkRequestStatus]); // Run when data changes
 
   // Format time display
   const formatTime = (seconds: number): string => {
@@ -92,7 +177,24 @@ export default function WaitingForRecycler() {
         { 
           text: 'Yes, Cancel', 
           style: 'destructive',
-          onPress: () => router.back()
+          onPress: async () => {
+            try {
+              if (params.requestId) {
+                // Update pickup request status to 'cancelled' in database
+                await supabase
+                  .from('pickup_requests')
+                  .update({
+                    status: 'cancelled',
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', params.requestId);
+              }
+              router.back();
+            } catch (error) {
+              console.error('Error cancelling request:', error);
+              router.back(); // Still go back even if database update fails
+            }
+          }
         }
       ]
     );
@@ -122,15 +224,26 @@ export default function WaitingForRecycler() {
     return (
       <View style={styles.loadingContainer}>
         <Ionicons name="refresh" size={64} color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
+        <Text style={styles.loadingText}>Loading pickup request...</Text>
       </View>
     );
   }
 
-  if (!recyclerInfo) {
+  if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Failed to load recycler information</Text>
+        <Text style={styles.errorText}>Error: {error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
+          <Text style={styles.retryButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!recyclerInfo || !pickupRequest) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Failed to load pickup request information</Text>
         <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
           <Text style={styles.retryButtonText}>Go Back</Text>
         </TouchableOpacity>
@@ -161,12 +274,12 @@ export default function WaitingForRecycler() {
         
         <View style={styles.statusBanner}>
           <Text style={styles.statusTitle}>
-            {showConfirmation ? 'Pickup Confirmed! 🎉' : 'Waiting for Recycler...'}
+            {showConfirmation ? 'Request Accepted! 🎉' : 'Waiting for Response...'}
           </Text>
           <Text style={styles.statusSubtitle}>
             {showConfirmation 
-              ? `${recyclerInfo?.name || 'Recycler'} has confirmed your pickup request`
-              : 'Sending pickup request to recyclers...'
+              ? `${recyclerInfo?.name || 'Recycler'} has accepted your pickup request and will be on their way soon!`
+              : `Your request has been sent to ${recyclerInfo?.name || 'the recycler'}. Waiting for their response...`
             }
           </Text>
         </View>
@@ -216,9 +329,9 @@ export default function WaitingForRecycler() {
             <View style={styles.waitingIcon}>
               <Ionicons name="hourglass" size={64} color={COLORS.primary} />
             </View>
-            <Text style={styles.waitingTitle}>Waiting for Response</Text>
+            <Text style={styles.waitingTitle}>Request Sent to Recycler</Text>
             <Text style={styles.waitingSubtitle}>
-              Recyclers are reviewing your pickup request...
+              {recyclerInfo?.name || 'The recycler'} will review your pickup request and respond shortly...
             </Text>
           </View>
         )}
@@ -230,7 +343,9 @@ export default function WaitingForRecycler() {
             <Text style={styles.timeTitle}>Time Elapsed</Text>
           </View>
           <Text style={styles.timeValue}>{formatTime(timeElapsed)}</Text>
-          <Text style={styles.timeSubtitle}>Waiting for recycler arrival</Text>
+          <Text style={styles.timeSubtitle}>
+            {showConfirmation ? 'Recycler accepted - waiting for arrival' : 'Waiting for recycler response'}
+          </Text>
         </View>
 
         {/* Pickup Details Card */}
@@ -243,7 +358,9 @@ export default function WaitingForRecycler() {
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Pickup Location</Text>
-              <Text style={styles.detailValue}>123 Main Street, Accra Central</Text>
+              <Text style={styles.detailValue}>
+                {pickupRequest?.pickup_address || 'Loading...'}
+              </Text>
             </View>
           </View>
           
@@ -253,7 +370,9 @@ export default function WaitingForRecycler() {
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Waste Type</Text>
-              <Text style={styles.detailValue}>Mixed Waste • 8kg</Text>
+              <Text style={styles.detailValue}>
+                {pickupRequest ? `${pickupRequest.waste_type} • ${pickupRequest.estimated_weight}kg` : 'Loading...'}
+              </Text>
             </View>
           </View>
         </View>
@@ -274,7 +393,10 @@ export default function WaitingForRecycler() {
                       params: { 
                         requestId: params.requestId || 'req_001',
                         recyclerName: recyclerInfo.name,
-                        pickup: '123 Main Street, Accra Central'
+                        recyclerPhone: recyclerInfo.phone,
+                        pickup: pickupRequest?.pickup_address || 'Loading...',
+                        estimatedPrice: recyclerInfo.estimatedPrice,
+                        estimatedArrival: recyclerInfo.estimatedArrival
                       }
                     });
                   }
@@ -312,7 +434,7 @@ export default function WaitingForRecycler() {
           <Text style={styles.statusMessageText}>
             {showConfirmation 
               ? 'The recycler will contact you when they arrive at your location'
-              : 'Please wait while recyclers review your request...'
+              : `Your request is now with ${recyclerInfo?.name || 'the recycler'}. They will accept or reject it soon.`
             }
           </Text>
         </View>

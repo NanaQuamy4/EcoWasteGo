@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
+import { useNotificationCount } from '../../hooks/useNotificationCount';
 // Mock user data (replacing useAuth)
 // import BottomNav from '../../components/BottomNav';
 
 export default function HistoryScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(1); // Mock notification count
+  // Use real notification count
+  const { notificationCount } = useNotificationCount();
   const user = { id: "user_001", username: "User", email: "user@example.com", phone: "+233 24 123 4567", role: "customer", verification_status: "verified", created_at: "2024-01-15T10:30:00Z", profile_image: null, company_name: "Green Team Recycling" };
   const router = useRouter();
 
@@ -187,4 +189,6 @@ const styles = StyleSheet.create({
     elevation: 4,
     width: 230,
   },
+}); 
+
 }); 

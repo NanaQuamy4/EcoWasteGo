@@ -29,6 +29,7 @@ const RecyclerItem: React.FC<RecyclerItemProps> = ({ recycler, onForceOffline })
     switch (status) {
       case 'Available': return COLORS.darkGreen;
       case 'Busy': return COLORS.orange;
+      case 'Busy (5+ Requests)': return '#e74c3c';
       case 'Offline': return COLORS.gray;
       case 'Inactive': return '#ff6b6b';
       case 'Unverified': return '#9b59b6';
@@ -40,6 +41,7 @@ const RecyclerItem: React.FC<RecyclerItemProps> = ({ recycler, onForceOffline })
     switch (status) {
       case 'Available': return 'check-circle';
       case 'Busy': return 'pause-circle';
+      case 'Busy (5+ Requests)': return 'block';
       case 'Offline': return 'cancel';
       case 'Inactive': return 'warning';
       case 'Unverified': return 'help';
@@ -116,6 +118,14 @@ const RecyclerItem: React.FC<RecyclerItemProps> = ({ recycler, onForceOffline })
           <Text style={styles.detailLabel}>Last Seen:</Text>
           <Text style={styles.detailValue}>{formatLastSeen(recycler.lastSeenAt)}</Text>
         </View>
+        {recycler.pendingRequestsCount !== undefined && recycler.pendingRequestsCount > 0 && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Pending Requests:</Text>
+            <Text style={[styles.detailValue, { color: recycler.pendingRequestsCount >= 5 ? '#e74c3c' : COLORS.orange }]}>
+              {recycler.pendingRequestsCount}
+            </Text>
+          </View>
+        )}
       </View>
 
       {recycler.isOnline && (
@@ -145,7 +155,7 @@ export default function OnlineRecyclersScreen() {
   const filters = [
     { key: 'All', label: 'All', count: recyclers.length },
     { key: 'Available', label: 'Available', count: recyclers.filter(r => r.statusCategory === 'Available').length },
-    { key: 'Busy', label: 'Busy', count: recyclers.filter(r => r.statusCategory === 'Busy').length },
+    { key: 'Busy', label: 'Busy', count: recyclers.filter(r => r.statusCategory === 'Busy' || r.statusCategory === 'Busy (5+ Requests)').length },
     { key: 'Offline', label: 'Offline', count: recyclers.filter(r => r.statusCategory === 'Offline').length },
     { key: 'Inactive', label: 'Inactive', count: recyclers.filter(r => r.statusCategory === 'Inactive').length },
     { key: 'Unverified', label: 'Unverified', count: recyclers.filter(r => r.statusCategory === 'Unverified').length }
@@ -153,6 +163,8 @@ export default function OnlineRecyclersScreen() {
 
   const filteredRecyclers = selectedFilter === 'All' 
     ? recyclers 
+    : selectedFilter === 'Busy'
+    ? recyclers.filter(recycler => recycler.statusCategory === 'Busy' || recycler.statusCategory === 'Busy (5+ Requests)')
     : recyclers.filter(recycler => recycler.statusCategory === selectedFilter);
 
   const onRefresh = async () => {
@@ -437,6 +449,18 @@ const styles = StyleSheet.create({
     paddingVertical: 64,
   },
   emptyText: {
+    fontSize: 18,
+    color: COLORS.gray,
+    marginTop: 16,
+    fontWeight: 'bold',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: COLORS.gray,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+});
     fontSize: 18,
     color: COLORS.gray,
     marginTop: 16,

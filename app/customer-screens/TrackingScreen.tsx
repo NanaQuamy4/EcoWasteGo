@@ -1,6 +1,6 @@
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import MapComponent from '../../components/MapComponent';
@@ -143,52 +143,124 @@ export default function TrackingScreen() {
       });
     }, 1000);
   };
+
+  // ===== LOCATION CALCULATION FUNCTIONS =====
+  // These functions calculate distance and ETA
   
+  // Calculate distance between two coordinates using Haversine formula
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
 
-
-  // ===== INITIALIZATION EFFECT =====
-  // This effect runs when the component first loads
-  useEffect(() => {
-    loadMockData();
-    startTracking();
-  }, []);
-
-  // Simulate recycler arriving after some time
-  useEffect(() => {
-    const arrivalTimer = setTimeout(() => {
-      setHasArrived(true);
-      setHasReachedDestination(true);
-      setIsTrackingActive(false);
-      setCurrentStatus('arrived');
-      
-      // Show arrival notification alert
-      Alert.alert(
-        '🎯 Recycler Has Arrived!',
-        'Your recycler is now at your location and ready to collect waste.',
-        [
-          {
-            text: 'OK',
-            onPress: () => console.log('User acknowledged recycler arrival')
-          }
-        ]
+  // Calculate distance and ETA
+  const calculateDistanceAndETA = useCallback(() => {
+    if (recyclerLocation && customerLocation) {
+      const calculatedDistance = calculateDistance(
+        recyclerLocation.latitude,
+        recyclerLocation.longitude,
+        customerLocation.latitude,
+        customerLocation.longitude
       );
-    }, 10000); // 10 seconds delay
+      
+      setDistance(calculatedDistance);
+      
+      // Estimate time based on distance and speed
+      const estimatedMinutes = Math.round((calculatedDistance / recyclerLocation.speed) * 60);
+      setEstimatedTime(estimatedMinutes);
+    }
+  }, [recyclerLocation, customerLocation]);
+
+  // ===== SIMULATION FUNCTIONS =====
+  // These functions simulate real-time updates
+  
+  // Add new tracking update
+  const addTrackingUpdate = useCallback((type: string, message: string, icon?: string) => {
+    const newUpdate = {
+      id: `update_${Date.now()}`,
+      type,
+      message,
+      timestamp: new Date().toISOString(),
+      icon: icon || 'info'
+    };
     
-    return () => clearTimeout(arrivalTimer);
+    setTrackingUpdates(prev => [newUpdate, ...prev]);
   }, []);
 
-  // Clear arrival timer when navigating away
-  useEffect(() => {
+  // Simulate recycler movement towards customer
+  const simulateRecyclerMovement = useCallback(() => {
+    if (recyclerLocation && customerLocation) {
+      // Move recycler closer to customer (simplified linear interpolation)
+      const progress = Math.min(timeElapsed / 600, 1); // Complete journey in 10 minutes
+      
+      const newLat = recyclerLocation.latitude + (customerLocation.latitude - recyclerLocation.latitude) * progress;
+      const newLon = recyclerLocation.longitude + (customerLocation.longitude - recyclerLocation.longitude) * progress;
+      
+      const newLocation = {
+        ...recyclerLocation,
+        latitude: newLat,
+        longitude: newLon,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      setRecyclerLocation(newLocation);
+      calculateDistanceAndETA();
+      
+      // Check if recycler has arrived
+      if (progress >= 0.95) {
+        setCurrentStatus('arrived');
+        addTrackingUpdate('arrival', 'Recycler has arrived at your location!');
+      }
+    }
+  }, [recyclerLocation, customerLocation, timeElapsed, addTrackingUpdate, calculateDistanceAndETA]);
+
+  // Simulate new tracking updates
+  const simulateTrackingUpdates = useCallback(() => {
+    const updateTypes = [
+      { type: 'location', message: 'Recycler is getting closer', icon: 'my-location' },
+      { type: 'status', message: 'Making good progress', icon: 'trending-up' },
+      { type: 'eta', message: `Updated ETA: ${Math.max(estimatedTime - 2, 1)} minutes`, icon: 'access-time' }
+    ];
+    
+    const randomUpdate = updateTypes[Math.floor(Math.random() * updateTypes.length)];
+    addTrackingUpdate(randomUpdate.type, randomUpdate.message, randomUpdate.icon);
+  }, [estimatedTime, addTrackingUpdate]);
+
+  // ===== TRACKING SIMULATION =====
+  // This simulates real-time tracking updates
+  const startTracking = useCallback(() => {
+    // Timer for elapsed time
+    const timeInterval = setInterval(() => {
+      setTimeElapsed(prev => prev + 1);
+    }, 1000);
+
+    // Simulate recycler movement every 10 seconds
+    const trackingInterval = setInterval(() => {
+      simulateRecyclerMovement();
+    }, 10000);
+
+    // Simulate new tracking updates every 30 seconds
+    const updateInterval = setInterval(() => {
+      simulateTrackingUpdates();
+    }, 30000);
+
     return () => {
-      // This will clear any pending timers when component unmounts
-      // or when navigating to PaymentSummary
+      clearInterval(timeInterval);
+      clearInterval(trackingInterval);
+      clearInterval(updateInterval);
     };
-  }, []);
+  }, [simulateRecyclerMovement, simulateTrackingUpdates]); // Include the simulation functions
 
   // ===== MOCK DATA LOADING FUNCTION =====
   // This replaces the backend API call to fetch tracking data
   // It loads data from our mock data arrays
-  const loadMockData = async () => {
+  const loadMockData = useCallback(async () => {
     try {
       setIsLoading(true);
       
@@ -228,120 +300,46 @@ export default function TrackingScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [params.recyclerName, params.pickup, calculateDistanceAndETA]);
 
-  // ===== TRACKING SIMULATION =====
-  // This simulates real-time tracking updates
-  const startTracking = () => {
-    // Timer for elapsed time
-    const timeInterval = setInterval(() => {
-      setTimeElapsed(prev => prev + 1);
-    }, 1000);
+  // ===== INITIALIZATION EFFECT =====
+  // This effect runs when the component first loads
+  useEffect(() => {
+    loadMockData();
+    startTracking();
+  }, [loadMockData, startTracking]);
 
-    // Simulate recycler movement every 10 seconds
-    const trackingInterval = setInterval(() => {
-      simulateRecyclerMovement();
-    }, 10000);
-
-    // Simulate new tracking updates every 30 seconds
-    const updateInterval = setInterval(() => {
-      simulateTrackingUpdates();
-    }, 30000);
-
-    return () => {
-      clearInterval(timeInterval);
-      clearInterval(trackingInterval);
-      clearInterval(updateInterval);
-    };
-  };
-
-  // ===== LOCATION CALCULATION FUNCTIONS =====
-  // These functions calculate distance and ETA
-  
-  // Calculate distance between two coordinates using Haversine formula
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
-
-  // Calculate distance and ETA
-  const calculateDistanceAndETA = () => {
-    if (recyclerLocation && customerLocation) {
-      const calculatedDistance = calculateDistance(
-        recyclerLocation.latitude,
-        recyclerLocation.longitude,
-        customerLocation.latitude,
-        customerLocation.longitude
+  // Simulate recycler arriving after some time
+  useEffect(() => {
+    const arrivalTimer = setTimeout(() => {
+      setHasArrived(true);
+      setHasReachedDestination(true);
+      setIsTrackingActive(false);
+      setCurrentStatus('arrived');
+      
+      // Show arrival notification alert
+      Alert.alert(
+        '🎯 Recycler Has Arrived!',
+        'Your recycler is now at your location and ready to collect waste.',
+        [
+          {
+            text: 'OK',
+            onPress: () => console.log('User acknowledged recycler arrival')
+          }
+        ]
       );
-      
-      setDistance(calculatedDistance);
-      
-      // Estimate time based on distance and speed
-      const estimatedMinutes = Math.round((calculatedDistance / recyclerLocation.speed) * 60);
-      setEstimatedTime(estimatedMinutes);
-    }
-  };
-
-  // ===== SIMULATION FUNCTIONS =====
-  // These functions simulate real-time updates
-  
-  // Simulate recycler movement towards customer
-  const simulateRecyclerMovement = () => {
-    if (recyclerLocation && customerLocation) {
-      // Move recycler closer to customer (simplified linear interpolation)
-      const progress = Math.min(timeElapsed / 600, 1); // Complete journey in 10 minutes
-      
-      const newLat = recyclerLocation.latitude + (customerLocation.latitude - recyclerLocation.latitude) * progress;
-      const newLon = recyclerLocation.longitude + (customerLocation.longitude - recyclerLocation.longitude) * progress;
-      
-      const newLocation = {
-        ...recyclerLocation,
-        latitude: newLat,
-        longitude: newLon,
-        lastUpdated: new Date().toISOString()
-      };
-      
-      setRecyclerLocation(newLocation);
-      calculateDistanceAndETA();
-      
-      // Check if recycler has arrived
-      if (progress >= 0.95) {
-        setCurrentStatus('arrived');
-        addTrackingUpdate('arrival', 'Recycler has arrived at your location!');
-      }
-    }
-  };
-
-  // Simulate new tracking updates
-  const simulateTrackingUpdates = () => {
-    const updateTypes = [
-      { type: 'location', message: 'Recycler is getting closer', icon: 'my-location' },
-      { type: 'status', message: 'Making good progress', icon: 'trending-up' },
-      { type: 'eta', message: `Updated ETA: ${Math.max(estimatedTime - 2, 1)} minutes`, icon: 'access-time' }
-    ];
+    }, 10000); // 10 seconds delay
     
-    const randomUpdate = updateTypes[Math.floor(Math.random() * updateTypes.length)];
-    addTrackingUpdate(randomUpdate.type, randomUpdate.message, randomUpdate.icon);
-  };
+    return () => clearTimeout(arrivalTimer);
+  }, []);
 
-  // Add new tracking update
-  const addTrackingUpdate = (type: string, message: string, icon?: string) => {
-    const newUpdate = {
-      id: `update_${Date.now()}`,
-      type,
-      message,
-      timestamp: new Date().toISOString(),
-      icon: icon || 'info'
+  // Clear arrival timer when navigating away
+  useEffect(() => {
+    return () => {
+      // This will clear any pending timers when component unmounts
+      // or when navigating to PaymentSummary
     };
-    
-    setTrackingUpdates(prev => [newUpdate, ...prev]);
-  };
+  }, []);
 
   // ===== ACTION HANDLERS =====
   // These functions handle user actions

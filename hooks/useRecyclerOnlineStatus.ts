@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 interface OnlineStatus {
@@ -26,23 +26,26 @@ export function useRecyclerOnlineStatus(recyclerId?: string) {
   const [status, setStatus] = useState<OnlineStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   // Fetch current online status
   const fetchStatus = useCallback(async () => {
-    try {
-      if (!recyclerId) return;
+    if (!mountedRef.current || !recyclerId) return;
 
+    try {
       const { data, error } = await supabase.rpc('get_recycler_online_status', {
         p_recycler_id: recyclerId
       });
 
       if (error) {
         console.error('Error fetching online status:', error);
-        setError(error.message);
+        if (mountedRef.current) {
+          setError(error.message);
+        }
         return;
       }
 
-      if (data && data.length > 0) {
+      if (data && data.length > 0 && mountedRef.current) {
         const statusData = data[0];
         setStatus({
           isOnline: statusData.is_online,
@@ -54,15 +57,21 @@ export function useRecyclerOnlineStatus(recyclerId?: string) {
       }
     } catch (err) {
       console.error('Error fetching online status:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [recyclerId]);
 
   // Set up real-time subscription
   useEffect(() => {
     if (!recyclerId) return;
+
+    mountedRef.current = true;
 
     // Initial fetch
     fetchStatus();
@@ -79,6 +88,8 @@ export function useRecyclerOnlineStatus(recyclerId?: string) {
           filter: `id=eq.${recyclerId}`
         },
         (payload) => {
+          if (!mountedRef.current) return;
+          
           console.log('Real-time status update:', payload);
           const newData = payload.new as any;
           setStatus({
@@ -93,9 +104,10 @@ export function useRecyclerOnlineStatus(recyclerId?: string) {
       .subscribe();
 
     return () => {
+      mountedRef.current = false;
       supabase.removeChannel(channel);
     };
-  }, [recyclerId, fetchStatus]);
+  }, [recyclerId]); // Remove fetchStatus dependency to prevent infinite loop
 
   return {
     status,
@@ -109,20 +121,37 @@ export function useOnlineRecyclers() {
   const [recyclers, setRecyclers] = useState<OnlineRecycler[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  // Helper function to determine status from heartbeat
+  const getStatusFromHeartbeat = (heartbeatAt: string): 'Active' | 'Online' | 'Offline' => {
+    const heartbeat = new Date(heartbeatAt);
+    const now = new Date();
+    const diffMs = now.getTime() - heartbeat.getTime();
+    const diffMinutes = diffMs / (1000 * 60);
+
+    if (diffMinutes <= 1) return 'Active';
+    if (diffMinutes <= 5) return 'Online';
+    return 'Offline';
+  };
 
   // Fetch online recyclers
   const fetchOnlineRecyclers = useCallback(async () => {
+    if (!mountedRef.current) return;
+    
     try {
       setLoading(true);
       const { data, error } = await supabase.rpc('get_online_recyclers');
 
       if (error) {
         console.error('Error fetching online recyclers:', error);
-        setError(error.message);
+        if (mountedRef.current) {
+          setError(error.message);
+        }
         return;
       }
 
-      if (data) {
+      if (data && mountedRef.current) {
         const formattedRecyclers: OnlineRecycler[] = data.map((recycler: any) => ({
           id: recycler.id,
           fullName: recycler.full_name,
@@ -140,26 +169,20 @@ export function useOnlineRecyclers() {
       }
     } catch (err) {
       console.error('Error fetching online recyclers:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
-  // Helper function to determine status from heartbeat
-  const getStatusFromHeartbeat = (heartbeatAt: string): 'Active' | 'Online' | 'Offline' => {
-    const heartbeat = new Date(heartbeatAt);
-    const now = new Date();
-    const diffMs = now.getTime() - heartbeat.getTime();
-    const diffMinutes = diffMs / (1000 * 60);
-
-    if (diffMinutes <= 1) return 'Active';
-    if (diffMinutes <= 5) return 'Online';
-    return 'Offline';
-  };
-
   // Set up real-time subscription for online recyclers
   useEffect(() => {
+    mountedRef.current = true;
+    
     // Initial fetch
     fetchOnlineRecyclers();
 
@@ -175,15 +198,18 @@ export function useOnlineRecyclers() {
         },
         () => {
           // Refetch when any recycler status changes
-          fetchOnlineRecyclers();
+          if (mountedRef.current) {
+            fetchOnlineRecyclers();
+          }
         }
       )
       .subscribe();
 
     return () => {
+      mountedRef.current = false;
       supabase.removeChannel(channel);
     };
-  }, [fetchOnlineRecyclers]);
+  }, []); // Empty dependency array to prevent infinite loops
 
   return {
     recyclers,

@@ -1,7 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../lib/supabase';
 
 export default function PrivacyScreen() {
   const router = useRouter();
@@ -9,6 +10,45 @@ export default function PrivacyScreen() {
   const fromRegister = params.fromRegister === 'true';
   const [agree, setAgree] = useState(false);
   const [disagree, setDisagree] = useState(true);
+  const [userAccountDate, setUserAccountDate] = useState<string>('');
+  const [policyLastUpdated, setPolicyLastUpdated] = useState<string>('');
+
+  // Get user's account creation date and policy update date
+  useEffect(() => {
+    const fetchUserDates = async () => {
+      try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          // Format user's account creation date (when they accepted the policy)
+          const accountDate = new Date(user.created_at);
+          const formattedAccountDate = accountDate.toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          });
+          setUserAccountDate(formattedAccountDate);
+
+          // Set policy last updated date (you can change this when you update the policy)
+          const lastUpdated = new Date('2024-12-19'); // Update this date when you modify the policy
+          const formattedLastUpdated = lastUpdated.toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          });
+          setPolicyLastUpdated(formattedLastUpdated);
+        }
+      } catch (error) {
+        console.error('Error fetching user dates:', error);
+        // Fallback dates if there's an error
+        setUserAccountDate('N/A');
+        setPolicyLastUpdated('19/12/2024');
+      }
+    };
+
+    fetchUserDates();
+  }, []);
 
   const handleAgree = () => {
     setAgree(true);
@@ -34,8 +74,8 @@ export default function PrivacyScreen() {
         <Text style={styles.headerTitle}>Privacy Policy for EcoWasteGo</Text>
       </View>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Effective Date: <Text style={styles.sectionBold}>[22/07/2025]</Text></Text>
-        <Text style={styles.sectionTitle}>Last Updated: <Text style={styles.sectionBold}>[29/08/2025]</Text></Text>
+        <Text style={styles.sectionTitle}>Effective Date: <Text style={styles.sectionBold}>{userAccountDate || 'Loading...'}</Text></Text>
+        <Text style={styles.sectionTitle}>Last Updated: <Text style={styles.sectionBold}>{policyLastUpdated || 'Loading...'}</Text></Text>
         <Text style={styles.sectionBold}>EcoWasteGo</Text>
         <Text style={styles.sectionText}>
           (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and disclose information when you use our mobile application and services (collectively, the &quot;App&quot;).
@@ -259,6 +299,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkboxBox: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderColor: '#263A13',
+    borderRadius: 4,
+    marginRight: 8,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#263A13',
+    borderColor: '#263A13',
+  },
+  checkboxTick: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: '#263A13',
+  },
+  submitButton: {
+    backgroundColor: '#263A13',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#B6CDBD',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+}); 
     width: 22,
     height: 22,
     borderWidth: 2,

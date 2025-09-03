@@ -63,7 +63,7 @@ export default function RecyclerHomeTab() {
   const { notificationCount, loading: notificationLoading } = useNotificationCount();
   
   // New online status tracking
-  const { status: onlineStatus, loading: statusLoading } = useCurrentRecyclerStatus();
+  const { status: onlineStatus, loading: statusLoading, refetch: refetchStatus } = useCurrentRecyclerStatus();
   const { startHeartbeat, stopHeartbeat, setOffline, getStatus } = useRecyclerHeartbeat();
   
   // Auto-offline manager (runs the auto-offline check periodically)
@@ -145,7 +145,7 @@ export default function RecyclerHomeTab() {
     if (!isVerified) {
       Alert.alert(
         'Verification Required',
-        'You need to complete your registration before you can change your availability status.',
+        'You need to complete your registration before you can change your online status.',
         [{ text: 'OK' }]
       );
       return;
@@ -153,33 +153,71 @@ export default function RecyclerHomeTab() {
 
     if (!onlineStatus) return;
 
-    const newAvailability = !onlineStatus.isAvailable;
+    const newOnlineStatus = !onlineStatus.isOnline;
+    const newAvailability = newOnlineStatus; // When online, also be available
+    
+    console.log('Toggle clicked - Current status:', onlineStatus);
+    console.log('Toggle clicked - New status:', { isOnline: newOnlineStatus, isAvailable: newAvailability });
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Update availability in database
-      const { error } = await supabase
-        .from('recyclers')
-        .update({ is_available: newAvailability })
-        .eq('id', user.id);
+      if (newOnlineStatus) {
+        // Going online - start heartbeat and set as available
+        startHeartbeat();
+        const { error } = await supabase
+          .from('recyclers')
+          .update({ 
+            is_online: true,
+            is_available: true,
+            last_seen_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
 
-      if (error) {
-        console.error('Error updating availability status:', error);
-        Alert.alert('Error', 'Failed to update availability status. Please try again.');
-        return;
+        if (error) {
+          console.error('Error going online:', error);
+          Alert.alert('Error', 'Failed to go online. Please try again.');
+          return;
+        }
+        
+        console.log('Successfully went online');
+      } else {
+        // Going offline - stop heartbeat and set as unavailable
+        stopHeartbeat();
+        setOffline();
+        const { error } = await supabase
+          .from('recyclers')
+          .update({ 
+            is_online: false,
+            is_available: false,
+            session_id: null
+          })
+          .eq('id', user.id);
+
+        if (error) {
+          console.error('Error going offline:', error);
+          Alert.alert('Error', 'Failed to go offline. Please try again.');
+          return;
+        }
+        
+        console.log('Successfully went offline');
       }
+      
+      // Refresh the status to get the latest data
+      setTimeout(() => {
+        refetchStatus();
+      }, 500);
       
       // Show success message
       Alert.alert(
         'Status Updated',
-        `You are now ${newAvailability ? 'available' : 'unavailable'} and ${newAvailability ? 'will' : 'will not'} receive new pickup requests.`,
+        `You are now ${newOnlineStatus ? 'online and available' : 'offline'} for pickup requests.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
-      console.error('Error updating availability status:', error);
-      Alert.alert('Error', 'Failed to update availability status. Please try again.');
+      console.error('Error updating online status:', error);
+      Alert.alert('Error', 'Failed to update online status. Please try again.');
     }
   };
 
@@ -315,7 +353,7 @@ export default function RecyclerHomeTab() {
           <TouchableOpacity 
             style={[
               styles.toggle, 
-              onlineStatus?.isAvailable && styles.toggleActive, 
+              onlineStatus?.isOnline && styles.toggleActive, 
               !isVerified && styles.toggleDisabled
             ]} 
             onPress={isVerified ? handleOfflineToggle : undefined}
@@ -323,7 +361,7 @@ export default function RecyclerHomeTab() {
           >
             <View style={[
               styles.toggleThumb, 
-              onlineStatus?.isAvailable && styles.toggleThumbActive, 
+              onlineStatus?.isOnline && styles.toggleThumbActive, 
               !isVerified && styles.toggleThumbDisabled
             ]} />
           </TouchableOpacity>

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Animated, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import { DIMENSIONS } from '../../constants';
@@ -50,7 +50,7 @@ export default function EcoImpactCelebrationScreen() {
   const [achievementsEarned, setAchievementsEarned] = useState<string[]>([]);
 
   // Create completion notifications
-  const createCompletionNotifications = async () => {
+  const createCompletionNotifications = useCallback(async () => {
     try {
       // Main completion notification
       await mockNotificationService.createLocalNotification(
@@ -87,7 +87,7 @@ export default function EcoImpactCelebrationScreen() {
     } catch (error) {
       console.error('EcoImpactCelebration: Failed to create mock completion notifications:', error);
     }
-  };
+  }, [weight, totalAmount]);
 
   useEffect(() => {
     // Initialize customer stats and save the completed pickup
@@ -131,7 +131,7 @@ export default function EcoImpactCelebrationScreen() {
     setTimeout(() => {
       setShowConfetti(false);
     }, 3000);
-      }, [fadeAnim, requestId, weight, totalAmount, recyclerName, pickup, wasteType, amount, environmentalTax]);
+  }, [fadeAnim, requestId, weight, totalAmount, recyclerName, pickup, wasteType, amount, environmentalTax, createCompletionNotifications]);
 
   const handleReturnHome = () => {
     // Navigate to user home screen (user tabs)

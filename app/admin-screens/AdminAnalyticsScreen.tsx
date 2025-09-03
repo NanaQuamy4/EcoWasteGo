@@ -2,6 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { isAdminUser } from '../../lib/adminConfig';
 import { supabase } from '../../lib/supabase';
 
 interface AnalyticsData {
@@ -44,47 +45,181 @@ export default function AdminAnalyticsScreen() {
     fetchAnalyticsData();
   }, []);
 
+  const fetchRecentActivities = async () => {
+    try {
+      const activities = [];
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      // Get recent user registrations
+      const [recentCustomers, recentRecyclers, recentPickupRequests, recentHelpMessages] = await Promise.all([
+        supabase
+          .from('customers')
+          .select('id, full_name, email, created_at')
+          .gte('created_at', sevenDaysAgo.toISOString())
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('recyclers')
+          .select('id, full_name, email, created_at')
+          .gte('created_at', sevenDaysAgo.toISOString())
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('pickup_requests')
+          .select('id, status, created_at, updated_at')
+          .gte('created_at', sevenDaysAgo.toISOString())
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('help_messages')
+          .select('id, user_name, user_role, subject, created_at')
+          .gte('created_at', sevenDaysAgo.toISOString())
+          .order('created_at', { ascending: false })
+          .limit(5)
+      ]);
+
+      // Add customer registrations
+      if (recentCustomers.data) {
+        recentCustomers.data.forEach(customer => {
+          if (!isAdminUser(customer.email)) {
+            activities.push({
+              id: `customer_${customer.id}`,
+              type: 'user_registration',
+              description: `New customer registered: ${customer.full_name}`,
+              timestamp: customer.created_at
+            });
+          }
+        });
+      }
+
+      // Add recycler registrations
+      if (recentRecyclers.data) {
+        recentRecyclers.data.forEach(recycler => {
+          if (!isAdminUser(recycler.email)) {
+            activities.push({
+              id: `recycler_${recycler.id}`,
+              type: 'user_registration',
+              description: `New recycler registered: ${recycler.full_name}`,
+              timestamp: recycler.created_at
+            });
+          }
+        });
+      }
+
+      // Add pickup request activities
+      if (recentPickupRequests.data) {
+        recentPickupRequests.data.forEach(request => {
+          activities.push({
+            id: `pickup_${request.id}`,
+            type: 'pickup_request',
+            description: `New pickup request created (Status: ${request.status})`,
+            timestamp: request.created_at
+          });
+        });
+      }
+
+      // Add help message activities
+      if (recentHelpMessages.data) {
+        recentHelpMessages.data.forEach(message => {
+          activities.push({
+            id: `help_${message.id}`,
+            type: 'help_message',
+            description: `Help message from ${message.user_name} (${message.user_role}): ${message.subject}`,
+            timestamp: message.created_at
+          });
+        });
+      }
+
+      // Sort by timestamp (most recent first) and limit to 10
+      return activities
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 10);
+
+    } catch (error) {
+      console.error('Error fetching recent activities:', error);
+      return [];
+    }
+  };
+
   const fetchAnalyticsData = async () => {
     try {
-      // Fetch analytics data using RPC function
-      const { data: analyticsResult, error: analyticsError } = await supabase
-        .rpc('get_user_analytics');
+      // Fetch users data directly, excluding admin users
+      const [customersResult, recyclersResult] = await Promise.all([
+        supabase.from('customers').select('id, email, created_at'),
+        supabase.from('recyclers').select('id, email, created_at, verification_status')
+      ]);
 
-      if (analyticsError) {
-        console.error('Error fetching analytics:', analyticsError);
+      if (customersResult.error || recyclersResult.error) {
+        console.error('Error fetching users:', customersResult.error || recyclersResult.error);
         return;
       }
 
-      // Fetch recent activity using RPC function
-      const { data: activityResult, error: activityError } = await supabase
-        .rpc('get_recent_activity');
+      // Filter out admin users
+      const nonAdminCustomers = customersResult.data?.filter(c => !isAdminUser(c.email)) || [];
+      const nonAdminRecyclers = recyclersResult.data?.filter(r => !isAdminUser(r.email)) || [];
 
-      if (activityError) {
-        console.error('Error fetching activity:', activityError);
-      }
+      // Remove duplicates (in case user exists in both tables)
+      const allEmails = new Set();
+      const uniqueUsers = [];
+      
+      // Add all recyclers first
+      nonAdminRecyclers.forEach(recycler => {
+        if (!allEmails.has(recycler.email)) {
+          allEmails.add(recycler.email);
+          uniqueUsers.push(recycler);
+        }
+      });
+      
+      // Add customers only if they don't already exist
+      nonAdminCustomers.forEach(customer => {
+        if (!allEmails.has(customer.email)) {
+          allEmails.add(customer.email);
+          uniqueUsers.push(customer);
+        }
+      });
 
-      const analytics = analyticsResult?.[0];
-      const recentActivity = activityResult || [];
+      // Calculate analytics
+      const totalUsers = uniqueUsers.length;
+      const totalCustomers = uniqueUsers.filter(u => nonAdminCustomers.some(c => c.email === u.email)).length;
+      const totalRecyclers = uniqueUsers.filter(u => nonAdminRecyclers.some(r => r.email === u.email)).length;
+      const verifiedRecyclers = nonAdminRecyclers.filter(r => r.verification_status === 'approved').length;
+      const pendingVerifications = nonAdminRecyclers.filter(r => r.verification_status === 'pending').length;
+      const approvedVerifications = nonAdminRecyclers.filter(r => r.verification_status === 'approved').length;
+      const rejectedVerifications = nonAdminRecyclers.filter(r => r.verification_status === 'rejected').length;
 
-      if (analytics) {
-        setAnalyticsData({
-          totalUsers: Number(analytics.total_users) || 0,
-          totalCustomers: Number(analytics.total_customers) || 0,
-          totalRecyclers: Number(analytics.total_recyclers) || 0,
-          verifiedRecyclers: Number(analytics.verified_recyclers) || 0,
-          pendingVerifications: Number(analytics.pending_verifications) || 0,
-          approvedVerifications: Number(analytics.approved_verifications) || 0,
-          rejectedVerifications: Number(analytics.rejected_verifications) || 0,
-          newUsersThisMonth: Number(analytics.new_users_this_month) || 0,
-          growthRate: Number(analytics.growth_rate) || 0,
-          recentActivity: recentActivity.map((activity: any) => ({
-            id: activity.id,
-            type: activity.type,
-            description: activity.description,
-            timestamp: activity.activity_timestamp
-          }))
-        });
-      }
+      // Calculate new users this month
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const newUsersThisMonth = [...nonAdminCustomers, ...nonAdminRecyclers]
+        .filter(user => new Date(user.created_at) >= startOfMonth).length;
+
+      // Calculate growth rate (simplified)
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      const usersLastMonth = [...nonAdminCustomers, ...nonAdminRecyclers]
+        .filter(user => {
+          const createdDate = new Date(user.created_at);
+          return createdDate >= lastMonth && createdDate <= endOfLastMonth;
+        }).length;
+      
+      const growthRate = usersLastMonth > 0 ? ((newUsersThisMonth - usersLastMonth) / usersLastMonth) * 100 : 0;
+
+      // Fetch recent activities from various sources
+      const recentActivities = await fetchRecentActivities();
+
+      setAnalyticsData({
+        totalUsers,
+        totalCustomers,
+        totalRecyclers,
+        verifiedRecyclers,
+        pendingVerifications,
+        approvedVerifications,
+        rejectedVerifications,
+        newUsersThisMonth,
+        growthRate,
+        recentActivity: recentActivities
+      });
 
     } catch (error) {
       console.error('Error fetching analytics data:', error);
@@ -109,11 +244,8 @@ export default function AdminAnalyticsScreen() {
         return;
       }
 
-      // Check if user is admin using RPC function
-      const { data: isAdmin, error: adminCheckError } = await supabase
-        .rpc('is_admin_user', { user_email: currentUser.email });
-
-      if (adminCheckError || !isAdmin) {
+      // Check if user is admin using our config function
+      if (!isAdminUser(currentUser.email)) {
         Alert.alert('Access Denied', 'You do not have permission to access this page.');
         router.replace('/admin-screens/AdminPortal');
         return;
@@ -516,6 +648,138 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#1A1A1A',
+    marginBottom: 2,
+  },
+  distributionValue: {
+    fontSize: 12,
+    color: '#666666',
+  },
+  distributionPercentage: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#207E06',
+  },
+  verificationCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  verificationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  verificationIcon: {
+    backgroundColor: '#F0F8F0',
+    borderRadius: 8,
+    padding: 8,
+    marginRight: 12,
+  },
+  verificationLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1A1A1A',
+  },
+  verificationCount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#207E06',
+  },
+  comingSoonCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  comingSoonTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  comingSoonText: {
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  featureList: {
+    width: '100%',
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  featureText: {
+    fontSize: 14,
+    color: '#666666',
+    marginLeft: 8,
+  },
+  // Activity styles
+  activityCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  activityIcon: {
+    backgroundColor: '#F0F8F0',
+    borderRadius: 8,
+    padding: 8,
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityDescription: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1A1A1A',
+    marginBottom: 2,
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#666666',
+  },
+  noActivityContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  noActivityText: {
+    fontSize: 14,
+    color: '#CCCCCC',
+    marginTop: 8,
+  },
+});
+
     marginBottom: 2,
   },
   distributionValue: {

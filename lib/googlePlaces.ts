@@ -44,6 +44,8 @@ class GooglePlacesService {
     
     if (!this.apiKey) {
       console.warn('Google Places API key not found. Please set EXPO_PUBLIC_GOOGLE_PLACES_API_KEY in your environment variables.');
+    } else {
+      console.log('Google Places API key loaded successfully:', this.apiKey.substring(0, 10) + '...');
     }
   }
 
@@ -72,6 +74,7 @@ class GooglePlacesService {
       const data = await response.json();
 
       if (data.status === 'OK') {
+        console.log('Google Places API success:', data.predictions?.length || 0, 'predictions found');
         return data.predictions || [];
       } else {
         console.error('Google Places API error:', data.status, data.error_message);
@@ -128,6 +131,7 @@ class GooglePlacesService {
       const data = await response.json();
 
       if (data.status === 'OK' && data.results.length > 0) {
+        console.log('Google Geocoding API success:', data.results[0].formatted_address);
         return data.results[0];
       } else {
         console.error('Google Geocoding API error:', data.status, data.error_message);
@@ -172,4 +176,5 @@ class GooglePlacesService {
 export const googlePlacesService = new GooglePlacesService();
 
 // Export types for use in components
-export type { PlacePrediction, PlaceDetails, GeocodeResult };
+export type { GeocodeResult, PlaceDetails, PlacePrediction };
+

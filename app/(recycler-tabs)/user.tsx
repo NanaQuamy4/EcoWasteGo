@@ -6,6 +6,7 @@ import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import { COLORS } from '../../constants';
+import { useNotificationCount } from '../../hooks/useNotificationCount';
 import { supabase } from '../../lib/supabase';
 
 export default function RecyclerUserTab() {
@@ -134,7 +135,8 @@ export default function RecyclerUserTab() {
   const [deleteStep, setDeleteStep] = useState(1);
   const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
   const [showStatusSwitch, setShowStatusSwitch] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(3);
+  // Use real notification count
+  const { notificationCount } = useNotificationCount();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const router = useRouter();
 
@@ -876,4 +878,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: 'rgba(34, 51, 11, 0.1)',
   },
+}); 
+
 }); 

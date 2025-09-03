@@ -2,14 +2,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    Alert,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { isAdminUser } from '../../lib/adminConfig';
 import { supabase } from '../../lib/supabase';
@@ -26,6 +26,7 @@ interface User {
   verification_status?: string;
   admin_verified?: boolean;
   verification_expires_at?: string;
+  unique_key?: string;
 }
 
 interface UserStats {
@@ -47,9 +48,13 @@ export default function AdminUsersScreen() {
 
   useEffect(() => {
     checkAdminAccess();
-    fetchUsers();
-    fetchStats();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    await fetchUsers();
+    await fetchStats();
+  };
 
   const checkAdminAccess = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -61,15 +66,56 @@ export default function AdminUsersScreen() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('admin_all_users')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Fetch both customers and recyclers separately
+      const [customersResult, recyclersResult] = await Promise.all([
+        supabase
+          .from('customers')
+          .select('id, full_name, email, phone, created_at, updated_at')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('recyclers')
+          .select('id, full_name, email, phone, created_at, updated_at, company_name, verification_status, verification_expires_at')
+          .order('created_at', { ascending: false })
+      ]);
 
-      if (error) throw error;
+      if (customersResult.error) throw customersResult.error;
+      if (recyclersResult.error) throw recyclersResult.error;
+
+      // Combine and format the data
+      const customers = (customersResult.data || []).map(customer => ({
+        ...customer,
+        user_type: 'customer' as const,
+        company_name: undefined,
+        verification_status: undefined,
+        verification_expires_at: undefined,
+        unique_key: `customer_${customer.id}` // Ensure unique key
+      }));
+
+      const recyclers = (recyclersResult.data || []).map(recycler => ({
+        ...recycler,
+        user_type: 'recycler' as const,
+        unique_key: `recycler_${recycler.id}` // Ensure unique key
+      }));
+
+      const allUsers = [...customers, ...recyclers];
+      
+      // Remove any potential duplicates based on email (in case user exists in both tables)
+      const uniqueUsers = allUsers.reduce((acc, user) => {
+        const existingUser = acc.find(u => u.email === user.email);
+        if (!existingUser) {
+          acc.push(user);
+        } else {
+          // If user exists in both tables, prefer recycler over customer
+          if (user.user_type === 'recycler' && existingUser.user_type === 'customer') {
+            const index = acc.findIndex(u => u.email === user.email);
+            acc[index] = user;
+          }
+        }
+        return acc;
+      }, [] as typeof allUsers);
       
       // Filter out the admin user from the list
-      const filteredData = (data || []).filter(user => !isAdminUser(user.email));
+      const filteredData = uniqueUsers.filter(user => !isAdminUser(user.email));
       setUsers(filteredData);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -81,12 +127,32 @@ export default function AdminUsersScreen() {
 
   const fetchStats = async () => {
     try {
-      const { data, error } = await supabase
-        .from('admin_user_stats')
-        .select('*');
+      // Calculate stats from the actual user data
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-      if (error) throw error;
-      setStats(data || []);
+      const customers = users.filter(user => user.user_type === 'customer');
+      const recyclers = users.filter(user => user.user_type === 'recycler');
+
+      const customerStats = {
+        user_type: 'customer',
+        total_users: customers.length,
+        new_users_30_days: customers.filter(user => new Date(user.created_at) >= thirtyDaysAgo).length,
+        new_users_7_days: customers.filter(user => new Date(user.created_at) >= sevenDaysAgo).length,
+        new_users_1_day: customers.filter(user => new Date(user.created_at) >= oneDayAgo).length
+      };
+
+      const recyclerStats = {
+        user_type: 'recycler',
+        total_users: recyclers.length,
+        new_users_30_days: recyclers.filter(user => new Date(user.created_at) >= thirtyDaysAgo).length,
+        new_users_7_days: recyclers.filter(user => new Date(user.created_at) >= sevenDaysAgo).length,
+        new_users_1_day: recyclers.filter(user => new Date(user.created_at) >= oneDayAgo).length
+      };
+
+      setStats([customerStats, recyclerStats]);
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
@@ -94,7 +160,8 @@ export default function AdminUsersScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchUsers(), fetchStats()]);
+    await fetchUsers();
+    await fetchStats();
     setRefreshing(false);
   };
 
@@ -282,7 +349,7 @@ export default function AdminUsersScreen() {
           </View>
         ) : (
           filteredUsers.map((user) => (
-            <View key={user.id} style={styles.userCard}>
+            <View key={user.unique_key || user.id} style={styles.userCard}>
               <View style={styles.cardHeader}>
                 <View style={styles.userInfo}>
                   <View style={[styles.avatar, { backgroundColor: user.user_type === 'recycler' ? '#FFF3E0' : '#E3F2FD' }]}>

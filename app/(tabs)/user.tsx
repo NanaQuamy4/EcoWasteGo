@@ -6,6 +6,7 @@ import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import { COLORS } from '../../constants';
+import { useNotificationCount } from '../../hooks/useNotificationCount';
 import { supabase } from '../../lib/supabase';
 
 export default function UserScreen() {
@@ -80,14 +81,14 @@ export default function UserScreen() {
   // Fetch user data on component mount
   useEffect(() => {
     fetchUserData();
-  }, [fetchUserData]);
+  }, []); // Remove fetchUserData dependency to prevent infinite loop
 
   // Refresh user data when screen comes into focus (e.g., returning from edit profile)
   useFocusEffect(
     useCallback(() => {
       console.log('UserScreen: Screen focused, refreshing user data...');
       fetchUserData();
-    }, [fetchUserData])
+    }, []) // Remove fetchUserData dependency to prevent infinite loop
   );
 
   // Helper function to safely format creation date
@@ -121,7 +122,8 @@ export default function UserScreen() {
   const [deleteStep, setDeleteStep] = useState(1);
   const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
   const [showStatusSwitch, setShowStatusSwitch] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(3); // Mock notification count
+  // Use real notification count
+  const { notificationCount } = useNotificationCount();
 
   // Mock functions (replacing useAuth)
   const deleteAccount = async () => {
@@ -305,8 +307,6 @@ export default function UserScreen() {
   const handleNotificationPress = () => {
     // Navigate to notifications screen or show notification panel
     router.push('/customer-screens/CustomerNotificationScreen' as any);
-    // Clear notification count when opened
-    setNotificationCount(0);
   };
 
   if (isLoadingUser || isLoadingStats) {

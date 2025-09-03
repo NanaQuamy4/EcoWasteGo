@@ -16,6 +16,7 @@ export const COLORS = {
   darkBlue: '#1976D2',
   orange: '#FF9800',
   blue: '#2196F3',
+  purple: '#9C27B0',
 } as const;
 
 // App Dimensions

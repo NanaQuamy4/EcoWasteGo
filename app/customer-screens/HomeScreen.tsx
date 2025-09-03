@@ -7,6 +7,7 @@ import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
+import { useNotificationCount } from '../../hooks/useNotificationCount';
 // Mock user data (replacing useAuth)
 
 // ===== MOCK DATA FOR CUSTOMER HOME SCREEN =====
@@ -111,6 +112,9 @@ export default function HomeScreen() {
   const [search, setSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  
+  // Use real notification count
+  const { notificationCount } = useNotificationCount();
   const [nearbyRecyclers, setNearbyRecyclers] = useState<any[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<any | null>(null);
@@ -287,7 +291,7 @@ export default function HomeScreen() {
       <AppHeader
         onMenuPress={() => setDrawerOpen(true)}
         onNotificationPress={() => router.push('/customer-screens/CustomerNotificationScreen' as any)}
-        notificationCount={3}
+        notificationCount={notificationCount}
       />
       <DrawerMenu open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       
@@ -765,6 +769,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: COLORS.white,
     borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+});
+
     borderColor: COLORS.primary,
   },
 });

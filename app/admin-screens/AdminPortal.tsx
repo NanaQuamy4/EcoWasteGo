@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { isAdminUser } from '../../lib/adminConfig';
@@ -10,6 +10,8 @@ interface NotificationCounts {
   helpMessages: number;
   verifications: number;
   total: number;
+  totalUsers: number;
+  onlineRecyclers: number;
 }
 
 export default function AdminPortal() {
@@ -19,7 +21,9 @@ export default function AdminPortal() {
   const [notificationCounts, setNotificationCounts] = useState<NotificationCounts>({
     helpMessages: 0,
     verifications: 0,
-    total: 0
+    total: 0,
+    totalUsers: 0,
+    onlineRecyclers: 0
   });
 
   useEffect(() => {
@@ -94,12 +98,50 @@ export default function AdminPortal() {
       }
 
       const helpMessages = helpMessagesData?.length || 0;
-      const verifications = notifications?.filter(n => n.type === 'verification_request' && !n.is_read).length || 0;
+      const verifications = notifications?.filter((n: any) => n.type === 'verification_request' && !n.is_read).length || 0;
+
+      // Get total users count (both customers and recyclers, excluding admin users)
+      const [recyclersResult, customersResult] = await Promise.all([
+        supabase.from('recyclers').select('id, email'),
+        supabase.from('customers').select('id, email')
+      ]);
+      
+      // Filter out admin users from both tables
+      const nonAdminRecyclers = recyclersResult.data?.filter(r => !isAdminUser(r.email)) || [];
+      const nonAdminCustomers = customersResult.data?.filter(c => !isAdminUser(c.email)) || [];
+      
+      // Remove duplicates (in case user exists in both tables)
+      const allEmails = new Set();
+      const uniqueUsers = [];
+      
+      // Add all recyclers first
+      nonAdminRecyclers.forEach(recycler => {
+        if (!allEmails.has(recycler.email)) {
+          allEmails.add(recycler.email);
+          uniqueUsers.push(recycler);
+        }
+      });
+      
+      // Add customers only if they don't already exist
+      nonAdminCustomers.forEach(customer => {
+        if (!allEmails.has(customer.email)) {
+          allEmails.add(customer.email);
+          uniqueUsers.push(customer);
+        }
+      });
+      
+      const totalUsersCount = uniqueUsers.length;
+
+      // Get online recyclers count using our admin function
+      const { data: onlineSummary } = await supabase
+        .rpc('admin_get_online_recyclers_summary');
 
       setNotificationCounts({
         helpMessages,
         verifications,
-        total: unreadCount || 0
+        total: unreadCount || 0,
+        totalUsers: totalUsersCount || 0,
+        onlineRecyclers: onlineSummary?.[0]?.online_recyclers || 0
       });
     } catch (error) {
       console.error('Error fetching notification counts:', error);
@@ -136,6 +178,9 @@ export default function AdminPortal() {
         break;
       case 'notifications':
         router.push('/admin-screens/AdminNotificationsScreen');
+        break;
+      case 'online-recyclers':
+        router.push('/admin-screens/OnlineRecyclersScreen');
         break;
       default:
         Alert.alert('Coming Soon', 'This section is under development.');
@@ -228,6 +273,22 @@ export default function AdminPortal() {
           <MaterialIcons name="chevron-right" size={24} color="#207E06" />
         </TouchableOpacity>
 
+        {/* Online Recyclers */}
+        <TouchableOpacity 
+          style={styles.menuItem} 
+          onPress={() => navigateToSection('online-recyclers')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.menuItemIcon}>
+            <MaterialIcons name="recycling" size={28} color="#207E06" />
+          </View>
+          <View style={styles.menuItemText}>
+            <Text style={styles.menuItemTitle}>Online Recyclers</Text>
+            <Text style={styles.menuItemSubtitle}>Monitor recycler online status and activity</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="#207E06" />
+        </TouchableOpacity>
+
         {/* Analytics */}
         <TouchableOpacity 
           style={styles.menuItem} 
@@ -313,8 +374,13 @@ export default function AdminPortal() {
             </View>
             <View style={styles.statCard}>
               <MaterialIcons name="people" size={24} color="#207E06" />
-              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statNumber}>{notificationCounts.totalUsers}</Text>
               <Text style={styles.statLabel}>Total Users</Text>
+            </View>
+            <View style={styles.statCard}>
+              <MaterialIcons name="recycling" size={24} color="#207E06" />
+              <Text style={styles.statNumber}>{notificationCounts.onlineRecyclers}</Text>
+              <Text style={styles.statLabel}>Online</Text>
             </View>
             <View style={styles.statCard}>
               <MaterialIcons name="support-agent" size={24} color="#207E06" />
@@ -515,14 +581,15 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
   statCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
-    flex: 1,
-    marginHorizontal: 4,
+    width: '48%',
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,

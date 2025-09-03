@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import { supabase } from '../../lib/supabase';
@@ -11,21 +11,8 @@ export default function CustomerEditProfileScreen() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
 
-  // Debug logging for user data
-  useEffect(() => {
-    if (user) {
-      console.log('CustomerEditProfileScreen: User data:', user);
-      console.log('CustomerEditProfileScreen: User created_at:', user.created_at);
-      console.log('CustomerEditProfileScreen: User object keys:', Object.keys(user));
-    }
-  }, [user]);
-
-  // Fetch current user data on component mount
-  useEffect(() => {
-    fetchCurrentUser();
-  }, []);
-
-  const fetchCurrentUser = async () => {
+  // Fetch current user data
+  const fetchCurrentUser = useCallback(async () => {
     try {
       console.log('CustomerEditProfileScreen: Fetching current user...');
       setIsLoadingUser(true);
@@ -66,7 +53,21 @@ export default function CustomerEditProfileScreen() {
     } finally {
       setIsLoadingUser(false);
     }
-  };
+  }, []);
+
+  // Debug logging for user data
+  useEffect(() => {
+    if (user) {
+      console.log('CustomerEditProfileScreen: User data:', user);
+      console.log('CustomerEditProfileScreen: User created_at:', user.created_at);
+      console.log('CustomerEditProfileScreen: User object keys:', Object.keys(user));
+    }
+  }, [user]);
+
+  // Fetch current user data on component mount
+  useEffect(() => {
+    fetchCurrentUser();
+  }, []); // Remove fetchCurrentUser dependency to prevent infinite loop
 
   const handleSaveChanges = async () => {
     try {

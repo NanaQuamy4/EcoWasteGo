@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +10,8 @@ import {
   View
 } from 'react-native';
 import { COLORS } from '../../constants';
+import { PickupRequestStatus, validateAndUpdateStatus } from '../../lib/pickupRequestStatus';
+import { supabase } from '../../lib/supabase';
 
 interface RecyclerData {
   id: string;
@@ -20,6 +22,10 @@ interface RecyclerData {
   rate: string;
   pastPickups: number;
   rating: number;
+  phone?: string;
+  distance?: string;
+  estimatedArrival?: string;
+  estimatedPrice?: string;
 }
 
 export default function RecyclerProfileDetailsScreen() {
@@ -28,69 +34,116 @@ export default function RecyclerProfileDetailsScreen() {
   const recyclerName = params.recyclerName as string;
   const recyclerRating = params.recyclerRating as string;
   const recyclerDistance = params.recyclerDistance as string;
+  const recyclerPhone = params.recyclerPhone as string;
   const vehicleType = params.vehicleType as string;
   const rate = params.rate as string;
   const requestId = params.requestId as string;
+  const estimatedPrice = params.estimatedPrice as string;
+  const estimatedArrival = params.estimatedArrival as string;
 
   const [recycler, setRecycler] = useState<RecyclerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
 
-  // ===== MOCK DATA LOADING FUNCTION =====
-  const loadMockData = async () => {
+  // ===== LOAD RECYCLER DATA =====
+  const loadRecyclerData = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Create recycler data from params
-      const recyclerData: RecyclerData = {
-        id: recyclerId || 'recycler_001',
-        name: recyclerName || 'GreenFleet GH',
-        vehicleType: vehicleType || 'Big Truck',
-        vehicleId: 'EWG-ASH-TK-0823',
-        vehicleColor: 'Green and yellow',
-        rate: rate || 'GHS 1.20/kg',
-        pastPickups: 314,
-        rating: parseFloat(recyclerRating) || 4.8
+      // Fetch recycler data from database
+      const { data: recyclerData, error } = await supabase
+        .from('recyclers')
+        .select('*')
+        .eq('id', recyclerId)
+        .single();
+
+      if (error) throw error;
+
+      // Get completed pickups count
+      const { count: completedPickups } = await supabase
+        .from('pickup_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('recycler_id', recyclerId)
+        .eq('status', 'completed');
+
+      // Create recycler data object
+      const recycler: RecyclerData = {
+        id: recyclerData.id,
+        name: recyclerData.full_name || recyclerName || 'Unknown Recycler',
+        vehicleType: vehicleType || (recyclerData.truck_size === 'big' ? 'Big Truck' : 'Small Truck'),
+        vehicleId: recyclerData.truck_number_plate || 'EWG-ASH-TK-0823',
+        vehicleColor: 'Green and yellow', // Default color
+        rate: rate || `GHS ${estimatedPrice || '0.00'}`,
+        pastPickups: completedPickups || 0,
+        rating: parseFloat(recyclerRating) || recyclerData.rating || 4.5,
+        phone: recyclerPhone || recyclerData.phone,
+        distance: recyclerDistance,
+        estimatedArrival: estimatedArrival,
+        estimatedPrice: estimatedPrice
       };
       
-      setRecycler(recyclerData);
+      setRecycler(recycler);
     } catch (error) {
-      console.error('Error loading mock data:', error);
+      console.error('Error loading recycler data:', error);
       Alert.alert('Error', 'Failed to load recycler details');
       router.back();
     } finally {
       setLoading(false);
     }
-  };
+  }, [recyclerId, recyclerName, recyclerRating, recyclerDistance, vehicleType, rate, estimatedPrice, estimatedArrival]);
 
   // ===== INITIALIZATION EFFECT =====
   useEffect(() => {
-    loadMockData();
-  }, [recyclerId]);
+    loadRecyclerData();
+  }, [loadRecyclerData]);
 
   const handleConfirm = async () => {
-    if (!recycler) return;
+    if (!recycler || !requestId) return;
     
     setConfirming(true);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Validate and update status to 'confirmed' - this sends the request to recycler
+      const result = await validateAndUpdateStatus(
+        supabase,
+        requestId,
+        'confirmed' as PickupRequestStatus,
+        'assigned' as PickupRequestStatus
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to confirm request');
+      }
       
-      // Navigate to waiting screen
-      router.push({
-        pathname: '/customer-screens/WaitingForRecycler',
-        params: {
-          requestId: requestId,
-          recyclerId: recycler.id,
-          recyclerName: recycler.name,
-          recyclerRating: recycler.rating.toString(),
-          recyclerDistance: recyclerDistance
-        }
-      });
+      // The database trigger will automatically send notifications to both parties
+      // when the status changes to 'confirmed'
+      
+      // Show success message to customer
+      Alert.alert(
+        'Request Sent!',
+        'Your pickup request has been sent to the recycler. You will be notified when they respond.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to waiting screen
+              router.push({
+                pathname: '/customer-screens/WaitingForRecycler',
+                params: {
+                  requestId: requestId,
+                  recyclerId: recycler.id,
+                  recyclerName: recycler.name,
+                  recyclerRating: recycler.rating.toString(),
+                  recyclerDistance: recycler.distance || recyclerDistance,
+                  recyclerPhone: recycler.phone,
+                  estimatedPrice: recycler.estimatedPrice,
+                  estimatedArrival: recycler.estimatedArrival
+                }
+              });
+            }
+          }
+        ]
+      );
     } catch (error) {
       console.error('Error confirming pickup:', error);
       Alert.alert(
@@ -109,7 +162,27 @@ export default function RecyclerProfileDetailsScreen() {
       'Are you sure you want to cancel this pickup?',
       [
         { text: 'No', style: 'cancel' },
-        { text: 'Yes', onPress: () => router.back() }
+        { 
+          text: 'Yes', 
+          onPress: async () => {
+            try {
+              if (requestId) {
+                // Update pickup request status to 'cancelled' in database
+                await supabase
+                  .from('pickup_requests')
+                  .update({
+                    status: 'cancelled',
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', requestId);
+              }
+              router.back();
+            } catch (error) {
+              console.error('Error cancelling pickup:', error);
+              router.back(); // Still go back even if database update fails
+            }
+          }
+        }
       ]
     );
   };

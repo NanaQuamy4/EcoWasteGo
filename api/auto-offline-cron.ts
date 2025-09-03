@@ -37,15 +37,18 @@ export default async function handler(req: any, res: any) {
       console.error('Auto-offline cron error:', error);
       return res.status(500).json({ 
         error: 'Failed to run auto-offline check',
-        details: error.message 
+        details: error.message,
+        code: error.code
       });
     }
 
-    console.log(`Auto-offline cron completed. Set ${data || 0} recyclers offline.`);
+    const offlineCount = data || 0;
+    console.log(`Auto-offline cron completed. Set ${offlineCount} recyclers offline.`);
 
     return res.status(200).json({
       success: true,
-      message: `Set ${data || 0} inactive recyclers offline`,
+      message: `Set ${offlineCount} inactive recyclers offline`,
+      offline_count: offlineCount,
       timestamp: new Date().toISOString()
     });
 

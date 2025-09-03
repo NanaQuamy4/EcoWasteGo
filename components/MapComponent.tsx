@@ -26,7 +26,7 @@ interface MapComponentProps {
     };
     title?: string;
     description?: string;
-    type?: 'pickup' | 'recycler' | 'destination';
+    type?: 'pickup' | 'recycler' | 'destination' | 'search' | 'user';
   }>;
   route?: {
     coordinates: Array<{ latitude: number; longitude: number }>;
@@ -35,6 +35,7 @@ interface MapComponentProps {
   showUserLocation?: boolean;
   onMarkerPress?: (markerId: string) => void;
   onMapPress?: (coordinate: { latitude: number; longitude: number }) => void;
+  onLocationPress?: () => void; // New callback for location button
   style?: any;
   height?: number;
 }
@@ -48,6 +49,7 @@ export default function MapComponent({
   showUserLocation = true,
   onMarkerPress,
   onMapPress,
+  onLocationPress,
   style,
   height: customHeight,
 }: MapComponentProps) {
@@ -121,6 +123,10 @@ export default function MapComponent({
         return 'local-shipping';
       case 'destination':
         return 'flag';
+      case 'search':
+        return 'search';
+      case 'user':
+        return 'my-location';
       default:
         return 'location-on';
     }
@@ -134,6 +140,10 @@ export default function MapComponent({
         return COLORS.orange;
       case 'destination':
         return COLORS.red;
+      case 'search':
+        return COLORS.blue;
+      case 'user':
+        return COLORS.purple;
       default:
         return COLORS.darkGreen;
     }
@@ -209,7 +219,7 @@ export default function MapComponent({
       <View style={styles.mapControls}>
         <TouchableOpacity
           style={styles.controlButton}
-          onPress={getCurrentLocation}
+          onPress={onLocationPress || getCurrentLocation}
         >
           <MaterialIcons name="my-location" size={20} color={COLORS.darkGreen} />
         </TouchableOpacity>

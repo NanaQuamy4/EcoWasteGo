@@ -106,7 +106,7 @@ export default function DrawerMenu({ open, onClose, menuItems }: DrawerMenuProps
       console.log('DrawerMenu: Drawer opened, refreshing user data...');
       fetchUserData();
     }
-  }, [open, fetchUserData]);
+  }, [open]); // Remove fetchUserData dependency to prevent infinite loop
 
   // Determine user type and menu items
   const isRecycler = user?.role === 'recycler';

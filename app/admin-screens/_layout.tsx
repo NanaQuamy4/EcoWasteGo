@@ -10,6 +10,7 @@ export default function AdminLayout() {
       <Stack.Screen name="AdminAnalyticsScreen" options={{ headerShown: false }} />
       <Stack.Screen name="AdminHelpScreen" options={{ headerShown: false }} />
       <Stack.Screen name="AdminNotificationsScreen" options={{ headerShown: false }} />
+      <Stack.Screen name="OnlineRecyclersScreen" options={{ headerShown: false }} />
     </Stack>
   );
 }

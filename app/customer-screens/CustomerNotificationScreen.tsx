@@ -10,60 +10,24 @@ import {
     View
 } from 'react-native';
 import { COLORS } from '../../constants';
+import { useNotificationCount } from '../../hooks/useNotificationCount';
+import { supabase } from '../../lib/supabase';
 
-// Simple notification interface
+// Notification interface matching database schema
 interface Notification {
   id: string;
+  user_id: string;
   title: string;
   message: string;
-  type: string;
-  isRead: boolean;
+  type: 'general' | 'verification' | 'pickup' | 'request_confirmed' | 'request_accepted' | 'request_rejected' | 'request_completed' | 'request_cancelled' | 'pickup_started' | 'pickup_completed' | 'help_response';
+  is_read: boolean;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  read_at?: string;
   created_at: string;
+  updated_at: string;
 }
 
-// Simple mock notifications
-const mockNotifications: Notification[] = [
-  {
-    id: 'notif_001',
-    title: '🎉 Pickup Completed!',
-    message: 'Your waste pickup has been completed successfully. Weight: 8 kg, Total: GHS 15.75.',
-    type: 'pickup_completed',
-    isRead: false,
-    created_at: '2024-01-15T14:30:00Z'
-  },
-  {
-    id: 'notif_002',
-    title: '⭐ Points Earned!',
-    message: 'You\'ve earned 80 points for this pickup. Keep recycling to earn more rewards!',
-    type: 'points_earned',
-    isRead: false,
-    created_at: '2024-01-15T14:30:00Z'
-  },
-  {
-    id: 'notif_003',
-    title: '🌱 Environmental Impact',
-    message: 'You\'ve helped save 4.0 kg of CO2 emissions! Every pickup contributes to a cleaner planet.',
-    type: 'system',
-    isRead: true,
-    created_at: '2024-01-15T14:30:00Z'
-  },
-  {
-    id: 'notif_004',
-    title: '📅 Schedule Next Pickup',
-    message: 'Ready for your next recycling session? Schedule another pickup to continue earning points.',
-    type: 'reminder',
-    isRead: true,
-    created_at: '2024-01-15T12:00:00Z'
-  },
-  {
-    id: 'notif_005',
-    title: '🚚 Recycler on the Way',
-    message: 'Your recycler is 5 minutes away. Please be ready for pickup.',
-    type: 'pickup_confirmed',
-    isRead: true,
-    created_at: '2024-01-15T10:00:00Z'
-  }
-];
+// Removed mock notifications - now using real data from database
 
 export const config = {
   headerShown: false,
@@ -74,54 +38,123 @@ export default function CustomerNotificationScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const { refetch: refetchNotificationCount } = useNotificationCount();
 
-  // Load notifications
+  // Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getCurrentUser();
+  }, []);
+
+  // Load notifications from database
   const loadNotifications = async () => {
+    if (!user) return;
+    
     try {
       setLoading(true);
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setNotifications([...mockNotifications]);
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading notifications:', error);
+        setNotifications([]);
+      } else {
+        setNotifications(data || []);
+      }
     } catch (error) {
       console.error('Error loading notifications:', error);
-      setNotifications(mockNotifications);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
   };
 
   // Mark notification as read
-  const markAsRead = (notificationId: string) => {
-    setNotifications(prev => 
-      prev.map(notif => 
-        notif.id === notificationId 
-          ? { ...notif, isRead: true }
-          : notif
-      )
-    );
+  const markAsRead = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ 
+          is_read: true, 
+          read_at: new Date().toISOString() 
+        })
+        .eq('id', notificationId);
+
+      if (error) {
+        console.error('Error marking notification as read:', error);
+      } else {
+        setNotifications(prev => 
+          prev.map(notif => 
+            notif.id === notificationId 
+              ? { ...notif, is_read: true, read_at: new Date().toISOString() }
+              : notif
+          )
+        );
+        // Refetch notification count to update the badge
+        refetchNotificationCount();
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
   // Mark all as read
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notif => ({ ...notif, isRead: true }))
-    );
+  const markAllAsRead = async () => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ 
+          is_read: true, 
+          read_at: new Date().toISOString() 
+        })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+
+      if (error) {
+        console.error('Error marking all notifications as read:', error);
+      } else {
+        setNotifications(prev => 
+          prev.map(notif => ({ 
+            ...notif, 
+            is_read: true, 
+            read_at: new Date().toISOString() 
+          }))
+        );
+        // Refetch notification count to update the badge
+        refetchNotificationCount();
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
   };
 
   // Handle notification tap
   const handleNotificationTap = (notification: Notification) => {
-    if (!notification.isRead) {
+    if (!notification.is_read) {
       markAsRead(notification.id);
     }
     
-    // Simple navigation based on type
+    // Navigation based on type
     switch (notification.type) {
+      case 'request_completed':
       case 'pickup_completed':
-      case 'pickup_confirmed':
-        router.push('/customer-screens/history');
+        router.push('/(tabs)/history');
         break;
-      case 'points_earned':
-        router.push('/customer-screens/Rewards');
+      case 'request_confirmed':
+      case 'request_accepted':
+        router.push('/customer-screens/TrackingScreen');
+        break;
+      case 'help_response':
+        router.push('/customer-screens/Help');
         break;
       default:
         // Just mark as read for other types
@@ -132,33 +165,63 @@ export default function CustomerNotificationScreen() {
   // Get notification icon and color
   const getNotificationIcon = (type: string) => {
     switch (type) {
+      case 'request_completed':
       case 'pickup_completed': return 'checkmark-circle';
-      case 'points_earned': return 'star';
-      case 'pickup_confirmed': return 'car';
-      case 'reminder': return 'time';
-      default: return 'information-circle';
+      case 'request_confirmed':
+      case 'request_accepted': return 'car';
+      case 'request_rejected': return 'close-circle';
+      case 'help_response': return 'chatbubble';
+      case 'verification': return 'shield-checkmark';
+      case 'general': return 'information-circle';
+      default: return 'notifications';
     }
   };
 
   const getNotificationColor = (type: string) => {
     switch (type) {
+      case 'request_completed':
       case 'pickup_completed': return COLORS.green;
-      case 'points_earned': return '#FFD700';
-      case 'pickup_confirmed': return COLORS.primary;
-      case 'reminder': return COLORS.orange;
-      default: return COLORS.blue;
+      case 'request_confirmed':
+      case 'request_accepted': return COLORS.primary;
+      case 'request_rejected': return COLORS.red;
+      case 'help_response': return COLORS.blue;
+      case 'verification': return COLORS.purple;
+      case 'general': return COLORS.darkBlue;
+      default: return COLORS.orange;
     }
   };
 
-  // Format date
+  // Format date with better time calculation
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    const diffInMs = now.getTime() - date.getTime();
     
-    if (diffInHours < 1) return 'Just now';
-    if (diffInHours < 24) return `${Math.floor(diffInHours)}h ago`;
-    return date.toLocaleDateString();
+    // Convert to different time units
+    const diffInSeconds = Math.floor(diffInMs / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    const diffInMonths = Math.floor(diffInDays / 30);
+    const diffInYears = Math.floor(diffInDays / 365);
+    
+    // Return appropriate time format
+    if (diffInSeconds < 60) {
+      return 'Just now';
+    } else if (diffInMinutes < 60) {
+      return `${diffInMinutes}m ago`;
+    } else if (diffInHours < 24) {
+      return `${diffInHours}h ago`;
+    } else if (diffInDays < 7) {
+      return `${diffInDays}d ago`;
+    } else if (diffInWeeks < 4) {
+      return `${diffInWeeks}w ago`;
+    } else if (diffInMonths < 12) {
+      return `${diffInMonths}mo ago`;
+    } else {
+      return `${diffInYears}y ago`;
+    }
   };
 
   // Render notification item
@@ -166,7 +229,7 @@ export default function CustomerNotificationScreen() {
     <TouchableOpacity 
       style={[
         styles.notificationCard,
-        !item.isRead && styles.unreadNotification
+        !item.is_read && styles.unreadNotification
       ]}
       onPress={() => handleNotificationTap(item)}
       activeOpacity={0.7}
@@ -183,7 +246,7 @@ export default function CustomerNotificationScreen() {
         <View style={styles.notificationHeader}>
           <Text style={[
             styles.notificationTitle,
-            !item.isRead && styles.unreadTitle
+            !item.is_read && styles.unreadTitle
           ]}>
             {item.title}
           </Text>
@@ -196,7 +259,7 @@ export default function CustomerNotificationScreen() {
           {item.message}
         </Text>
         
-        {!item.isRead && (
+        {!item.is_read && (
           <View style={styles.unreadIndicator} />
         )}
       </View>
@@ -221,10 +284,23 @@ export default function CustomerNotificationScreen() {
     setRefreshing(false);
   };
 
-  // Load notifications on mount
+  // Load notifications when user is available
   useEffect(() => {
-    loadNotifications();
-  }, []);
+    if (user) {
+      loadNotifications();
+    }
+  }, [user]);
+
+  // Refresh notification count when screen is focused
+  useEffect(() => {
+    // Use useFocusEffect from React Navigation instead of router.addListener
+    const handleFocus = () => {
+      refetchNotificationCount();
+    };
+
+    // Call immediately when component mounts
+    handleFocus();
+  }, [refetchNotificationCount]);
 
   if (loading) {
     return (
@@ -251,10 +327,10 @@ export default function CustomerNotificationScreen() {
       </View>
 
       {/* Simple Action Bar */}
-      {notifications.filter(n => !n.isRead).length > 0 && (
+      {notifications.filter(n => !n.is_read).length > 0 && (
         <View style={styles.actionBar}>
           <Text style={styles.unreadCount}>
-            {notifications.filter(n => !n.isRead).length} unread
+            {notifications.filter(n => !n.is_read).length} unread
           </Text>
         </View>
       )}
@@ -296,11 +372,16 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingHorizontal: 20,
     backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E9ECEF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   backButton: {
     padding: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.lightGreen,
   },
   headerTitle: {
     fontSize: 24,
@@ -309,10 +390,12 @@ const styles = StyleSheet.create({
   },
   markAllButton: {
     padding: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.lightGreen,
   },
   actionBar: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
     backgroundColor: COLORS.white,
     borderBottomWidth: 1,
     borderBottomColor: '#E9ECEF',
@@ -320,15 +403,20 @@ const styles = StyleSheet.create({
   unreadCount: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.primary,
-    backgroundColor: COLORS.primary + '15',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    color: COLORS.white,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     alignSelf: 'flex-start',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   listContent: {
-    padding: 20,
+    padding: 16,
   },
   emptyListContent: {
     flex: 1,
@@ -340,26 +428,34 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     backgroundColor: COLORS.white,
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F1F3F4',
   },
   unreadNotification: {
     borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
-    backgroundColor: COLORS.primary + '05',
+    backgroundColor: COLORS.lightGreen + '20',
+    borderColor: COLORS.primary + '30',
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   notificationContent: {
     flex: 1,
@@ -368,7 +464,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   notificationTitle: {
     fontSize: 16,
@@ -376,49 +472,57 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     flex: 1,
     marginRight: 12,
+    lineHeight: 22,
   },
   unreadTitle: {
     fontWeight: 'bold',
   },
   notificationTime: {
     fontSize: 12,
-    color: '#6C757D',
+    color: COLORS.gray,
     fontWeight: '500',
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   notificationMessage: {
     fontSize: 14,
-    color: '#495057',
+    color: COLORS.darkGreen,
     lineHeight: 20,
+    marginBottom: 4,
   },
   unreadIndicator: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: -2,
+    right: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: COLORS.white,
   },
   separator: {
-    height: 8,
+    height: 4,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 80,
+    paddingHorizontal: 40,
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#6C757D',
+    color: COLORS.gray,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateMessage: {
     fontSize: 16,
-    color: '#ADB5BD',
+    color: COLORS.lightGray,
     textAlign: 'center',
-    paddingHorizontal: 40,
     lineHeight: 24,
   },
   loadingContainer: {
@@ -431,5 +535,111 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: COLORS.primary,
+    fontWeight: '500',
+  },
+}); 
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F1F3F4',
+  },
+  unreadNotification: {
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+    backgroundColor: COLORS.lightGreen + '20',
+    borderColor: COLORS.primary + '30',
+  },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+  },
+  notificationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.primary,
+    flex: 1,
+    marginRight: 12,
+    lineHeight: 22,
+  },
+  unreadTitle: {
+    fontWeight: 'bold',
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: COLORS.gray,
+    fontWeight: '500',
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    color: COLORS.darkGreen,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  unreadIndicator: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  separator: {
+    height: 4,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.gray,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateMessage: {
+    fontSize: 16,
+    color: COLORS.lightGray,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: COLORS.primary,
+    fontWeight: '500',
   },
 }); 

@@ -1,82 +1,12 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, Vibration, View } from 'react-native';
 import { COLORS } from '../../constants';
+import { supabase } from '../../lib/supabase';
 
-// ===== MOCK DATA FOR RECYCLER REQUESTS =====
-// This replaces the backend API calls with local mock data
-// In a real app, this would come from a database or real-time service
-const mockPickupRequests: PickupRequest[] = [
-  {
-    id: "req_001",
-    userName: "John Doe",
-    location: "Accra Central, Ghana",
-    phone: "+233241234567",
-    wasteType: "Plastic & Paper",
-    distance: "2.3 km",
-    status: "pending",
-    createdAt: "2024-01-15T10:30:00Z",
-    customer_id: "user_001",
-    recycler_id: null,
-    waste_type: "Plastic & Paper",
-    pickup_address: "123 Main Street, Accra Central",
-    special_instructions: "Please call before arrival",
-    weight: 5,
-    isNew: true
-  },
-  {
-    id: "req_002",
-    userName: "Jane Smith", 
-    location: "Kumasi, Ghana",
-    phone: "+233241234569",
-    wasteType: "Mixed Waste",
-    distance: "1.8 km",
-    status: "accepted",
-    createdAt: "2024-01-15T09:15:00Z",
-    customer_id: "user_003",
-    recycler_id: "user_002",
-    waste_type: "Mixed Waste",
-    pickup_address: "456 Oak Avenue, Kumasi",
-    special_instructions: "Gate code: 1234",
-    weight: 8,
-    isNew: false
-  },
-  {
-    id: "req_003",
-    userName: "Michael Afia",
-    location: "Komfo Anokye, Ghana", 
-    phone: "+233546732719",
-    wasteType: "Plastic",
-    distance: "3.1 km",
-    status: "in_progress",
-    createdAt: "2024-01-15T08:00:00Z",
-    customer_id: "cust_004",
-    recycler_id: "user_002",
-    waste_type: "Plastic",
-    pickup_address: "Gold hostel - Komfo Anokye",
-    special_instructions: "Call when at gate",
-    weight: 10,
-    isNew: false
-  },
-  {
-    id: "req_004",
-    userName: "Sarah Johnson",
-    location: "Tema, Ghana",
-    phone: "+233241234570",
-    wasteType: "Electronic Waste",
-    distance: "4.2 km",
-    status: "pending",
-    createdAt: "2024-01-15T11:00:00Z",
-    customer_id: "cust_005",
-    recycler_id: null,
-    waste_type: "Electronic Waste",
-    pickup_address: "789 Industrial Road, Tema",
-    special_instructions: "Large items, need truck",
-    weight: 15,
-    isNew: true
-  }
-];
+// ===== REAL DATA INTEGRATION =====
+// This now uses real Supabase data instead of mock data
 
 // Simple distance calculation utility (placeholder - in real app would use actual GPS coordinates)
 const calculateDistance = (location: string): string => {
@@ -92,20 +22,34 @@ const calculateDistance = (location: string): string => {
 
 interface PickupRequest {
   id: string;
-  userName: string;
-  location: string;
-  phone: string;
-  wasteType: string;
-  distance: string;
-  status: string;
-  createdAt: string;
   customer_id: string;
   recycler_id: string | null;
-  waste_type: string;
   pickup_address: string;
-  special_instructions?: string;
-  weight: number;
-  isNew?: boolean; // Track if this is a new request
+  pickup_latitude?: number;
+  pickup_longitude?: number;
+  pickup_notes?: string;
+  waste_type: string;
+  waste_quantity: string;
+  estimated_weight?: number;
+  status: 'pending' | 'assigned' | 'confirmed' | 'accepted' | 'in_progress' | 'completed' | 'cancelled' | 'rejected';
+  preferred_pickup_date?: string;
+  preferred_pickup_time?: string;
+  estimated_price?: number;
+  final_price?: number;
+  payment_status: 'pending' | 'paid' | 'failed' | 'refunded';
+  pickup_started_at?: string;
+  pickup_completed_at?: string;
+  customer_rating?: number;
+  customer_feedback?: string;
+  recycler_notes?: string;
+  created_at: string;
+  updated_at: string;
+  
+  // Computed fields for UI
+  userName?: string;
+  phone?: string;
+  distance?: string;
+  isNew?: boolean;
 }
 
 export default function RecyclerRequests() {
@@ -126,23 +70,106 @@ export default function RecyclerRequests() {
   const pulseAnimation = useRef(new Animated.Value(1)).current;
   const [hasNewRequests, setHasNewRequests] = useState(false);
 
+  // ===== REAL DATA LOADING FUNCTION =====
+  // This fetches pickup requests from Supabase database
+  const loadPickupRequests = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error('Error getting user:', userError);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch pickup requests that are:
+      // 1. Pending (no recycler assigned yet) - any recycler can see these
+      // 2. Assigned to this recycler (assigned, confirmed, accepted, in_progress, completed)
+      // 3. Confirmed requests (waiting for recycler acceptance)
+      const { data: requests, error } = await supabase
+        .from('pickup_requests')
+        .select(`
+          *,
+          customers:customer_id (
+            id,
+            full_name,
+            phone
+          )
+        `)
+        .or(`status.eq.pending,recycler_id.eq.${user.id},status.eq.confirmed`)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching pickup requests:', error);
+        Alert.alert('Error', 'Failed to load pickup requests. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Transform the data to include customer information
+      const transformedRequests: PickupRequest[] = (requests || []).map(request => ({
+        ...request,
+        userName: request.customers?.full_name || `Customer ${request.customer_id.slice(0, 8)}`,
+        phone: request.customers?.phone || '+233 XX XXX XXXX',
+        distance: calculateDistance(request.pickup_address),
+        isNew: new Date(request.created_at) > new Date(Date.now() - 5 * 60 * 1000)
+      }));
+
+      setPickupRequests(transformedRequests);
+      setLastRequestCount(transformedRequests.length);
+      
+      // Check for new requests
+      const newRequests = transformedRequests.filter(req => req.isNew);
+      setHasNewRequests(newRequests.length > 0);
+      
+      console.log('Loaded pickup requests:', transformedRequests.length);
+    } catch (error) {
+      console.error('Error loading pickup requests:', error);
+      Alert.alert('Error', 'Failed to load pickup requests. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // ===== INITIALIZATION EFFECT =====
   // This effect runs when the component first loads
   useEffect(() => {
-    // Load initial mock data
-    loadMockData();
-  }, []);
+    // Load initial real data
+    loadPickupRequests();
+  }, [loadPickupRequests]);
 
-  // ===== REAL-TIME SIMULATION EFFECT =====
-  // This simulates real-time updates by polling every 10 seconds
-  // In a real app, this would be WebSocket or push notifications
+  // ===== REAL-TIME SUBSCRIPTION EFFECT =====
+  // This sets up real-time updates using Supabase subscriptions
   useEffect(() => {
-    const pollInterval = setInterval(() => {
-      simulateRealTimeUpdates();
-    }, 10000); // Poll every 10 seconds
+    const channel = supabase
+      .channel('pickup_requests_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pickup_requests'
+        },
+        (payload) => {
+          console.log('Pickup request change detected:', payload);
+          
+          // Reload data when there are changes
+          loadPickupRequests();
+          
+          // Vibrate for new requests
+          if (payload.eventType === 'INSERT') {
+            Vibration.vibrate(500);
+          }
+        }
+      )
+      .subscribe();
 
-    return () => clearInterval(pollInterval);
-  }, []);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadPickupRequests]);
 
   // ===== ANIMATION EFFECT =====
   // This effect animates the new request indicator when there are new requests
@@ -165,97 +192,52 @@ export default function RecyclerRequests() {
     }
   }, [hasNewRequests, pulseAnimation]);
 
-  // ===== MOCK DATA LOADING FUNCTION =====
-  // This replaces the backend API call to fetch pickup requests
-  // It loads data from our mock data array
-  const loadMockData = () => {
-    setLoading(true);
-    
-    // Simulate network delay
-    setTimeout(() => {
-      setPickupRequests([...mockPickupRequests]);
-      setLastRequestCount(mockPickupRequests.length);
-      
-      // Check for new requests (requests created in the last 5 minutes)
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-      const newRequests = mockPickupRequests.filter(req => 
-        new Date(req.createdAt) > fiveMinutesAgo
-      );
-      
-      setHasNewRequests(newRequests.length > 0);
-      setLoading(false);
-    }, 1000);
-  };
 
-  // ===== REAL-TIME UPDATE SIMULATION =====
-  // This simulates real-time updates by occasionally adding new mock requests
-  const simulateRealTimeUpdates = () => {
-    // 10% chance of getting a new request
-    if (Math.random() < 0.1) {
-      const newRequest: PickupRequest = {
-        id: `req_${Date.now()}`,
-        userName: `Customer ${Math.floor(Math.random() * 1000)}`,
-        location: "Random Location, Ghana",
-        phone: `+23324${Math.floor(Math.random() * 900000 + 100000)}`,
-        wasteType: "Mixed Waste",
-        distance: calculateDistance("Random Location"),
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        customer_id: `cust_${Date.now()}`,
-        recycler_id: null,
-        waste_type: "Mixed Waste",
-        pickup_address: "Random Address",
-        special_instructions: "No special instructions",
-        weight: Math.floor(Math.random() * 20) + 1,
-        isNew: true
-      };
-      
-      // Add to mock data and update state
-      const updatedRequests = [newRequest, ...mockPickupRequests];
-      mockPickupRequests.length = 0;
-      mockPickupRequests.push(...updatedRequests);
-      setPickupRequests(updatedRequests);
-      setHasNewRequests(true);
-      
-      // Vibrate to notify recycler of new request
-      Vibration.vibrate(500);
-    }
-  };
 
   // ===== REFRESH HANDLER =====
   // This handles pull-to-refresh functionality
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    loadMockData();
-    
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    await loadPickupRequests();
+    setRefreshing(false);
   };
 
   // ===== REQUEST ACTION HANDLERS =====
   // These functions handle different actions on pickup requests
   
   // Accept a pickup request
-  const handleAcceptRequest = (requestId: string) => {
-    const request = pickupRequests.find(r => r.id === requestId);
-    if (request) {
-      request.status = "accepted";
-      request.recycler_id = "current_recycler_id"; // In real app, this would be the logged-in recycler's ID
+  const handleAcceptRequest = async (requestId: string) => {
+    try {
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        Alert.alert('Error', 'Please log in to accept requests.');
+        return;
+      }
+
+      // Update the request in the database
+      const { error } = await supabase
+        .from('pickup_requests')
+        .update({
+          status: 'accepted',
+          recycler_id: user.id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (error) {
+        console.error('Error accepting request:', error);
+        Alert.alert('Error', 'Failed to accept request. Please try again.');
+        return;
+      }
+
+      // Update local state
       setAcceptedRequests(prev => new Set(prev).add(requestId));
       
-      // Update the mock data
-      const mockRequest = mockPickupRequests.find(r => r.id === requestId);
-      if (mockRequest) {
-        mockRequest.status = "accepted";
-        mockRequest.recycler_id = "current_recycler_id";
-      }
-      
-      setPickupRequests([...pickupRequests]);
-      
+      const request = pickupRequests.find(r => r.id === requestId);
       Alert.alert(
         "Request Accepted!",
-        `You've accepted the pickup request from ${request.userName}. Navigate to start pickup.`,
+        `You've accepted the pickup request from ${request?.userName || 'Customer'}. Navigate to start pickup.`,
         [
           {
             text: "Navigate",
@@ -269,51 +251,73 @@ export default function RecyclerRequests() {
           { text: "Later", style: "cancel" }
         ]
       );
+    } catch (error) {
+      console.error('Error accepting request:', error);
+      Alert.alert('Error', 'Failed to accept request. Please try again.');
     }
   };
 
   // Complete a pickup request
-  const handleCompleteRequest = (requestId: string) => {
-    const request = pickupRequests.find(r => r.id === requestId);
-    if (request) {
-      request.status = "completed";
+  const handleCompleteRequest = async (requestId: string) => {
+    try {
+      // Update the request in the database
+      const { error } = await supabase
+        .from('pickup_requests')
+        .update({
+          status: 'completed',
+          pickup_completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (error) {
+        console.error('Error completing request:', error);
+        Alert.alert('Error', 'Failed to complete request. Please try again.');
+        return;
+      }
+
+      // Update local state
       setCompletedRequests(prev => new Set(prev).add(requestId));
       
-      // Update the mock data
-      const mockRequest = mockPickupRequests.find(r => r.id === requestId);
-      if (mockRequest) {
-        mockRequest.status = "completed";
-      }
-      
-      setPickupRequests([...pickupRequests]);
-      
+      const request = pickupRequests.find(r => r.id === requestId);
       Alert.alert(
         "Pickup Completed!",
-        `Great job! You've completed the pickup for ${request.userName}.`,
+        `Great job! You've completed the pickup for ${request?.userName || 'Customer'}.`,
         [{ text: "OK" }]
       );
+    } catch (error) {
+      console.error('Error completing request:', error);
+      Alert.alert('Error', 'Failed to complete request. Please try again.');
     }
   };
 
   // Reject a pickup request
-  const handleCancelRequest = (requestId: string) => {
-    const request = pickupRequests.find(r => r.id === requestId);
-    if (request) {
-      request.status = "rejected";
-      
-      // Update the mock data
-      const mockRequest = mockPickupRequests.find(r => r.id === requestId);
-      if (mockRequest) {
-        mockRequest.status = "rejected";
+  const handleCancelRequest = async (requestId: string) => {
+    try {
+      // Update the request in the database
+      const { error } = await supabase
+        .from('pickup_requests')
+        .update({
+          status: 'rejected',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (error) {
+        console.error('Error rejecting request:', error);
+        Alert.alert('Error', 'Failed to reject request. Please try again.');
+        return;
       }
-      
-      setPickupRequests([...pickupRequests]);
-      
+
+      const request = pickupRequests.find(r => r.id === requestId);
       Alert.alert(
         "Request Rejected",
-        `You've rejected the pickup request from ${request.userName}.`,
+        `You've rejected the pickup request from ${request?.userName || 'Customer'}.`,
         [{ text: "OK" }]
       );
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      Alert.alert('Error', 'Failed to reject request. Please try again.');
     }
   };
 
@@ -326,14 +330,23 @@ export default function RecyclerRequests() {
     
     switch (selectedFilter) {
       case 'pending':
-        return activeRequests.filter(req => req.status === 'pending');
+        // Active pickups: pending, assigned, confirmed, accepted, in_progress
+        return activeRequests.filter(req => 
+          ['pending', 'assigned', 'confirmed', 'accepted', 'in_progress'].includes(req.status)
+        );
       case 'accepted':
-        return activeRequests.filter(req => req.status === 'accepted');
+        // Accepted pickups: accepted, in_progress
+        return activeRequests.filter(req => 
+          ['accepted', 'in_progress'].includes(req.status)
+        );
       case 'in_progress':
+        // In progress pickups: in_progress only
         return activeRequests.filter(req => req.status === 'in_progress');
       case 'completed':
+        // Completed pickups: completed only
         return activeRequests.filter(req => req.status === 'completed');
       default:
+        // All pickups: everything except cancelled/rejected
         return activeRequests;
     }
   };
@@ -362,18 +375,29 @@ export default function RecyclerRequests() {
         {/* Request Details */}
         <View style={styles.requestDetails}>
           <View style={styles.detailRow}>
-            <MaterialIcons name="search" size={16} color={COLORS.gray} />
+            <MaterialIcons name="location-on" size={16} color={COLORS.gray} />
             <Text style={styles.detailText}>{request.pickup_address}</Text>
           </View>
           <View style={styles.detailRow}>
             <MaterialIcons name="phone" size={16} color={COLORS.gray} />
             <Text style={styles.detailText}>{request.phone}</Text>
           </View>
+          <View style={styles.detailRow}>
+            <MaterialIcons name="recycling" size={16} color={COLORS.gray} />
+            <Text style={styles.detailText}>{request.waste_type} • {request.waste_quantity}</Text>
+          </View>
+          {request.estimated_weight && (
+            <View style={styles.detailRow}>
+              <MaterialIcons name="scale" size={16} color={COLORS.gray} />
+              <Text style={styles.detailText}>~{request.estimated_weight}kg</Text>
+            </View>
+          )}
         </View>
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          {request.status === 'pending' && (
+          {/* Show Accept/Reject buttons for confirmed requests */}
+          {request.status === 'confirmed' && (
             <>
               <TouchableOpacity
                 style={[styles.actionButton, styles.acceptButton]}
@@ -391,6 +415,26 @@ export default function RecyclerRequests() {
             </>
           )}
 
+          {/* Show Accept/Reject buttons for pending requests (if no recycler assigned yet) */}
+          {request.status === 'pending' && !request.recycler_id && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.acceptButton]}
+                onPress={() => handleAcceptRequest(request.id)}
+              >
+                <Text style={styles.actionButtonText}>Accept</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => handleCancelRequest(request.id)}
+              >
+                <Text style={styles.actionButtonText}>Reject</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Show Complete/Route buttons for accepted and in-progress requests */}
           {(request.status === 'accepted' || request.status === 'in_progress') && (
             <>
               <TouchableOpacity
@@ -412,6 +456,15 @@ export default function RecyclerRequests() {
                 <Text style={styles.actionButtonText}>Route</Text>
               </TouchableOpacity>
             </>
+          )}
+
+          {/* Show status for other states */}
+          {(request.status === 'assigned' || request.status === 'completed') && (
+            <View style={[styles.actionButton, { backgroundColor: COLORS.gray, opacity: 0.7 }]}>
+              <Text style={styles.actionButtonText}>
+                {request.status === 'assigned' ? 'Waiting for Customer' : 'Completed'}
+              </Text>
+            </View>
           )}
         </View>
       </View>
@@ -497,13 +550,22 @@ export default function RecyclerRequests() {
               {selectedFilter === 'all' 
                 ? 'No pickup requests available at the moment'
                 : selectedFilter === 'pending'
-                ? 'No pending pickup requests'
+                ? 'No active pickup requests'
+                : selectedFilter === 'accepted'
+                ? 'No accepted pickup requests'
+                : selectedFilter === 'in_progress'
+                ? 'No in-progress pickup requests'
                 : 'No completed pickup requests'
               }
             </Text>
             {selectedFilter === 'all' && (
               <Text style={styles.emptyStateSubtext}>
                 New requests will appear here automatically
+              </Text>
+            )}
+            {selectedFilter === 'pending' && (
+              <Text style={styles.emptyStateSubtext}>
+                Active requests include pending, assigned, confirmed, accepted, and in-progress pickups
               </Text>
             )}
           </View>
