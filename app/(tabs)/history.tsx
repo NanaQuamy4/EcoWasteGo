@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
-import { useNotificationCount } from '../../hooks/useNotificationCount';
+import { useNotificationCountSimple as useNotificationCount } from '../../hooks/useNotificationCountSimple';
 // Mock user data (replacing useAuth)
 // import BottomNav from '../../components/BottomNav';
 

@@ -13,7 +13,7 @@ export type PickupRequestStatus =
 
 // Status flow validation
 export const STATUS_FLOW: Record<PickupRequestStatus, PickupRequestStatus[]> = {
-  pending: ['assigned', 'cancelled'],
+  pending: ['assigned', 'confirmed', 'cancelled'], // Allow direct pending -> confirmed
   assigned: ['confirmed', 'cancelled'],
   confirmed: ['accepted', 'rejected', 'cancelled'],
   accepted: ['in_progress', 'cancelled'],

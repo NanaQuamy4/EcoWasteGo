@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
 import { useOnlineRecyclers } from '../../hooks/useRecyclerOnlineStatus';
@@ -18,6 +19,9 @@ interface Recycler {
   lastSeenAt: string;
   heartbeatAt: string;
   status: 'Active' | 'Online' | 'Offline';
+  // Location fields
+  latitude?: number;
+  longitude?: number;
   // Computed fields
   distance?: string;
   estimatedArrival?: string;
@@ -78,51 +82,260 @@ export default function SelectTruck() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
+
+  // ===== REFS TO PREVENT INFINITE LOOPS =====
+  const hasFetchedRecyclers = useRef(false);
+  const isFetchingRecyclers = useRef(false);
 
   // ===== HELPER FUNCTIONS =====
   const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
+    // Validate coordinates
+    if (!lat1 || !lon1 || !lat2 || !lon2 || 
+        isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2) ||
+        lat1 === 0 || lon1 === 0 || lat2 === 0 || lon2 === 0) {
+      console.warn('SelectTruck: Invalid coordinates for distance calculation:', { lat1, lon1, lat2, lon2 });
+      return 0;
+    }
+
+    // Earth's radius in kilometers
+    const R = 6371;
+    
+    // Convert degrees to radians
+    const lat1Rad = lat1 * Math.PI / 180;
+    const lat2Rad = lat2 * Math.PI / 180;
+    const deltaLat = (lat2 - lat1) * Math.PI / 180;
+    const deltaLon = (lon2 - lon1) * Math.PI / 180;
+
+    // Haversine formula
+    const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+              Math.cos(lat1Rad) * Math.cos(lat2Rad) *
+              Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    
+    const distance = R * c;
+    
+    console.log('SelectTruck: Distance calculation details:', {
+      from: { lat: lat1, lon: lon1 },
+      to: { lat: lat2, lon: lon2 },
+      distance: distance.toFixed(2) + ' km'
+    });
+    
+    return distance;
   }, []);
 
-  const calculateETA = useCallback((distance: number): number => {
-    // Assume average speed of 30 km/h in city traffic
-    return Math.round((distance / 30) * 60); // Convert to minutes
+  const calculateETA = useCallback((distance: number, isUrban: boolean = true): number => {
+    if (distance <= 0) return 0;
+    
+    // More realistic speed calculations based on distance and area type
+    let averageSpeed: number;
+    
+    if (distance <= 1) {
+      // Very close - walking/cycling speed
+      averageSpeed = 8; // km/h
+    } else if (distance <= 3) {
+      // Short distance - slow city traffic
+      averageSpeed = isUrban ? 20 : 30; // km/h
+    } else if (distance <= 10) {
+      // Medium distance - mixed traffic
+      averageSpeed = isUrban ? 25 : 35; // km/h
+    } else {
+      // Longer distance - highway speeds possible
+      averageSpeed = isUrban ? 30 : 45; // km/h
+    }
+    
+    const etaMinutes = Math.round((distance / averageSpeed) * 60);
+    
+    console.log('SelectTruck: ETA calculation:', {
+      distance: distance.toFixed(2) + ' km',
+      speed: averageSpeed + ' km/h',
+      eta: etaMinutes + ' min',
+      isUrban
+    });
+    
+    return Math.max(etaMinutes, 1); // Minimum 1 minute
   }, []);
 
   const calculatePrice = useCallback((truckSize: string, weight: number, distance: number): number => {
-    // Base rate per kg
-    const baseRate = truckSize === 'big' ? 1.25 : 1.15;
+    // Fixed service fee (no weight or distance calculation - proper weighing will be done later)
+    const serviceFee = 10; // GHS 10 fixed service fee
     
-    // Distance multiplier (higher for longer distances)
-    const distanceMultiplier = distance > 5 ? 1.2 : distance > 2 ? 1.1 : 1.0;
-    
-    // Calculate total price
-    const totalPrice = (baseRate * weight * distanceMultiplier);
-    
-    return Math.round(totalPrice * 100) / 100; // Round to 2 decimal places
+    return serviceFee;
+  }, []);
+
+  // ===== GET CUSTOMER LOCATION =====
+  const getCustomerLocation = useCallback(async (userId?: string) => {
+    try {
+      console.log('SelectTruck: Requesting location permission...');
+      
+      // Request location permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        console.log('SelectTruck: Location permission denied');
+        Alert.alert(
+          'Location Permission Required',
+          'Please enable location access to find nearby recyclers and calculate accurate distances.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Settings', onPress: () => Location.requestForegroundPermissionsAsync() }
+          ]
+        );
+        return null;
+      }
+      
+      setLocationPermissionGranted(true);
+      console.log('SelectTruck: Location permission granted');
+      
+      // Get current location
+      console.log('SelectTruck: Getting current location...');
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      
+      const customerLocation = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude
+      };
+      
+      console.log('SelectTruck: Customer location obtained:', customerLocation);
+      setUserLocation(customerLocation);
+      
+      // Store customer location in database
+      if (userId) {
+        try {
+          console.log('SelectTruck: Attempting to update customer location in database:', {
+            userId,
+            latitude: customerLocation.latitude,
+            longitude: customerLocation.longitude
+          });
+          
+          // First, check if customer record exists
+          const { data: existingCustomer, error: checkError } = await supabase
+            .from('customers')
+            .select('id, full_name, email')
+            .eq('id', userId)
+            .single();
+          
+          if (checkError) {
+            console.error('SelectTruck: Error checking customer record:', checkError);
+            // Try to create customer record if it doesn't exist
+            const { data: newCustomer, error: createError } = await supabase
+              .from('customers')
+              .insert({
+                id: userId,
+                full_name: 'Customer',
+                email: 'customer@example.com',
+                latitude: customerLocation.latitude,
+                longitude: customerLocation.longitude,
+                last_location_updated: new Date().toISOString()
+              })
+              .select();
+            
+            if (createError) {
+              console.error('SelectTruck: Error creating customer record:', createError);
+            } else {
+              console.log('SelectTruck: Customer record created with location:', newCustomer);
+            }
+          } else {
+            console.log('SelectTruck: Customer record exists:', existingCustomer);
+            
+            // Update existing customer record
+            const { data, error: locationError } = await supabase
+              .from('customers')
+              .update({
+                latitude: customerLocation.latitude,
+                longitude: customerLocation.longitude,
+                last_location_updated: new Date().toISOString()
+              })
+              .eq('id', userId)
+              .select();
+            
+            if (locationError) {
+              console.error('SelectTruck: Error updating customer location:', locationError);
+              console.error('SelectTruck: Error details:', {
+                message: locationError.message,
+                details: locationError.details,
+                hint: locationError.hint,
+                code: locationError.code
+              });
+            } else {
+              console.log('SelectTruck: Customer location stored successfully:', data);
+            }
+          }
+        } catch (error) {
+          console.error('SelectTruck: Exception storing customer location:', error);
+        }
+      } else {
+        console.log('SelectTruck: No userId provided, skipping database update');
+      }
+      
+      return customerLocation;
+    } catch (error) {
+      console.error('SelectTruck: Error getting customer location:', error);
+      Alert.alert(
+        'Location Error',
+        'Unable to get your current location. Using default location for distance calculation.',
+        [{ text: 'OK' }]
+      );
+      return null;
+    }
   }, []);
 
   // ===== FETCH AVAILABLE RECYCLERS =====
   const fetchAvailableRecyclers = useCallback(async () => {
+    // Prevent multiple simultaneous calls
+    if (isFetchingRecyclers.current) {
+      console.log('SelectTruck: Already fetching recyclers, skipping...');
+      return;
+    }
+    
+    // Prevent repeated calls if we already fetched
+    if (hasFetchedRecyclers.current) {
+      console.log('SelectTruck: Already fetched recyclers, skipping...');
+      return;
+    }
+    
     try {
       console.log('SelectTruck: Starting fetchAvailableRecyclers...');
+      isFetchingRecyclers.current = true;
       setLoadingAvailable(true);
+      
+      // Get current online recyclers from the hook
+      const currentOnlineRecyclers = onlineRecyclers;
+      
+      // Quick bypass: if we have online recyclers that are available, use them directly
+      console.log('SelectTruck: Checking bypass - onlineRecyclers.length:', currentOnlineRecyclers.length);
+      if (currentOnlineRecyclers.length > 0) {
+        console.log('SelectTruck: Online recyclers data:', currentOnlineRecyclers.map(r => ({
+          name: r.fullName,
+          isAvailable: r.isAvailable,
+          isOnline: r.isOnline
+        })));
+        const availableOnlineRecyclers = currentOnlineRecyclers.filter(r => r.isAvailable && r.isOnline);
+        console.log('SelectTruck: Available online recyclers after filter:', availableOnlineRecyclers.length);
+        if (availableOnlineRecyclers.length > 0) {
+          console.log('SelectTruck: Bypassing RPC, using available online recyclers directly');
+          const convertedRecyclers: Recycler[] = availableOnlineRecyclers.map(recycler => ({
+            ...recycler,
+            truckSize: (recycler.truckSize?.toLowerCase() === 'big' ? 'big' : 'small') as 'small' | 'big'
+          }));
+          setAvailableRecyclers(convertedRecyclers);
+          setLoadingAvailable(false);
+          console.log('SelectTruck: Bypass completed, set availableRecyclers to:', convertedRecyclers.length);
+          return;
+        }
+      }
       
       // Add timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 8000) // 8 second timeout
+        setTimeout(() => reject(new Error('Request timeout')), 3000) // Reduced to 3 second timeout
       );
       
-      console.log('SelectTruck: Calling get_available_recyclers_for_requests RPC...');
-      const rpcPromise = supabase.rpc('get_available_recyclers_for_requests');
+      console.log('SelectTruck: Calling get_available_recyclers_exclude_rejected RPC...');
+      const rpcPromise = supabase.rpc('get_available_recyclers_exclude_rejected', {
+        p_customer_id: currentUser.id
+      });
       
       // Use the new function that excludes busy recyclers
       const { data, error } = await Promise.race([rpcPromise, timeoutPromise]) as any;
@@ -131,21 +344,142 @@ export default function SelectTruck() {
       
       if (error) {
         console.error('Error fetching available recyclers:', error);
-        // Fallback to regular online recyclers if the function fails
-        const fallbackRecyclers: Recycler[] = onlineRecyclers.map(recycler => ({
+        console.log('RPC failed, trying direct database query...');
+        
+        // Try direct database query as fallback
+        try {
+          // First get rejected recycler IDs for this customer
+          const { data: rejectedData } = await supabase
+            .from('pickup_requests')
+            .select('recycler_id')
+            .eq('customer_id', currentUser.id)
+            .eq('status', 'rejected')
+            .not('recycler_id', 'is', null);
+
+          const rejectedRecyclerIds = rejectedData?.map(r => r.recycler_id) || [];
+
+          const { data: directData, error: directError } = await supabase
+            .from('recyclers')
+            .select(`
+              id,
+              full_name,
+              phone,
+              truck_size,
+              rating,
+              is_available,
+              is_online,
+              last_seen_at,
+              heartbeat_at,
+              latitude,
+              longitude
+            `)
+            .eq('verification_status', 'approved')
+            .eq('is_online', true)
+            .eq('is_available', true)
+            .gt('heartbeat_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()) // Extended to 10 minutes
+            .not('id', 'in', `(${rejectedRecyclerIds.length > 0 ? rejectedRecyclerIds.map(id => `'${id}'`).join(',') : 'null'})`); // Exclude rejected recyclers
+
+          if (directError) {
+            console.error('Direct query also failed:', directError);
+            // Final fallback to online recyclers (excluding rejected ones)
+            const filteredRecyclers = currentOnlineRecyclers.filter(recycler => 
+              !rejectedRecyclerIds.includes(recycler.id)
+            );
+            const convertedRecyclers: Recycler[] = filteredRecyclers.map(recycler => ({
           ...recycler,
-          truckSize: recycler.truckSize as 'small' | 'big',
-          fullName: recycler.fullName,
+              truckSize: (recycler.truckSize?.toLowerCase() === 'big' ? 'big' : 'small') as 'small' | 'big'
+            }));
+            setAvailableRecyclers(convertedRecyclers);
+            console.log(`Final Fallback: Using ${filteredRecyclers.length} online recyclers (excluding ${rejectedRecyclerIds.length} rejected)`);
+          } else {
+            console.log('Direct query successful:', directData?.length, 'recyclers');
+            const convertedRecyclers: Recycler[] = (directData || []).map(recycler => ({
+              id: recycler.id,
+              fullName: recycler.full_name,
           phone: recycler.phone,
+              truckSize: (recycler.truck_size?.toLowerCase() === 'big' ? 'big' : 'small') as 'small' | 'big',
           rating: recycler.rating,
-          isAvailable: recycler.isAvailable,
-          isOnline: recycler.isOnline,
-          lastSeenAt: recycler.lastSeenAt,
-          heartbeatAt: recycler.heartbeatAt,
-          status: recycler.status,
+              isAvailable: recycler.is_available,
+              isOnline: recycler.is_online,
+              lastSeenAt: recycler.last_seen_at,
+              heartbeatAt: recycler.heartbeat_at,
+              status: 'Active' as 'Active' | 'Online' | 'Offline',
+              latitude: recycler.latitude,
+              longitude: recycler.longitude,
           pendingRequestsCount: 0
         }));
-        setAvailableRecyclers(fallbackRecyclers);
+            setAvailableRecyclers(convertedRecyclers);
+          }
+        } catch (fallbackError) {
+          console.error('Fallback query failed:', fallbackError);
+          // Final fallback to online recyclers
+          const convertedRecyclers: Recycler[] = currentOnlineRecyclers.map(recycler => ({
+            ...recycler,
+            truckSize: (recycler.truckSize?.toLowerCase() === 'big' ? 'big' : 'small') as 'small' | 'big'
+          }));
+          setAvailableRecyclers(convertedRecyclers);
+          console.log(`Final Fallback: Using ${currentOnlineRecyclers.length} online recyclers`);
+        }
+        return;
+      }
+      
+      // Check if we got any data
+      if (!data || data.length === 0) {
+        console.log('No data returned from RPC, trying direct database query...');
+        
+        // Direct database query as final fallback
+        const { data: directData, error: directError } = await supabase
+          .from('recyclers')
+          .select(`
+            id,
+            full_name,
+            phone,
+            truck_size,
+            rating,
+            is_available,
+            is_online,
+            last_seen_at,
+            heartbeat_at,
+            verification_status,
+            latitude,
+            longitude
+          `)
+          .eq('verification_status', 'approved')
+          .eq('is_online', true)
+          .eq('is_available', true)
+          .gt('heartbeat_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()); // Extended to 10 minutes
+        
+        console.log('Direct query result:', directData, 'error:', directError);
+        
+        if (directData && directData.length > 0) {
+          const directRecyclers: Recycler[] = directData.map((recycler: any) => ({
+        id: recycler.id,
+        fullName: recycler.full_name,
+        phone: recycler.phone,
+        truckSize: recycler.truck_size as 'small' | 'big',
+        rating: recycler.rating,
+        isAvailable: recycler.is_available,
+        isOnline: recycler.is_online,
+        lastSeenAt: recycler.last_seen_at,
+        heartbeatAt: recycler.heartbeat_at,
+        status: 'Active' as 'Active' | 'Online' | 'Offline',
+            pendingRequestsCount: 0,
+            latitude: recycler.latitude,
+            longitude: recycler.longitude
+          }));
+          setAvailableRecyclers(directRecyclers);
+          console.log(`Direct query: Found ${directRecyclers.length} available recyclers`);
+          return;
+        }
+        
+        // Final fallback to online recyclers
+        console.log('Direct query failed, using online recyclers directly...');
+        const convertedRecyclers: Recycler[] = currentOnlineRecyclers.map(recycler => ({
+        ...recycler,
+          truckSize: (recycler.truckSize?.toLowerCase() === 'big' ? 'big' : 'small') as 'small' | 'big'
+        }));
+        setAvailableRecyclers(convertedRecyclers);
+        console.log(`Direct Query Fallback: Using ${currentOnlineRecyclers.length} online recyclers`);
         return;
       }
       
@@ -161,7 +495,9 @@ export default function SelectTruck() {
         lastSeenAt: recycler.last_seen_at,
         heartbeatAt: recycler.heartbeat_at,
         status: 'Active' as 'Active' | 'Online' | 'Offline',
-        pendingRequestsCount: recycler.pending_requests_count
+        pendingRequestsCount: recycler.pending_requests_count,
+        latitude: recycler.latitude,
+        longitude: recycler.longitude
       }));
       
       setAvailableRecyclers(transformedData);
@@ -182,13 +518,18 @@ export default function SelectTruck() {
       }
     } finally {
       console.log('SelectTruck: fetchAvailableRecyclers completed');
+      isFetchingRecyclers.current = false;
+      hasFetchedRecyclers.current = true;
       setLoadingAvailable(false);
     }
-  }, [onlineRecyclers]);
+  }, []); // Removed onlineRecyclers dependency to prevent infinite loop
 
   // ===== TRANSFORM AVAILABLE RECYCLERS =====
   const transformedRecyclers = useMemo(() => {
-    if (!userLocation || !pickupRequest) return [];
+    if (!pickupRequest) {
+      console.log('SelectTruck: No pickupRequest, returning empty array');
+      return [];
+    }
     
     console.log('SelectTruck: Filtering available recyclers:', availableRecyclers.map(r => ({
       name: r.fullName,
@@ -203,35 +544,77 @@ export default function SelectTruck() {
     
     return filtered
       .map((recycler): Recycler => {
-        // Mock recycler location (in real app, get from recycler profile)
-        const recyclerLat = userLocation.latitude + (Math.random() - 0.5) * 0.1;
-        const recyclerLon = userLocation.longitude + (Math.random() - 0.5) * 0.1;
+        // Use customer's actual location or fallback to Kumasi center
+        const defaultLat = 6.6885; // Kumasi coordinates (fallback only)
+        const defaultLon = -1.6244;
         
-        // Calculate real distance
-        const distance = calculateDistance(
-          userLocation.latitude, 
-          userLocation.longitude, 
-          recyclerLat, 
-          recyclerLon
-        );
+        const userLat = userLocation?.latitude || defaultLat;
+        const userLon = userLocation?.longitude || defaultLon;
         
-        // Calculate ETA based on distance
-        const etaMinutes = calculateETA(distance);
+        console.log('SelectTruck: Customer location:', { 
+          userLat, 
+          userLon, 
+          isRealLocation: userLocation !== null,
+          locationSource: userLocation ? 'GPS/Params' : 'Fallback'
+        });
         
-        // Calculate price based on truck size, weight, and distance
-        const price = calculatePrice(recycler.truckSize, pickupRequest.estimated_weight, distance);
-        const rate = `GHS ${price.toFixed(2)}`;
+        // Check if recycler has location data
+        const recyclerLat = (recycler as any).latitude;
+        const recyclerLon = (recycler as any).longitude;
         
-        // Mock completed pickups (in real app, get from database)
-        const completedPickups = Math.floor(Math.random() * 300 + 50);
+        let distance = 'Distance TBD';
+        let estimatedArrival = 'ETA TBD';
+        
+        if (recyclerLat && recyclerLon && userLat && userLon) {
+          // Calculate real distance with improved accuracy
+          const calculatedDistance = calculateDistance(userLat, userLon, recyclerLat, recyclerLon);
+          
+          if (calculatedDistance > 0) {
+            // Format distance appropriately
+            if (calculatedDistance < 1) {
+              distance = `${Math.round(calculatedDistance * 1000)} m`; // Show in meters if < 1km
+            } else {
+              distance = `${calculatedDistance.toFixed(1)} km`;
+            }
+            
+            // Calculate ETA with improved logic (assuming Kumasi is urban)
+            const etaMinutes = calculateETA(calculatedDistance, true);
+            estimatedArrival = `${etaMinutes} min`;
+            
+            console.log('SelectTruck: Improved distance calculation:', {
+              recycler: recycler.fullName,
+              customer: { lat: userLat, lon: userLon, source: userLocation ? 'Real GPS' : 'Fallback' },
+              recyclerCoords: { lat: recyclerLat, lon: recyclerLon },
+              distance: calculatedDistance.toFixed(2) + ' km',
+              displayDistance: distance,
+              eta: etaMinutes + ' min',
+              isAccurate: userLocation !== null,
+              coordinatesValid: true
+            });
+          } else {
+            console.warn('SelectTruck: Distance calculation returned 0 or invalid:', {
+              recycler: recycler.fullName,
+              customer: { lat: userLat, lon: userLon },
+              recyclerCoords: { lat: recyclerLat, lon: recyclerLon }
+            });
+          }
+        } else {
+          console.warn('SelectTruck: Missing coordinates for distance calculation:', {
+            recyclerName: recycler.fullName,
+            hasCustomerCoords: !!(userLat && userLon),
+            hasRecyclerCoords: !!(recyclerLat && recyclerLon),
+            customer: { lat: userLat, lon: userLon },
+            recyclerCoords: { lat: recyclerLat, lon: recyclerLon }
+          });
+        }
         
         return {
           ...recycler,
-          truckSize: recycler.truckSize as 'small' | 'big',
-          distance: `${distance.toFixed(1)} km`,
-          estimatedArrival: `${etaMinutes} min`,
-          rate,
-          completedPickups
+          truckSize: (recycler.truckSize?.toLowerCase() === 'big' ? 'big' : 'small') as 'small' | 'big',
+          distance,
+          estimatedArrival,
+          rate: 'GHS 1.2/kg', // Rate per kg
+          completedPickups: 0 // Will be fetched from database when available
         };
       })
       .sort((a, b) => {
@@ -244,7 +627,16 @@ export default function SelectTruck() {
         }
         
         // If pending requests are equal, sort by distance
-        return parseFloat(a.distance!) - parseFloat(b.distance!);
+        // Handle both "X.X km" and "XXX m" formats
+        const parseDistance = (dist: string): number => {
+          if (!dist || dist === 'Distance TBD') return Infinity;
+          if (dist.includes('m')) {
+            return parseFloat(dist.replace(' m', '')) / 1000; // Convert meters to km
+          }
+          return parseFloat(dist.replace(' km', ''));
+        };
+        
+        return parseDistance(a.distance!) - parseDistance(b.distance!);
       });
   }, [availableRecyclers, userLocation, pickupRequest, calculateDistance, calculateETA, calculatePrice]);
 
@@ -266,6 +658,43 @@ export default function SelectTruck() {
     return filtered;
   }, [transformedRecyclers, selectedFilter]);
 
+  // ===== CHECK FOR ACTIVE REQUESTS =====
+  const checkForActiveRequests = useCallback(async (userId: string) => {
+    try {
+      console.log('SelectTruck: Checking for active requests for user:', userId);
+      
+      const { data, error } = await supabase.rpc('can_customer_place_request', {
+        customer_id_param: userId
+      });
+      
+      if (error) {
+        console.error('SelectTruck: Error checking active requests:', error);
+        return { canPlace: true, activeRequest: null };
+      }
+      
+      if (data && data.length > 0) {
+        const result = data[0];
+        console.log('SelectTruck: Active request check result:', result);
+        
+        if (!result.can_place_request) {
+          return {
+            canPlace: false,
+            activeRequest: {
+              id: result.active_request_id,
+              status: result.active_request_status,
+              message: result.message
+            }
+          };
+        }
+      }
+      
+      return { canPlace: true, activeRequest: null };
+    } catch (error) {
+      console.error('SelectTruck: Error in checkForActiveRequests:', error);
+      return { canPlace: true, activeRequest: null };
+    }
+  }, []);
+
   // ===== INITIALIZATION EFFECT =====
   useEffect(() => {
     if (isInitialized) return; // Prevent re-initialization
@@ -285,30 +714,59 @@ export default function SelectTruck() {
         
         setCurrentUser(user);
 
-        // Set user location from params
+        // Check for active requests before proceeding
+        const activeRequestCheck = await checkForActiveRequests(user.id);
+        if (!activeRequestCheck.canPlace) {
+          setError(activeRequestCheck.activeRequest?.message || 'You have an active request that must be completed first');
+          setLoading(false);
+          return;
+        }
+
+        // Get customer location - try params first, then GPS
+        let customerLocation = null;
+        
         if (params.latitude && params.longitude) {
-          setUserLocation({
+          // Use location from params (if passed from previous screen)
+          customerLocation = {
             latitude: parseFloat(params.latitude),
             longitude: parseFloat(params.longitude)
-          });
+          };
+          console.log('SelectTruck: Using location from params:', customerLocation);
+        } else {
+          // Get current GPS location
+          console.log('SelectTruck: Getting GPS location...');
+          customerLocation = await getCustomerLocation(user.id);
+        }
+        
+        if (customerLocation) {
+          setUserLocation(customerLocation);
+        } else {
+          // Fallback to Kumasi center if location unavailable
+          const fallbackLocation = {
+            latitude: 6.6885,
+            longitude: -1.6244
+          };
+          setUserLocation(fallbackLocation);
+          console.log('SelectTruck: Using fallback location:', fallbackLocation);
         }
 
         // Create pickup request data (but don't save to database yet)
         // The request will only be created when customer confirms with a recycler
+        const finalLocation = customerLocation || userLocation;
         const requestData: PickupRequest = {
           id: '', // Will be generated when request is actually created
-          customer_id: user.id,
+            customer_id: user.id,
           recycler_id: undefined, // Will be set when recycler is selected
-          pickup_address: params.pickup || 'Selected Location',
-          pickup_latitude: params.latitude ? parseFloat(params.latitude) : undefined,
-          pickup_longitude: params.longitude ? parseFloat(params.longitude) : undefined,
-          waste_type: params.wasteType || 'Mixed Waste',
-          waste_quantity: parseInt(params.wasteQuantity || '1'),
-          estimated_weight: parseFloat(params.weight || '5'),
+            pickup_address: params.pickup || 'Selected Location',
+          pickup_latitude: finalLocation?.latitude,
+          pickup_longitude: finalLocation?.longitude,
+            waste_type: params.wasteType || 'Mixed Waste',
+            waste_quantity: parseInt(params.wasteQuantity || '1'),
+            estimated_weight: parseFloat(params.weight || '5'),
           status: 'draft', // Draft status - not yet submitted
-          preferred_pickup_date: new Date().toISOString().split('T')[0],
-          preferred_pickup_time: new Date().toTimeString().split(' ')[0].substring(0, 5),
-          estimated_price: 0, // Will be calculated when recycler is selected
+            preferred_pickup_date: new Date().toISOString().split('T')[0],
+            preferred_pickup_time: new Date().toTimeString().split(' ')[0].substring(0, 5),
+            estimated_price: 0, // Will be calculated when recycler is selected
           payment_status: 'pending',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -317,6 +775,8 @@ export default function SelectTruck() {
         setPickupRequest(requestData);
         console.log('SelectTruck: Pickup request data prepared (not yet created):', requestData);
         setIsInitialized(true);
+        
+        // Note: fetchAvailableRecyclers will be called by the useEffect when isInitialized becomes true
         
       } catch (error) {
         console.error('SelectTruck: Error initializing:', error);
@@ -331,16 +791,27 @@ export default function SelectTruck() {
 
   // ===== FETCH AVAILABLE RECYCLERS EFFECT =====
   useEffect(() => {
-    if (currentUser && userLocation) {
+    if (currentUser && userLocation && isInitialized) {
       console.log(`SelectTruck: Total online recyclers: ${onlineRecyclers.length}`);
       console.log(`SelectTruck: Online recyclers status:`, onlineRecyclers.map(r => ({ 
         name: r.fullName, 
         isOnline: r.isOnline, 
         isAvailable: r.isAvailable 
       })));
+      
+      // Reset refs when conditions change
+      hasFetchedRecyclers.current = false;
+      isFetchingRecyclers.current = false;
+      
+      // Only call fetchAvailableRecyclers once when conditions are met
+      const timeoutId = setTimeout(() => {
+        console.log('SelectTruck: Calling fetchAvailableRecyclers...');
       fetchAvailableRecyclers();
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
     }
-  }, [currentUser, userLocation, fetchAvailableRecyclers, onlineRecyclers]);
+  }, [currentUser, userLocation, isInitialized]); // Removed fetchAvailableRecyclers and onlineRecyclers to prevent infinite loop
 
   // ===== LOADING TIMEOUT EFFECT =====
   useEffect(() => {
@@ -373,36 +844,8 @@ export default function SelectTruck() {
     }
 
     try {
-      // Calculate final price
-      const distance = parseFloat(recycler.distance?.replace(' km', '') || '0');
-      const finalPrice = calculatePrice(recycler.truckSize, pickupRequest.estimated_weight, distance);
-
-      // Create the actual pickup request in the database
-      const newRequest = {
-        customer_id: pickupRequest.customer_id,
-        recycler_id: recycler.id, // Assign the selected recycler
-        pickup_address: pickupRequest.pickup_address,
-        pickup_latitude: pickupRequest.pickup_latitude,
-        pickup_longitude: pickupRequest.pickup_longitude,
-        waste_type: pickupRequest.waste_type,
-        waste_quantity: pickupRequest.waste_quantity,
-        estimated_weight: pickupRequest.estimated_weight,
-        status: 'pending', // Set to pending - waiting for recycler acceptance
-        preferred_pickup_date: pickupRequest.preferred_pickup_date,
-        preferred_pickup_time: pickupRequest.preferred_pickup_time,
-        estimated_price: finalPrice,
-        payment_status: 'pending'
-      };
-
-      const { data: createdRequest, error } = await supabase
-        .from('pickup_requests')
-        .insert([newRequest])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Navigate to recycler profile details screen
+      // Navigate to recycler profile details screen WITHOUT creating the request yet
+      // The request will be created when user confirms in the profile screen
       router.push({
         pathname: '/customer-screens/RecyclerProfileDetails',
         params: { 
@@ -413,17 +856,26 @@ export default function SelectTruck() {
           recyclerPhone: recycler.phone,
           vehicleType: recycler.truckSize,
           rate: recycler.rate,
-          requestId: createdRequest.id, // Use the newly created request ID
-          estimatedPrice: finalPrice.toString(),
+          // Pass pickup request data to be used when confirming
+          customerId: pickupRequest.customer_id,
+          pickupAddress: pickupRequest.pickup_address,
+          pickupLatitude: pickupRequest.pickup_latitude?.toString(),
+          pickupLongitude: pickupRequest.pickup_longitude?.toString(),
+          wasteType: pickupRequest.waste_type,
+          wasteQuantity: pickupRequest.waste_quantity?.toString(),
+          estimatedWeight: pickupRequest.estimated_weight?.toString(),
+          preferredPickupDate: pickupRequest.preferred_pickup_date,
+          preferredPickupTime: pickupRequest.preferred_pickup_time,
+          estimatedPrice: '0', // No initial price
           estimatedArrival: recycler.estimatedArrival
         }
       });
 
     } catch (error) {
-      console.error('Error selecting recycler:', error);
-      Alert.alert('Error', 'Failed to assign recycler. Please try again.');
+      console.error('Error navigating to recycler profile:', error);
+      Alert.alert('Error', 'Failed to open recycler profile. Please try again.');
     }
-  }, [router, pickupRequest, calculatePrice]);
+  }, [router, pickupRequest]);
 
   const handleCallRecycler = useCallback((recycler: Recycler) => {
     Alert.alert(
@@ -561,6 +1013,57 @@ export default function SelectTruck() {
           </View>
         </View>
 
+        {/* Active Request Warning */}
+        {error && error.includes('active request') && (
+          <View style={styles.activeRequestContainer}>
+            <View style={styles.activeRequestCard}>
+              <View style={styles.activeRequestHeader}>
+                <Text style={styles.activeRequestIcon}>⚠️</Text>
+                <Text style={styles.activeRequestTitle}>Active Request Found</Text>
+              </View>
+              <Text style={styles.activeRequestMessage}>{error}</Text>
+              <View style={styles.activeRequestActions}>
+                <TouchableOpacity 
+                  style={styles.cancelRequestButton}
+                  onPress={async () => {
+                    if (currentUser) {
+                      try {
+                        const { data, error } = await supabase.rpc('cancel_customer_active_request', {
+                          customer_id_param: currentUser.id
+                        });
+                        
+                        if (error) {
+                          console.error('Error cancelling request:', error);
+                          return;
+                        }
+                        
+                        if (data && data[0]?.success) {
+                          setError(null);
+                          // Refresh the screen
+                          setIsInitialized(false);
+                        }
+                      } catch (err) {
+                        console.error('Error cancelling request:', err);
+                      }
+                    }
+                  }}
+                >
+                  <Text style={styles.cancelRequestButtonText}>Cancel Active Request</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.viewRequestButton}
+                  onPress={() => {
+                    // Navigate to waiting screen or request details
+                    router.push('/customer-screens/WaitingForRecycler');
+                  }}
+                >
+                  <Text style={styles.viewRequestButtonText}>View Request</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Banner with Filter Buttons and Search */}
         <View style={styles.bannerBg}>
           <Image
@@ -621,50 +1124,17 @@ export default function SelectTruck() {
         contentContainerStyle={{ paddingBottom: 32 }}
         ListEmptyComponent={() => (
           <View style={styles.noResultsContainer}>
-            <Text style={styles.noResultsText}>🚛 No Recyclers Available</Text>
-            <Text style={styles.noResultsSubtext}>
-              {recyclersLoading ? 'Loading recyclers...' : 
-               selectedFilter !== 'all' ? 
-               `No ${selectedFilter.toLowerCase()} trucks available at the moment` :
-               onlineRecyclers.length > 0 ? 
-               'All recyclers are currently busy with other pickups. Please try again later.' :
-               'No recyclers are currently online. Please try again later.'}
+            <Text style={styles.noResultsText}>
+              {selectedFilter === 'all' ? '🚛 No Recyclers Available' : 
+               selectedFilter === 'big' ? '🚛 No Big Trucks Available' :
+               '🚛 No Small Trucks Available'}
             </Text>
-            
-            {!recyclersLoading && (
-              <>
-                <Text style={styles.suggestionText}>
-                  💡 What you can try:
-                </Text>
-                <View style={styles.suggestionsContainer}>
-                  <Text style={styles.suggestionItem}>• Try again in a few minutes</Text>
-                  <Text style={styles.suggestionItem}>• Change your pickup location</Text>
-                  {selectedFilter !== 'all' && (
-                    <Text style={styles.suggestionItem}>• Try "All" filter for more options</Text>
-                  )}
-                  <Text style={styles.suggestionItem}>• Contact support if issue persists</Text>
-                </View>
-                
-                <TouchableOpacity 
-                  style={styles.tryAgainButton}
-                  onPress={() => {
-                    // Refresh the recyclers list
-                    fetchAvailableRecyclers();
-                  }}
-                >
-                  <Text style={styles.tryAgainButtonText}>🔄 Try Again Later</Text>
-                </TouchableOpacity>
-                
-                {selectedFilter !== 'all' && (
-                  <TouchableOpacity 
-                    style={styles.showAllButton}
-                    onPress={() => handleFilterPress('all')}
-                  >
-                    <Text style={styles.showAllButtonText}>Show All Recyclers</Text>
-                  </TouchableOpacity>
-                )}
-              </>
-            )}
+            <Text style={styles.noResultsSubtext}>
+              {recyclersLoading ? 'Loading...' : 
+               selectedFilter !== 'all' ? 
+               `No ${selectedFilter} trucks available` :
+               'No recyclers available at the moment'}
+            </Text>
           </View>
         )}
       />
@@ -707,6 +1177,7 @@ const styles = StyleSheet.create({
     height: 80,
     resizeMode: 'contain',
   },
+
   bannerBg: {
     position: 'relative',
     height: 80,
@@ -984,5 +1455,73 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Active Request Styles
+  activeRequestContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#fff3cd',
+  },
+  activeRequestCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffc107',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  activeRequestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  activeRequestIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  activeRequestTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#856404',
+  },
+  activeRequestMessage: {
+    fontSize: 14,
+    color: '#856404',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  activeRequestActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelRequestButton: {
+    flex: 1,
+    backgroundColor: '#dc3545',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelRequestButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  viewRequestButton: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  viewRequestButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });

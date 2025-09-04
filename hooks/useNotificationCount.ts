@@ -54,13 +54,9 @@ export function useNotificationCount() {
       if (!user) return;
 
       try {
+        // Try to set up real-time subscription with better error handling
         channel = supabase
-          .channel(`notification_count_${user.id}`, {
-            config: {
-              broadcast: { self: false },
-              presence: { key: user.id }
-            }
-          })
+          .channel(`notification_count_${user.id}`)
           .on(
             'postgres_changes',
             {
@@ -77,10 +73,13 @@ export function useNotificationCount() {
           )
           .subscribe((status) => {
             console.log('Notification subscription status:', status);
-            if (status === 'CHANNEL_ERROR') {
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
               console.error('Notification subscription failed, falling back to polling...');
               setSubscriptionFailed(true);
               // Fall back to polling every 30 seconds
+              if (pollInterval) {
+                clearInterval(pollInterval);
+              }
               pollInterval = setInterval(() => {
                 fetchNotificationCount();
               }, 30000);
@@ -94,10 +93,27 @@ export function useNotificationCount() {
               }
             }
           });
+
+        // Set a timeout to fallback to polling if subscription doesn't work
+        setTimeout(() => {
+          if (subscriptionFailed) {
+            console.log('Setting up polling fallback due to subscription issues...');
+            if (pollInterval) {
+              clearInterval(pollInterval);
+            }
+            pollInterval = setInterval(() => {
+              fetchNotificationCount();
+            }, 30000);
+          }
+        }, 5000);
+
       } catch (error) {
         console.error('Error setting up notification subscription:', error);
         setSubscriptionFailed(true);
         // Fall back to polling
+        if (pollInterval) {
+          clearInterval(pollInterval);
+        }
         pollInterval = setInterval(() => {
           fetchNotificationCount();
         }, 30000);

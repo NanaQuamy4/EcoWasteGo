@@ -7,7 +7,7 @@ import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
-import { useNotificationCount } from '../../hooks/useNotificationCount';
+import { useNotificationCountSimple as useNotificationCount } from '../../hooks/useNotificationCountSimple';
 // Mock user data (replacing useAuth)
 
 // ===== MOCK DATA FOR CUSTOMER HOME SCREEN =====
@@ -219,9 +219,59 @@ export default function HomeScreen() {
     });
   };
 
+  // Check for active requests before allowing new pickup
+  const checkActiveRequests = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { canPlace: true, activeRequest: null };
+
+      const { data, error } = await supabase.rpc('can_customer_place_request', {
+        customer_id_param: user.id
+      });
+
+      if (error) {
+        console.error('HomeScreen: Error checking active requests:', error);
+        return { canPlace: true, activeRequest: null };
+      }
+
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (!result.can_place_request) {
+          return {
+            canPlace: false,
+            activeRequest: {
+              id: result.active_request_id,
+              status: result.active_request_status,
+              message: result.message
+            }
+          };
+        }
+      }
+
+      return { canPlace: true, activeRequest: null };
+    } catch (error) {
+      console.error('HomeScreen: Error in checkActiveRequests:', error);
+      return { canPlace: true, activeRequest: null };
+    }
+  };
+
   // Request pickup from recycler
-  const handleRequestPickup = (recycler: any) => {
+  const handleRequestPickup = async (recycler: any) => {
     console.log('HomeScreen: Requesting pickup from:', recycler);
+    
+    // Check for active requests first
+    const activeRequestCheck = await checkActiveRequests();
+    if (!activeRequestCheck.canPlace) {
+      Alert.alert(
+        'Active Request Found',
+        activeRequestCheck.activeRequest?.message || 'You have an active request that must be completed first',
+        [
+          { text: 'View Request', onPress: () => router.push('/customer-screens/WaitingForRecycler') },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+      return;
+    }
     
     // Navigate to pickup request screen
     router.push({

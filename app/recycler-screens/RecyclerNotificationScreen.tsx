@@ -23,11 +23,14 @@ export const config = {
   headerShown: false,
 };
 
+type FilterType = 'all' | 'unread' | 'read';
+
 export default function RecyclerNotificationScreen() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<FilterType>('all');
 
   useEffect(() => {
     fetchNotifications();
@@ -61,6 +64,56 @@ export default function RecyclerNotificationScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchNotifications();
+  };
+
+  // Filter notifications based on selected filter
+  const getFilteredNotifications = () => {
+    switch (filter) {
+      case 'unread':
+        return notifications.filter(notif => !notif.is_read);
+      case 'read':
+        return notifications.filter(notif => notif.is_read);
+      case 'all':
+      default:
+        return notifications;
+    }
+  };
+
+  const filteredNotifications = getFilteredNotifications();
+
+  const handleNotificationPress = async (notification: Notification) => {
+    // Mark notification as read
+    await markAsRead(notification.id);
+
+    // Handle different notification types
+    if (notification.type === 'new_pickup_request') {
+      // Navigate to requests screen for pickup request notifications
+      router.push('/recycler-screens/RecyclerRequests');
+    } else if (notification.type === 'help_response') {
+      // Navigate to help screen for help response notifications
+      router.push('/customer-screens/Help');
+    } else if (notification.action_data) {
+      // Handle notifications with action data
+      const { action_type, deep_link, section } = notification.action_data;
+
+      if (action_type === 'retry_verification') {
+        // Navigate to edit profile screen
+        router.push('/recycler-screens/RecyclerEditProfileScreen');
+        
+        // Show alert to guide user to verification section
+        Alert.alert(
+          'Retry Verification',
+          'You have been taken to your profile page. Please scroll down to the "Verification Information" section to review the admin feedback and make necessary corrections.',
+          [{ text: 'OK' }]
+        );
+      } else if (action_type === 'view_help') {
+        // Navigate to help screen
+        router.push(deep_link || '/customer-screens/Help');
+      }
+    } else {
+      // For other notifications, just mark as read
+      console.log('Notification tapped:', notification.title);
+    }
   };
 
   const handleActionButton = async (notification: Notification) => {
@@ -109,9 +162,18 @@ export default function RecyclerNotificationScreen() {
       case 'verification':
         return 'checkmark-circle';
       case 'pickup':
+      case 'new_pickup_request':
         return 'car';
       case 'payment':
         return 'card';
+      case 'help_response':
+        return 'chatbubble';
+      case 'request_confirmed':
+      case 'request_accepted':
+      case 'request_rejected':
+      case 'request_completed':
+      case 'request_cancelled':
+        return 'time';
       default:
         return 'notifications';
     }
@@ -122,8 +184,19 @@ export default function RecyclerNotificationScreen() {
       case 'verification':
         return '#4CAF50';
       case 'pickup':
+      case 'new_pickup_request':
         return '#2196F3';
       case 'payment':
+        return '#FF9800';
+      case 'help_response':
+        return '#9C27B0';
+      case 'request_confirmed':
+      case 'request_accepted':
+        return '#4CAF50';
+      case 'request_rejected':
+      case 'request_cancelled':
+        return '#F44336';
+      case 'request_completed':
         return '#FF9800';
       default:
         return '#22330B';
@@ -131,7 +204,15 @@ export default function RecyclerNotificationScreen() {
   };
 
   const renderItem = ({ item }: { item: Notification }) => (
-    <View style={[styles.notificationCard, !item.is_read && styles.unreadCard]}>
+    <TouchableOpacity 
+      style={[
+        styles.notificationCard, 
+        !item.is_read && styles.unreadCard,
+        styles.clickableCard
+      ]}
+      onPress={() => handleNotificationPress(item)}
+      activeOpacity={0.7}
+    >
       <Ionicons 
         name={getNotificationIcon(item.type)} 
         size={28} 
@@ -161,7 +242,7 @@ export default function RecyclerNotificationScreen() {
           </TouchableOpacity>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -177,8 +258,36 @@ export default function RecyclerNotificationScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Filter Buttons */}
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[styles.filterButtonText, filter === 'all' && styles.filterButtonTextActive]}>
+            All ({notifications.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'unread' && styles.filterButtonActive]}
+          onPress={() => setFilter('unread')}
+        >
+          <Text style={[styles.filterButtonText, filter === 'unread' && styles.filterButtonTextActive]}>
+            Unread ({notifications.filter(n => !n.is_read).length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'read' && styles.filterButtonActive]}
+          onPress={() => setFilter('read')}
+        >
+          <Text style={[styles.filterButtonText, filter === 'read' && styles.filterButtonTextActive]}>
+            Read ({notifications.filter(n => n.is_read).length})
+          </Text>
+        </TouchableOpacity>
+      </View>
       <FlatList
-        data={notifications}
+        data={filteredNotifications}
         keyExtractor={item => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
@@ -194,8 +303,16 @@ export default function RecyclerNotificationScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="notifications-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>No notifications yet</Text>
-            <Text style={styles.emptySubtext}>You'll see updates about your verification status and pickup requests here.</Text>
+            <Text style={styles.emptyText}>
+              {filter === 'all' ? 'No notifications yet' : 
+               filter === 'unread' ? 'No unread notifications' : 
+               'No read notifications'}
+            </Text>
+            <Text style={styles.emptySubtext}>
+              {filter === 'all' ? 'You\'ll see updates about your verification status and pickup requests here.' :
+               filter === 'unread' ? 'All your notifications have been read.' :
+               'You haven\'t read any notifications yet.'}
+            </Text>
           </View>
         }
       />
@@ -268,6 +385,10 @@ const styles = StyleSheet.create({
     borderLeftColor: '#4CAF50',
     backgroundColor: '#F8FFF8',
   },
+  clickableCard: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
   notificationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -338,5 +459,34 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 10,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E3F0D5',
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 4,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: '#4CAF50',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  filterButtonTextActive: {
+    color: '#fff',
   },
 }); 

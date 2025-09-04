@@ -20,6 +20,8 @@ interface OnlineRecycler {
   lastSeenAt: string;
   heartbeatAt: string;
   status: 'Active' | 'Online' | 'Offline';
+  latitude?: number;
+  longitude?: number;
 }
 
 export function useRecyclerOnlineStatus(recyclerId?: string) {
@@ -172,7 +174,9 @@ export function useOnlineRecyclers() {
           isOnline: recycler.is_online,
           lastSeenAt: recycler.last_seen_at,
           heartbeatAt: recycler.heartbeat_at,
-          status: getStatusFromHeartbeat(recycler.heartbeat_at)
+          status: getStatusFromHeartbeat(recycler.heartbeat_at),
+          latitude: recycler.latitude,
+          longitude: recycler.longitude
         }));
 
         setRecyclers(formattedRecyclers);

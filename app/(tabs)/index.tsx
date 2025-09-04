@@ -7,7 +7,7 @@ import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
-import { useNotificationCount } from '../../hooks/useNotificationCount';
+import { useNotificationCountSimple as useNotificationCount } from '../../hooks/useNotificationCountSimple';
 import { useOnlineRecyclers } from '../../hooks/useRecyclerOnlineStatus';
 import { googlePlacesService, PlaceDetails, PlacePrediction } from '../../lib/googlePlaces';
 import { supabase } from '../../lib/supabase';

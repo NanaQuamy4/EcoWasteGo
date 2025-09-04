@@ -250,4 +250,7 @@ export const DUMMY_RESPONSES = [
   'I accept all recyclable materials.',
   'Thank you for choosing our service!',
   'The weight is accurate, I double-checked.',
-]; 
+];
+
+// Google Maps API Key
+export const GOOGLE_MAPS_API_KEY = 'AIzaSyBUNUKncuC9GT6h4U-nDdjOea4-P7F_w4E'; 

@@ -2,11 +2,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  Dimensions,
-  StyleSheet,
-  TouchableOpacity,
-  View
+    Alert,
+    Dimensions,
+    StyleSheet,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from 'react-native-maps';
 import { COLORS } from '../constants';
@@ -27,6 +27,7 @@ interface MapComponentProps {
     title?: string;
     description?: string;
     type?: 'pickup' | 'recycler' | 'destination' | 'search' | 'user';
+    isMoving?: boolean; // New property for movement status
   }>;
   route?: {
     coordinates: Array<{ latitude: number; longitude: number }>;
@@ -184,7 +185,11 @@ export default function MapComponent({
             description={marker.description}
             onPress={() => onMarkerPress && onMarkerPress(marker.id)}
           >
-            <View style={[styles.marker, { backgroundColor: getMarkerColor(marker.type) }]}>
+            <View style={[
+              styles.marker, 
+              { backgroundColor: getMarkerColor(marker.type) },
+              marker.isMoving && marker.type === 'recycler' && styles.pulsingMarker
+            ]}>
               <MaterialIcons
                 name={getMarkerIcon(marker.type)}
                 size={20}
@@ -300,5 +305,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  pulsingMarker: {
+    // Pulsing animation for moving truck
+    transform: [{ scale: 1.2 }],
+    shadowColor: COLORS.orange,
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 12,
   },
 }); 

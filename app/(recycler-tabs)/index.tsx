@@ -1,4 +1,5 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -7,7 +8,7 @@ import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
 // import { useAutoOfflineManager } from '../../hooks/useAutoOfflineManager'; // Disabled - recycler has manual control
-import { useNotificationCount } from '../../hooks/useNotificationCount';
+import { useNotificationCountSimple as useNotificationCount } from '../../hooks/useNotificationCountSimple';
 import { useRecyclerHeartbeat } from '../../hooks/useRecyclerHeartbeat';
 import { useCurrentRecyclerStatus } from '../../hooks/useRecyclerOnlineStatus';
 import { useRecyclerVerification } from '../../hooks/useRecyclerVerification';
@@ -21,7 +22,7 @@ interface PickupRequest {
   pickup_address: string;
   waste_type: string;
   weight: number;
-  status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
   created_at: string;
   special_instructions?: string;
 }
@@ -64,6 +65,19 @@ export default function RecyclerHomeTab() {
   
   // New online status tracking
   const { status: onlineStatus, loading: statusLoading, refetch: refetchStatus } = useCurrentRecyclerStatus();
+  
+  // Force refresh status when component mounts or when verification changes
+  useEffect(() => {
+    if (isVerified && verificationData?.id) {
+      // Force refresh the status after a short delay to ensure database is updated
+      const refreshTimer = setTimeout(() => {
+        console.log('Force refreshing recycler status...');
+        refetchStatus();
+      }, 1000);
+      
+      return () => clearTimeout(refreshTimer);
+    }
+  }, [isVerified, verificationData?.id, refetchStatus]);
   const { startHeartbeat, stopHeartbeat, setOffline, getStatus } = useRecyclerHeartbeat();
   
   // Auto-offline manager disabled - recycler has full manual control
@@ -85,19 +99,28 @@ export default function RecyclerHomeTab() {
   const fetchRecyclerData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.log('No user found in fetchRecyclerData');
+        return;
+      }
+      
+      console.log('Fetching recycler data for user:', user.id);
 
-      // Fetch pickup requests
+      // Fetch pickup requests for this recycler
       const { data: pickupRequests, error: requestsError } = await supabase
         .from('pickup_requests')
         .select('*')
-        .in('status', ['pending', 'accepted', 'in_progress'])
+        .eq('recycler_id', user.id)
+        .in('status', ['pending', 'confirmed', 'accepted', 'in_progress'])
         .order('created_at', { ascending: false });
 
       if (requestsError) {
         console.error('Error fetching pickup requests:', requestsError);
       } else {
-        setRequests(pickupRequests?.length || 0);
+        const requestCount = pickupRequests?.length || 0;
+        console.log('Fetched pickup requests:', requestCount, 'requests');
+        console.log('Request details:', pickupRequests);
+        setRequests(requestCount);
       }
 
       // Fetch recycler stats (mock for now - would need actual tables)
@@ -117,6 +140,7 @@ export default function RecyclerHomeTab() {
   // Update counts from real data
   useEffect(() => {
     if (isVerified && verificationData?.id) {
+      console.log('Recycler verified, fetching data...');
       fetchRecyclerData();
       
       // Update counts every 30 seconds
@@ -125,6 +149,11 @@ export default function RecyclerHomeTab() {
       return () => clearInterval(interval);
     }
   }, [isVerified, verificationData?.id]);
+
+  // Debug log for requests state changes
+  useEffect(() => {
+    console.log('Requests state updated:', requests);
+  }, [requests]);
 
   // Check for subscription payment requirement (disabled for now)
   // useEffect(() => {
@@ -168,7 +197,7 @@ export default function RecyclerHomeTab() {
           .from('pickup_requests')
           .select('id')
           .eq('recycler_id', user.id)
-          .in('status', ['accepted', 'in_progress', 'confirmed']);
+          .in('status', ['pending', 'confirmed', 'accepted', 'in_progress']);
 
         if (requestsError) {
           console.error('Error checking pending requests:', requestsError);
@@ -181,15 +210,56 @@ export default function RecyclerHomeTab() {
         
         console.log(`Going online - Pending requests: ${pendingCount}, Will be available: ${shouldBeAvailable}`);
         
-        // Start heartbeat and set online status
+        // Get current location with better error handling
+        let currentLocation = null;
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: 5000,
+              distanceInterval: 10,
+            });
+            currentLocation = {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude
+            };
+            console.log('Current location obtained:', currentLocation);
+          } else {
+            console.log('Location permission denied, using default location');
+            // Use default Kumasi location as fallback
+            currentLocation = {
+              latitude: 6.6885,
+              longitude: -1.6244
+            };
+          }
+        } catch (locationError) {
+          console.error('Error getting location:', locationError);
+          console.log('Using default location as fallback');
+          // Use default Kumasi location as fallback
+          currentLocation = {
+            latitude: 6.6885,
+            longitude: -1.6244
+          };
+        }
+
+        // Start heartbeat and set online status with location
         startHeartbeat();
+        const updateData: any = { 
+          is_online: true,
+          is_available: shouldBeAvailable, // Set availability based on pending requests
+          last_seen_at: new Date().toISOString()
+        };
+
+        // Add location if available
+        if (currentLocation) {
+          updateData.latitude = currentLocation.latitude;
+          updateData.longitude = currentLocation.longitude;
+        }
+
         const { error } = await supabase
           .from('recyclers')
-          .update({ 
-            is_online: true,
-            is_available: shouldBeAvailable, // Set availability based on pending requests
-            last_seen_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq('id', user.id);
 
         if (error) {
@@ -358,6 +428,12 @@ export default function RecyclerHomeTab() {
                 <Text style={styles.badgeText}>{requests}</Text>
               </View>
             )}
+            {/* Debug: Always show badge for testing */}
+            {__DEV__ && (
+              <View style={[styles.badge, { backgroundColor: 'blue' }]}>
+                <Text style={styles.badgeText}>{requests}</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.statusText}>Requests</Text>
         </TouchableOpacity>
@@ -409,6 +485,15 @@ export default function RecyclerHomeTab() {
                 {onlineStatus.isAvailable ? ' Available' : ' Busy'} • 
                 Last seen: {onlineStatus.lastSeenAt ? new Date(onlineStatus.lastSeenAt).toLocaleTimeString() : 'Never'}
               </Text>
+              <TouchableOpacity 
+                style={styles.refreshButton}
+                onPress={() => {
+                  console.log('Manual refresh triggered');
+                  refetchStatus();
+                }}
+              >
+                <Text style={styles.refreshButtonText}>🔄 Refresh Status</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -700,5 +785,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray,
     textAlign: 'center',
+  },
+  refreshButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginTop: 4,
+    alignSelf: 'center',
+  },
+  refreshButtonText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });

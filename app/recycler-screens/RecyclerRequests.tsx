@@ -28,9 +28,6 @@ interface PickupRequest {
   pickup_latitude?: number;
   pickup_longitude?: number;
   pickup_notes?: string;
-  waste_type: string;
-  waste_quantity: string;
-  estimated_weight?: number;
   status: 'pending' | 'assigned' | 'confirmed' | 'accepted' | 'in_progress' | 'completed' | 'cancelled' | 'rejected';
   preferred_pickup_date?: string;
   preferred_pickup_time?: string;
@@ -231,25 +228,32 @@ export default function RecyclerRequests() {
         return;
       }
 
+      // Send notification to customer
+      const request = pickupRequests.find(r => r.id === requestId);
+      if (request) {
+        try {
+          await supabase.rpc('send_notification', {
+            p_user_id: request.customer_id,
+            p_type: 'request_accepted',
+            p_title: 'Pickup Request Accepted!',
+            p_message: `Great news! Your pickup request has been accepted by ${user.user_metadata?.full_name || 'a recycler'}. They will start moving to your location soon.`,
+            p_related_request_id: requestId,
+            p_related_user_id: user.id,
+            p_priority: 'high'
+          });
+        } catch (notificationError) {
+          console.error('Error sending notification:', notificationError);
+          // Don't fail the accept action if notification fails
+        }
+      }
+
       // Update local state
       setAcceptedRequests(prev => new Set(prev).add(requestId));
       
-      const request = pickupRequests.find(r => r.id === requestId);
       Alert.alert(
         "Request Accepted!",
-        `You've accepted the pickup request from ${request?.userName || 'Customer'}. Navigate to start pickup.`,
-        [
-          {
-            text: "Navigate",
-            onPress: () => {
-              router.push({
-                pathname: '/recycler-screens/RecyclerNavigation',
-                params: { requestId }
-              });
-            }
-          },
-          { text: "Later", style: "cancel" }
-        ]
+        `You've accepted the pickup request from ${request?.userName || 'Customer'}. The customer has been notified. Use the Route button to start navigation.`,
+        [{ text: "OK" }]
       );
     } catch (error) {
       console.error('Error accepting request:', error);
@@ -293,32 +297,81 @@ export default function RecyclerRequests() {
 
   // Reject a pickup request
   const handleCancelRequest = async (requestId: string) => {
-    try {
-      // Update the request in the database
-      const { error } = await supabase
-        .from('pickup_requests')
-        .update({
-          status: 'rejected',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId);
+    const request = pickupRequests.find(r => r.id === requestId);
+    
+    // Show reason input dialog
+    Alert.prompt(
+      "Reject Pickup Request",
+      `Please provide a reason for rejecting ${request?.userName || 'Customer'}'s request:`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Reject",
+          onPress: async (reason) => {
+            if (!reason || reason.trim() === '') {
+              Alert.alert('Error', 'Please provide a reason for rejection.');
+              return;
+            }
+            
+            try {
+              // Get current user
+              const { data: { user }, error: userError } = await supabase.auth.getUser();
+              if (userError || !user) {
+                Alert.alert('Error', 'Please log in to reject requests.');
+                return;
+              }
 
-      if (error) {
-        console.error('Error rejecting request:', error);
-        Alert.alert('Error', 'Failed to reject request. Please try again.');
-        return;
-      }
+              // Update the request in the database
+              const { error } = await supabase
+                .from('pickup_requests')
+                .update({
+                  status: 'rejected',
+                  recycler_notes: reason.trim(),
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', requestId);
 
-      const request = pickupRequests.find(r => r.id === requestId);
-      Alert.alert(
-        "Request Rejected",
-        `You've rejected the pickup request from ${request?.userName || 'Customer'}.`,
-        [{ text: "OK" }]
-      );
-    } catch (error) {
-      console.error('Error rejecting request:', error);
-      Alert.alert('Error', 'Failed to reject request. Please try again.');
-    }
+              if (error) {
+                console.error('Error rejecting request:', error);
+                Alert.alert('Error', 'Failed to reject request. Please try again.');
+                return;
+              }
+
+              // Send notification to customer with rejection reason
+              try {
+                await supabase.rpc('send_notification', {
+                  p_user_id: request?.customer_id,
+                  p_type: 'request_rejected',
+                  p_title: 'Pickup Request Rejected',
+                  p_message: `Unfortunately, your pickup request was rejected. Reason: "${reason.trim()}". You can try requesting from a different recycler.`,
+                  p_related_request_id: requestId,
+                  p_related_user_id: user.id,
+                  p_priority: 'high'
+                });
+              } catch (notificationError) {
+                console.error('Error sending rejection notification:', notificationError);
+                // Don't fail the reject action if notification fails
+              }
+
+              Alert.alert(
+                "Request Rejected",
+                `You've rejected the pickup request from ${request?.userName || 'Customer'}. The customer has been notified with your reason.`,
+                [{ text: "OK" }]
+              );
+            } catch (error) {
+              console.error('Error rejecting request:', error);
+              Alert.alert('Error', 'Failed to reject request. Please try again.');
+            }
+          }
+        }
+      ],
+      'plain-text',
+      '',
+      'default'
+    );
   };
 
   // ===== FILTERING LOGIC =====
@@ -364,34 +417,22 @@ export default function RecyclerRequests() {
       <View key={request.id} style={[styles.requestCard, isNew && styles.newRequestCard]}>
         {/* Request Header */}
         <View style={styles.requestHeader}>
-          <View style={styles.userInfo}>
-            <View style={styles.userIconContainer}>
-              <MaterialIcons name="person" size={20} color={COLORS.gray} />
-            </View>
-            <Text style={styles.userName}>{request.userName}</Text>
+          <View style={styles.userIconContainer}>
+            <MaterialIcons name="person" size={20} color={COLORS.gray} />
           </View>
+          <Text style={styles.userName}>{request.userName}</Text>
         </View>
 
         {/* Request Details */}
         <View style={styles.requestDetails}>
           <View style={styles.detailRow}>
-            <MaterialIcons name="location-on" size={16} color={COLORS.gray} />
+            <MaterialIcons name="location-on" size={20} color={COLORS.gray} />
             <Text style={styles.detailText}>{request.pickup_address}</Text>
           </View>
           <View style={styles.detailRow}>
-            <MaterialIcons name="phone" size={16} color={COLORS.gray} />
+            <MaterialIcons name="phone" size={20} color={COLORS.gray} />
             <Text style={styles.detailText}>{request.phone}</Text>
           </View>
-          <View style={styles.detailRow}>
-            <MaterialIcons name="recycling" size={16} color={COLORS.gray} />
-            <Text style={styles.detailText}>{request.waste_type} • {request.waste_quantity}</Text>
-          </View>
-          {request.estimated_weight && (
-            <View style={styles.detailRow}>
-              <MaterialIcons name="scale" size={16} color={COLORS.gray} />
-              <Text style={styles.detailText}>~{request.estimated_weight}kg</Text>
-            </View>
-          )}
         </View>
 
         {/* Action Buttons */}
@@ -400,17 +441,17 @@ export default function RecyclerRequests() {
           {request.status === 'confirmed' && (
             <>
               <TouchableOpacity
-                style={[styles.actionButton, styles.acceptButton]}
-                onPress={() => handleAcceptRequest(request.id)}
-              >
-                <Text style={styles.actionButtonText}>Accept</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
                 style={[styles.actionButton, styles.rejectButton]}
                 onPress={() => handleCancelRequest(request.id)}
               >
                 <Text style={styles.actionButtonText}>Reject</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionButton, styles.acceptButton]}
+                onPress={() => handleAcceptRequest(request.id)}
+              >
+                <Text style={styles.actionButtonText}>Accept</Text>
               </TouchableOpacity>
             </>
           )}
@@ -419,17 +460,17 @@ export default function RecyclerRequests() {
           {request.status === 'pending' && !request.recycler_id && (
             <>
               <TouchableOpacity
-                style={[styles.actionButton, styles.acceptButton]}
-                onPress={() => handleAcceptRequest(request.id)}
-              >
-                <Text style={styles.actionButtonText}>Accept</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
                 style={[styles.actionButton, styles.rejectButton]}
                 onPress={() => handleCancelRequest(request.id)}
               >
                 <Text style={styles.actionButtonText}>Reject</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionButton, styles.acceptButton]}
+                onPress={() => handleAcceptRequest(request.id)}
+              >
+                <Text style={styles.actionButtonText}>Accept</Text>
               </TouchableOpacity>
             </>
           )}
@@ -446,7 +487,23 @@ export default function RecyclerRequests() {
 
               <TouchableOpacity
                 style={[styles.actionButton, styles.routeButton]}
-                onPress={() => {
+                onPress={async () => {
+                  // Send notification to customer that recycler is starting to move
+                  try {
+                    await supabase.rpc('send_notification', {
+                      p_user_id: request.customer_id,
+                      p_type: 'recycler_started',
+                      p_title: 'Recycler is on the way!',
+                      p_message: `Your recycler has started moving to your location. You can track their progress in real-time.`,
+                      p_related_request_id: request.id,
+                      p_related_user_id: request.recycler_id,
+                      p_priority: 'high'
+                    });
+                  } catch (notificationError) {
+                    console.error('Error sending movement notification:', notificationError);
+                    // Don't fail the navigation if notification fails
+                  }
+                  
                   router.push({
                     pathname: '/recycler-screens/RecyclerNavigation',
                     params: { requestId: request.id }
@@ -702,15 +759,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.lightGray,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
-  },
-  userInfo: {
-    flex: 1,
   },
   userName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: COLORS.darkGreen,
+    marginLeft: 10,
+    flex: 1,
   },
   requestDetails: {
     marginBottom: 15,

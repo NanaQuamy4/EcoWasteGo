@@ -2,15 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { COLORS } from '../../constants';
-import { useNotificationCount } from '../../hooks/useNotificationCount';
+import { useNotificationCountSimple as useNotificationCount } from '../../hooks/useNotificationCountSimple';
 import { supabase } from '../../lib/supabase';
 
 // Notification interface matching database schema
@@ -19,12 +19,14 @@ interface Notification {
   user_id: string;
   title: string;
   message: string;
-  type: 'general' | 'verification' | 'pickup' | 'request_confirmed' | 'request_accepted' | 'request_rejected' | 'request_completed' | 'request_cancelled' | 'pickup_started' | 'pickup_completed' | 'help_response';
+  type: 'general' | 'verification' | 'pickup' | 'request_confirmed' | 'request_accepted' | 'request_rejected' | 'request_completed' | 'request_cancelled' | 'pickup_started' | 'pickup_completed' | 'help_response' | 'recycler_started_navigation';
   is_read: boolean;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   read_at?: string;
   created_at: string;
   updated_at: string;
+  related_request_id?: string;
+  related_user_id?: string;
 }
 
 // Removed mock notifications - now using real data from database
@@ -33,12 +35,15 @@ export const config = {
   headerShown: false,
 };
 
+type FilterType = 'all' | 'unread' | 'read';
+
 export default function CustomerNotificationScreen() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [filter, setFilter] = useState<FilterType>('all');
   const { refetch: refetchNotificationCount } = useNotificationCount();
 
   // Get current user
@@ -151,7 +156,13 @@ export default function CustomerNotificationScreen() {
         break;
       case 'request_confirmed':
       case 'request_accepted':
-        router.push('/customer-screens/TrackingScreen');
+      case 'recycler_started_navigation':
+        router.push({
+          pathname: '/customer-screens/TrackingScreen',
+          params: {
+            requestId: notification.related_request_id
+          }
+        });
         break;
       case 'help_response':
         router.push('/customer-screens/Help');
@@ -169,6 +180,7 @@ export default function CustomerNotificationScreen() {
       case 'pickup_completed': return 'checkmark-circle';
       case 'request_confirmed':
       case 'request_accepted': return 'car';
+      case 'recycler_started_navigation': return 'navigate';
       case 'request_rejected': return 'close-circle';
       case 'help_response': return 'chatbubble';
       case 'verification': return 'shield-checkmark';
@@ -183,6 +195,7 @@ export default function CustomerNotificationScreen() {
       case 'pickup_completed': return COLORS.green;
       case 'request_confirmed':
       case 'request_accepted': return COLORS.primary;
+      case 'recycler_started_navigation': return COLORS.darkGreen;
       case 'request_rejected': return COLORS.red;
       case 'help_response': return COLORS.blue;
       case 'verification': return COLORS.purple;
@@ -284,6 +297,21 @@ export default function CustomerNotificationScreen() {
     setRefreshing(false);
   };
 
+  // Filter notifications based on selected filter
+  const getFilteredNotifications = () => {
+    switch (filter) {
+      case 'unread':
+        return notifications.filter(notif => !notif.is_read);
+      case 'read':
+        return notifications.filter(notif => notif.is_read);
+      case 'all':
+      default:
+        return notifications;
+    }
+  };
+
+  const filteredNotifications = getFilteredNotifications();
+
   // Load notifications when user is available
   useEffect(() => {
     if (user) {
@@ -326,23 +354,42 @@ export default function CustomerNotificationScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Simple Action Bar */}
-      {notifications.filter(n => !n.is_read).length > 0 && (
-        <View style={styles.actionBar}>
-          <Text style={styles.unreadCount}>
-            {notifications.filter(n => !n.is_read).length} unread
+      {/* Filter Buttons */}
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[styles.filterButtonText, filter === 'all' && styles.filterButtonTextActive]}>
+            All ({notifications.length})
           </Text>
-        </View>
-      )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'unread' && styles.filterButtonActive]}
+          onPress={() => setFilter('unread')}
+        >
+          <Text style={[styles.filterButtonText, filter === 'unread' && styles.filterButtonTextActive]}>
+            Unread ({notifications.filter(n => !n.is_read).length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'read' && styles.filterButtonActive]}
+          onPress={() => setFilter('read')}
+        >
+          <Text style={[styles.filterButtonText, filter === 'read' && styles.filterButtonTextActive]}>
+            Read ({notifications.filter(n => n.is_read).length})
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Notifications List */}
       <FlatList
-        data={notifications}
+        data={filteredNotifications}
         keyExtractor={item => item.id}
         renderItem={renderItem}
         contentContainerStyle={[
           styles.listContent,
-          notifications.length === 0 && styles.emptyListContent
+          filteredNotifications.length === 0 && styles.emptyListContent
         ]}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         refreshControl={
@@ -353,7 +400,21 @@ export default function CustomerNotificationScreen() {
             tintColor={COLORS.primary}
           />
         }
-        ListEmptyComponent={renderEmptyState}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="notifications-off" size={64} color={COLORS.lightGray} />
+            <Text style={styles.emptyStateTitle}>
+              {filter === 'all' ? 'No Notifications' : 
+               filter === 'unread' ? 'No Unread Notifications' : 
+               'No Read Notifications'}
+            </Text>
+            <Text style={styles.emptyStateMessage}>
+              {filter === 'all' ? 'You\'re all caught up! Check back later for updates.' :
+               filter === 'unread' ? 'All your notifications have been read.' :
+               'You haven\'t read any notifications yet.'}
+            </Text>
+          </View>
+        }
       />
     </View>
   );
@@ -536,5 +597,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.primary,
     fontWeight: '500',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9ECEF',
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 4,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  filterButtonTextActive: {
+    color: COLORS.white,
   },
 });

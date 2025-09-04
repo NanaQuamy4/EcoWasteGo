@@ -5,6 +5,7 @@ import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import AppHeader from '../../components/AppHeader';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
+import { supabase } from '../../lib/supabase';
 
 // ===== MOCK DATA FOR TRACKING SCREEN =====
 // This replaces the backend API calls with local mock data
@@ -100,6 +101,8 @@ export default function TrackingScreen() {
   const [showPaymentButton, setShowPaymentButton] = useState(false);
   const [distanceToCustomer, setDistanceToCustomer] = useState(2.3);
   const [etaToCustomer, setEtaToCustomer] = useState(8);
+  const [isTruckMoving, setIsTruckMoving] = useState(false);
+  const [movementSpeed, setMovementSpeed] = useState(0);
   
   // Add missing handler functions
   const handlePopupOK = () => {
@@ -143,6 +146,211 @@ export default function TrackingScreen() {
       });
     }, 1000);
   };
+
+  // ===== DATABASE ARRIVAL DETECTION =====
+  // Check arrival status from database
+  const checkArrivalStatus = useCallback(async () => {
+    if (!params.requestId) return;
+    
+    try {
+      // Get arrival status from database
+      const { data, error } = await supabase.rpc('get_customer_arrival_status', {
+        p_customer_id: params.requestId // This should be customer ID, not request ID
+      });
+      
+      if (error) {
+        console.error('Error checking arrival status:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        const arrivalData = data[0];
+        
+        // Update arrival status if recycler has arrived
+        if (arrivalData.is_arrived && !hasArrived) {
+          setHasArrived(true);
+          setHasReachedDestination(true);
+          setIsTrackingActive(false);
+          setCurrentStatus('arrived');
+          
+          console.log('🎯 Recycler has arrived at pickup location!');
+          
+          // Show arrival notification
+          Alert.alert(
+            '🎯 Recycler Has Arrived!',
+            'Your recycler is now at your location and ready to collect waste.',
+            [
+              {
+                text: 'OK',
+                onPress: () => console.log('User acknowledged recycler arrival')
+              }
+            ]
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error in arrival status check:', error);
+    }
+  }, [params.requestId, hasArrived]);
+
+  // Load real tracking data from database
+  const loadTrackingData = useCallback(async () => {
+    if (!params.requestId) return;
+    
+    try {
+      console.log('📋 Loading tracking data for request:', params.requestId);
+      
+      // Get pickup request with recycler details
+      const { data: requestData, error: requestError } = await supabase
+        .from('pickup_requests')
+        .select(`
+          id,
+          customer_id,
+          recycler_id,
+          pickup_address,
+          pickup_latitude,
+          pickup_longitude,
+          status,
+          created_at,
+          customers!inner(
+            id,
+            full_name,
+            phone
+          ),
+          recyclers!inner(
+            id,
+            full_name,
+            phone,
+            latitude,
+            longitude
+          )
+        `)
+        .eq('id', params.requestId)
+        .single();
+      
+      if (requestError) {
+        console.error('Error loading tracking data:', requestError);
+        return;
+      }
+      
+      if (requestData) {
+        // Update tracking data with real data
+        setTrackingData({
+          requestId: requestData.id,
+          customerName: requestData.customers[0]?.full_name || 'Customer',
+          customerPhone: requestData.customers[0]?.phone || 'Unknown',
+          recyclerName: requestData.recyclers[0]?.full_name || 'Recycler',
+          recyclerPhone: requestData.recyclers[0]?.phone || 'Unknown',
+          pickupAddress: requestData.pickup_address,
+          status: requestData.status
+        });
+        
+        // Update customer location with real coordinates
+        if (requestData.pickup_latitude && requestData.pickup_longitude) {
+          setCustomerLocation({
+            latitude: requestData.pickup_latitude,
+            longitude: requestData.pickup_longitude,
+            address: requestData.pickup_address
+          });
+        }
+        
+        // Update recycler location with real coordinates
+        if (requestData.recyclers[0]?.latitude && requestData.recyclers[0]?.longitude) {
+          setRecyclerLocation({
+            latitude: requestData.recyclers[0].latitude,
+            longitude: requestData.recyclers[0].longitude,
+            heading: 45,
+            speed: 25,
+            lastUpdated: new Date().toISOString()
+          });
+        }
+        
+        console.log('✅ Tracking data loaded successfully');
+      }
+    } catch (error) {
+      console.error('Error loading tracking data:', error);
+    }
+  }, [params.requestId]);
+
+  // ===== EFFECTS =====
+  // Load tracking data and check arrival status
+  useEffect(() => {
+    loadTrackingData();
+  }, [loadTrackingData]);
+
+  // Check arrival status every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkArrivalStatus();
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [checkArrivalStatus]);
+
+  // Real-time recycler location updates with movement tracking
+  const updateRecyclerLocation = useCallback(async () => {
+    if (!wasteCollection?.recycler_id) return;
+    
+    try {
+      const { data: recyclerData, error } = await supabase
+        .from('recyclers')
+        .select('latitude, longitude, heartbeat_at')
+        .eq('id', wasteCollection.recycler_id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching recycler location:', error);
+        return;
+      }
+
+      if (recyclerData?.latitude && recyclerData?.longitude) {
+        // Store previous location for movement calculation
+        const previousLocation = recyclerLocation;
+        
+        setRecyclerLocation({
+          latitude: recyclerData.latitude,
+          longitude: recyclerData.longitude,
+          lastUpdated: recyclerData.heartbeat_at
+        });
+
+        // Calculate distance and ETA
+        if (customerLocation) {
+          const distance = calculateDistance(
+            recyclerData.latitude,
+            recyclerData.longitude,
+            customerLocation.latitude,
+            customerLocation.longitude
+          );
+          setDistance(distance);
+          setEtaToCustomer(Math.round(distance * 2)); // Rough estimate: 2 minutes per km
+          
+          // Calculate movement direction and speed if we have previous location
+          if (previousLocation) {
+            const movementDistance = calculateDistance(
+              previousLocation.latitude,
+              previousLocation.longitude,
+              recyclerData.latitude,
+              recyclerData.longitude
+            );
+            
+            // Update movement status
+            if (movementDistance > 0.001) { // 1 meter threshold
+              setIsTruckMoving(true);
+              // Calculate speed in km/h (distance moved in 5 seconds * 720)
+              const speed = movementDistance * 720;
+              setMovementSpeed(speed);
+              console.log('🚛 Truck is moving! Distance moved:', movementDistance.toFixed(3), 'km, Speed:', speed.toFixed(1), 'km/h');
+            } else {
+              setIsTruckMoving(false);
+              setMovementSpeed(0);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating recycler location:', error);
+    }
+  }, [wasteCollection?.recycler_id, customerLocation, recyclerLocation]);
 
   // ===== LOCATION CALCULATION FUNCTIONS =====
   // These functions calculate distance and ETA
@@ -305,9 +513,20 @@ export default function TrackingScreen() {
   // ===== INITIALIZATION EFFECT =====
   // This effect runs when the component first loads
   useEffect(() => {
-    loadMockData();
-    startTracking();
-  }, [loadMockData, startTracking]);
+    loadTrackingData();
+  }, [loadTrackingData]);
+
+  // Real-time location updates - Enhanced for better truck movement visibility
+  useEffect(() => {
+    if (!wasteCollection?.recycler_id) return;
+
+    // Update recycler location every 5 seconds for smoother movement
+    const locationInterval = setInterval(() => {
+      updateRecyclerLocation();
+    }, 5000);
+
+    return () => clearInterval(locationInterval);
+  }, [wasteCollection?.recycler_id, updateRecyclerLocation]);
 
   // Simulate recycler arriving after some time
   useEffect(() => {
@@ -530,11 +749,34 @@ export default function TrackingScreen() {
                 {hasReachedDestination
                   ? 'Ready for waste collection • Navigation completed'
                   : isTrackingActive 
-                  ? `${trackingData?.recyclerName || 'Recycler'} is on the way • ${distanceToCustomer.toFixed(1)} km away`
+                  ? `${trackingData?.recyclerName || 'Recycler'} is on the way • ${distanceToCustomer.toFixed(1)} km away${isTruckMoving ? ` • Moving at ${movementSpeed.toFixed(1)} km/h` : ' • Stopped'}`
                   : 'Recycler location will appear here'
                 }
               </Text>
             </View>
+            
+            {/* Movement Status Indicator */}
+            {isTrackingActive && !hasReachedDestination && (
+              <View style={styles.movementIndicator}>
+                <View style={styles.movementIcon}>
+                  <MaterialIcons 
+                    name={isTruckMoving ? "local-shipping" : "pause-circle-filled"} 
+                    size={24} 
+                    color={isTruckMoving ? COLORS.green : COLORS.orange} 
+                  />
+                </View>
+                <View style={styles.movementInfo}>
+                  <Text style={styles.movementStatus}>
+                    {isTruckMoving ? '🚛 Truck is moving towards you' : '⏸️ Truck is currently stopped'}
+                  </Text>
+                  {isTruckMoving && movementSpeed > 0 && (
+                    <Text style={styles.movementSpeed}>
+                      Speed: {movementSpeed.toFixed(1)} km/h
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
             
             {/* Debug Info */}
             <View style={styles.debugInfo}>
@@ -558,8 +800,11 @@ export default function TrackingScreen() {
                         : trackingData?.recyclerName || 'Recycler',
                       description: hasReachedDestination 
                         ? 'Ready to collect waste' 
+                        : isTruckMoving 
+                        ? `Moving towards you at ${movementSpeed.toFixed(1)} km/h`
                         : 'Recycler current location',
                       type: 'recycler',
+                      isMoving: isTruckMoving && !hasReachedDestination,
                     },
                     {
                       id: 'destination',
@@ -1215,5 +1460,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
     fontWeight: 'bold',
+  },
+  
+  // Movement indicator styles
+  movementIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.green,
+  },
+  movementIcon: {
+    marginRight: 12,
+  },
+  movementInfo: {
+    flex: 1,
+  },
+  movementStatus: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.darkGreen,
+    marginBottom: 2,
+  },
+  movementSpeed: {
+    fontSize: 14,
+    color: COLORS.secondary,
+    fontWeight: '500',
   },
 }); 

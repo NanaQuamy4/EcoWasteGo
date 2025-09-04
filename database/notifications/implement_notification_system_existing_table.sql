@@ -100,8 +100,6 @@ BEGIN
     -- Get request details
     SELECT 
         pr.pickup_address,
-        pr.waste_type,
-        pr.estimated_weight,
         c.full_name as customer_full_name,
         r.full_name as recycler_full_name
     INTO request_data
@@ -120,8 +118,7 @@ BEGIN
         'request_confirmed',
         'New Pickup Request Confirmed',
         'You have received a new pickup request from ' || customer_name || 
-        ' for ' || request_data.waste_type || ' (' || request_data.estimated_weight || 'kg) at ' || 
-        request_data.pickup_address || '. Please accept or reject this request.',
+        ' at ' || request_data.pickup_address || '. Please accept or reject this request.',
         p_request_id,
         p_customer_id,
         'high'
@@ -163,8 +160,6 @@ BEGIN
         pr.customer_id,
         pr.recycler_id,
         pr.pickup_address,
-        pr.waste_type,
-        pr.estimated_weight,
         c.full_name as customer_full_name,
         r.full_name as recycler_full_name
     INTO request_data

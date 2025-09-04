@@ -1,46 +1,16 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
+import { getRoute, RouteInfo, RouteStep } from '../../lib/routeService';
+import { supabase } from '../../lib/supabase';
 
-// ===== MOCK DATA FOR RECYCLER NAVIGATION =====
-// This replaces all backend API calls with local mock data
-// In a real app, this would come from a database or real-time service
-
-// Mock waste collection data
-const mockWasteCollections = [
-  {
-    id: 'col_001',
-    customer_id: 'user_001',
-    pickup_address: 'Gold hostel - Komfo Anokye',
-    waste_type: 'Plastic',
-    weight: 10,
-    status: 'accepted',
-    created_at: '2024-01-15T10:30:00Z'
-  },
-  {
-    id: 'col_002',
-    customer_id: 'user_002',
-    pickup_address: 'KNUST Campus, Kumasi',
-    waste_type: 'Paper & Cardboard',
-    weight: 15,
-    status: 'accepted',
-    created_at: '2024-01-15T11:15:00Z'
-  },
-  {
-    id: 'col_003',
-    customer_id: 'user_003',
-    pickup_address: 'Adum Business District',
-    waste_type: 'Mixed Waste',
-    weight: 8,
-    status: 'accepted',
-    created_at: '2024-01-15T12:00:00Z'
-  }
-];
+// ===== REAL DATA LOADING FOR RECYCLER NAVIGATION =====
+// This loads real data from the database instead of using mock data
 
 interface NavigationData {
   requestId: string;
@@ -75,66 +45,178 @@ export default function RecyclerNavigation() {
   const [routeCoordinates, setRouteCoordinates] = useState<Array<{latitude: number, longitude: number}>>([]);
   const [distanceToDestination, setDistanceToDestination] = useState(0);
   const [etaToDestination, setEtaToDestination] = useState(0);
+  const [isMoving, setIsMoving] = useState(false);
+  const [movementSpeed, setMovementSpeed] = useState(0);
+  const [previousLocation, setPreviousLocation] = useState<{latitude: number, longitude: number} | null>(null);
+  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+  const [routeSteps, setRouteSteps] = useState<RouteStep[]>([]);
+  const [showRouteSteps, setShowRouteSteps] = useState(false);
 
-  // ===== MOCK DATA LOADING FUNCTION =====
-  // This replaces the backend API call to fetch waste collection details
-  // It loads data from our mock data arrays
-  const loadMockData = async () => {
-    try {
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+
+  // ===== MOVEMENT CALCULATION FUNCTIONS =====
+  // Calculate distance between two coordinates using Haversine formula
+  const calculateDistanceHaversine = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // Calculate movement and speed
+  const calculateMovement = useCallback((newLocation: {latitude: number, longitude: number}) => {
+    if (previousLocation) {
+      const movementDistance = calculateDistanceHaversine(
+        previousLocation.latitude,
+        previousLocation.longitude,
+        newLocation.latitude,
+        newLocation.longitude
+      );
       
-      // Find waste collection in mock data
-      const foundCollection = mockWasteCollections.find(c => c.id === requestId);
-      
-      if (foundCollection) {
-        // Create navigation data from mock collection
-        setNavigationData({
-          requestId: foundCollection.id,
-          customerName: `Customer ${foundCollection.customer_id.substring(0, 8)}`,
-          customerPhone: '+233 XX XXX XXXX',
-          pickupAddress: foundCollection.pickup_address || 'Location not specified',
-          wasteType: foundCollection.waste_type,
-          weight: foundCollection.weight || 0,
-          estimatedDistance: 2.3,
-          estimatedTime: 8
-        });
+      // Update movement status
+      if (movementDistance > 0.001) { // 1 meter threshold
+        setIsMoving(true);
+        // Calculate speed in km/h (distance moved in 5 seconds * 720)
+        const speed = movementDistance * 720;
+        setMovementSpeed(speed);
+        console.log('🚛 Recycler is moving! Distance moved:', movementDistance.toFixed(3), 'km, Speed:', speed.toFixed(1), 'km/h');
       } else {
-        // Use fallback mock data if collection not found
-        setNavigationData({
-          requestId: requestId || 'mock-id',
-          customerName: 'Michael Afia',
-          customerPhone: '0546732719',
-          pickupAddress: 'Gold hostel - Komfo Anokye',
-          wasteType: 'Plastic',
-          weight: 10,
-          estimatedDistance: 2.3,
-          estimatedTime: 8
-        });
+        setIsMoving(false);
+        setMovementSpeed(0);
+      }
+    }
+    
+    // Update previous location for next calculation
+    setPreviousLocation(newLocation);
+  }, [previousLocation]);
+
+  // Calculate route to destination
+  const calculateRoute = useCallback(async () => {
+    if (!currentLocation || !destinationLocation) return;
+    
+    try {
+      setIsCalculatingRoute(true);
+      console.log('🗺️ Calculating route to destination...');
+      
+      const route = await getRoute(currentLocation, destinationLocation, 'driving');
+      
+      if (route) {
+        setRouteInfo(route);
+        setRouteSteps(route.steps);
+        setRouteCoordinates(route.coordinates);
+        
+        // Update distance and ETA with real route data
+        const distanceKm = parseFloat(route.distance.replace(/[^\d.]/g, ''));
+        const durationMinutes = parseInt(route.duration.replace(/[^\d]/g, ''));
+        
+        setDistanceToDestination(distanceKm);
+        setEtaToDestination(durationMinutes);
+        
+        console.log('✅ Route calculated successfully:');
+        console.log('Distance:', route.distance);
+        console.log('Duration:', route.duration);
+        console.log('Steps:', route.steps.length);
+      } else {
+        console.log('❌ Failed to calculate route, using fallback');
+        // Fallback to direct distance calculation
+        const distance = calculateDistanceHaversine(
+          currentLocation.latitude,
+          currentLocation.longitude,
+          destinationLocation.latitude,
+          destinationLocation.longitude
+        );
+        setDistanceToDestination(distance);
+        setEtaToDestination(Math.round(distance * 2)); // Rough estimate
       }
     } catch (error) {
-      console.error('Error loading mock data:', error);
-      // Use fallback mock data on error
-      setNavigationData({
-        requestId: requestId || 'mock-id',
-        customerName: 'Michael Afia',
-        customerPhone: '0546732719',
-        pickupAddress: 'Gold hostel - Komfo Anokye',
-        wasteType: 'Plastic',
-        weight: 10,
-        estimatedDistance: 2.3,
-        estimatedTime: 8
-      });
+      console.error('❌ Error calculating route:', error);
+    } finally {
+      setIsCalculatingRoute(false);
     }
-  };
+  }, [currentLocation, destinationLocation]);
+
+  // ===== REAL DATA LOADING FUNCTION =====
+  // This fetches real pickup request data from the database
+  const loadRequestData = useCallback(async () => {
+    if (!requestId) return;
+    
+    try {
+      console.log('RecyclerNavigation: Loading request data for ID:', requestId);
+      
+      // Fetch pickup request with customer details
+      const { data: requestData, error: requestError } = await supabase
+        .from('pickup_requests')
+        .select(`
+          *,
+          customers:customer_id (
+            id,
+            full_name,
+            phone
+          )
+        `)
+        .eq('id', requestId)
+        .single();
+
+      if (requestError) {
+        console.error('Error fetching request data:', requestError);
+        Alert.alert('Error', 'Failed to load pickup request details');
+        return;
+      }
+
+      if (!requestData) {
+        Alert.alert('Error', 'Pickup request not found');
+        router.back();
+        return;
+      }
+
+      // Calculate distance and ETA (simplified for now)
+      const estimatedDistance = 2.3; // This would be calculated from actual coordinates
+      const estimatedTime = 8; // This would be calculated based on distance and traffic
+
+      setNavigationData({
+        requestId: requestData.id,
+        customerName: requestData.customers?.full_name || 'Customer',
+        customerPhone: requestData.customers?.phone || 'Unknown',
+        pickupAddress: requestData.pickup_address || 'Location not specified',
+        wasteType: 'Mixed Waste', // We removed waste_type from the interface
+        weight: 0, // We removed weight from the interface
+        estimatedDistance,
+        estimatedTime
+      });
+
+      // Set destination coordinates if available
+      if (requestData.pickup_latitude && requestData.pickup_longitude) {
+        setDestinationLocation({
+          latitude: requestData.pickup_latitude,
+          longitude: requestData.pickup_longitude
+        });
+      }
+
+      console.log('RecyclerNavigation: Request data loaded successfully');
+    } catch (error) {
+      console.error('Error loading request data:', error);
+      Alert.alert('Error', 'Failed to load pickup request details');
+    }
+  }, [requestId]);
 
   // Get request details when component mounts
   useEffect(() => {
     if (requestId) {
-      loadMockData();
+      loadRequestData();
     }
     requestLocationPermission();
-  }, [requestId]);
+  }, [requestId, loadRequestData]);
+
+  // Calculate route when locations are available
+  useEffect(() => {
+    if (currentLocation && destinationLocation) {
+      calculateRoute();
+    }
+  }, [currentLocation, destinationLocation, calculateRoute]);
 
   // Cleanup location subscription and arrival timer
   useEffect(() => {
@@ -179,6 +261,9 @@ export default function RecyclerNavigation() {
       
       setCurrentLocation(newLocation);
       
+      // Calculate movement and speed
+      calculateMovement(newLocation);
+      
       // Update route coordinates when location changes
       if (isNavigating) {
         updateRouteCoordinates(newLocation);
@@ -204,13 +289,19 @@ export default function RecyclerNavigation() {
           timeInterval: 5000, // Update every 5 seconds
           distanceInterval: 10, // Update every 10 meters
         },
-        (location) => {
+        async (location) => {
           const newLocation = {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
           };
           
           setCurrentLocation(newLocation);
+          
+          // Calculate movement and speed
+          calculateMovement(newLocation);
+          
+          // Update recycler location in database
+          await updateRecyclerLocation(newLocation);
           
           if (isNavigating) {
             updateRouteCoordinates(newLocation);
@@ -236,12 +327,37 @@ export default function RecyclerNavigation() {
     setIsLocationTracking(false);
   };
 
+  // Update recycler location in database
+  const updateRecyclerLocation = async (location: {latitude: number, longitude: number}) => {
+    try {
+      const { error } = await supabase
+        .from('recyclers')
+        .update({
+          latitude: location.latitude,
+          longitude: location.longitude,
+          heartbeat_at: new Date().toISOString()
+        })
+        .eq('id', (await supabase.auth.getUser()).data.user?.id);
+
+      if (error) {
+        console.error('Error updating recycler location:', error);
+      }
+    } catch (error) {
+      console.error('Error updating recycler location:', error);
+    }
+  };
+
   const updateRouteCoordinates = (newLocation: {latitude: number, longitude: number}) => {
     // Add new location to route coordinates
     setRouteCoordinates(prev => [...prev, newLocation]);
     
     // Calculate distance to destination
-    const distance = calculateDistance(newLocation, destinationLocation);
+    const distance = calculateDistanceHaversine(
+      newLocation.latitude,
+      newLocation.longitude,
+      destinationLocation.latitude,
+      destinationLocation.longitude
+    );
     setDistanceToDestination(distance);
     
     // Calculate ETA (assuming average speed of 30 km/h)
@@ -262,43 +378,49 @@ export default function RecyclerNavigation() {
   };
 
   const checkArrival = async (currentLoc: {latitude: number, longitude: number}) => {
-    const distance = calculateDistance(currentLoc, destinationLocation);
+    if (!requestId) return;
     
-    // Consider arrived if within 50 meters of destination
-    if (distance < 0.05 && !hasArrived) {
-      setHasArrived(true);
-      setIsNavigating(false);
-      stopLocationTracking();
+    try {
+      // Use database function to check and update arrival status
+      const { data, error } = await supabase.rpc('update_pickup_status_on_arrival', {
+        p_request_id: requestId,
+        p_recycler_latitude: currentLoc.latitude,
+        p_recycler_longitude: currentLoc.longitude,
+        p_arrival_threshold: 0.05 // 50 meters
+      });
       
-      try {
-        // Update database status to indicate arrival (using 'in_progress' since 'arrived' is not a valid status)
-        // The status 'in_progress' now means: recycler has arrived and is ready to collect
-        // This mock function does nothing, as there's no backend API
-        console.log('Recycler has arrived at customer location');
+      if (error) {
+        console.error('Error checking arrival:', error);
+        return;
+      }
+      
+      // If database indicates arrival, update local state
+      if (data && !hasArrived) {
+        setHasArrived(true);
+        setIsNavigating(false);
+        stopLocationTracking();
         
-      } catch (error) {
-        console.error('Error updating arrival status:', error);
-        // Still show the arrival alert even if database update fails
+        console.log('🎯 Recycler has arrived at pickup location!');
+        
         Alert.alert(
           '🎯 Destination Reached!',
           'You have arrived at the pickup location. Ready to collect waste.',
-          [{ text: 'OK' }]
+          [
+            {
+              text: 'Start Collection',
+              onPress: () => {
+                console.log('Starting waste collection process');
+                // Navigate to collection screen or update UI
+              }
+            }
+          ]
         );
       }
+    } catch (error) {
+      console.error('Error in arrival detection:', error);
     }
   };
 
-  const calculateDistance = (point1: {latitude: number, longitude: number}, point2: {latitude: number, longitude: number}) => {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (point2.latitude - point1.latitude) * Math.PI / 180;
-    const dLon = (point2.longitude - point1.longitude) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(point1.latitude * Math.PI / 180) * Math.cos(point2.latitude * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
 
   const handleStartNavigation = async () => {
     if (!locationPermission) {
@@ -308,7 +430,41 @@ export default function RecyclerNavigation() {
 
     try {
       // Update status to 'in_progress' in the database
-      // This mock function does nothing, as there's no backend API
+      const { error: updateError } = await supabase
+        .from('pickup_requests')
+        .update({ status: 'in_progress' })
+        .eq('id', requestId);
+
+      if (updateError) {
+        console.error('Error updating pickup status:', updateError);
+        Alert.alert('Error', 'Failed to update pickup status. Please try again.');
+        return;
+      }
+
+      // Send notification to customer that recycler has started navigation
+      const { data: requestData } = await supabase
+        .from('pickup_requests')
+        .select('customer_id')
+        .eq('id', requestId)
+        .single();
+
+      if (requestData?.customer_id) {
+        const { error: notificationError } = await supabase.rpc('send_notification', {
+          p_user_id: requestData.customer_id,
+          p_type: 'recycler_started_navigation',
+          p_title: '🚛 Recycler is on the way!',
+          p_message: `Your recycler has started navigation and is heading to your pickup location. Tap to track their progress in real-time.`,
+          p_related_request_id: requestId,
+          p_related_user_id: (await supabase.auth.getUser()).data.user?.id,
+          p_priority: 'high'
+        });
+
+        if (notificationError) {
+          console.error('Error sending notification:', notificationError);
+          // Don't block navigation if notification fails
+        }
+      }
+      
       console.log('Starting waste collection process');
       
       setIsNavigating(true);
@@ -542,7 +698,74 @@ export default function RecyclerNavigation() {
               <Text style={styles.statLabel}>Waste Type</Text>
             </View>
           </View>
+          
+          {/* Movement Status Indicator */}
+          {isNavigating && (
+            <View style={styles.movementIndicator}>
+              <View style={styles.movementIcon}>
+                <MaterialIcons 
+                  name={isMoving ? "local-shipping" : "pause-circle-filled"} 
+                  size={24} 
+                  color={isMoving ? COLORS.green : COLORS.orange} 
+                />
+              </View>
+              <View style={styles.movementInfo}>
+                <Text style={styles.movementStatus}>
+                  {isMoving ? '🚛 You are moving towards pickup location' : '⏸️ You are currently stopped'}
+                </Text>
+                {isMoving && movementSpeed > 0 && (
+                  <Text style={styles.movementSpeed}>
+                    Speed: {movementSpeed.toFixed(1)} km/h
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
         </View>
+
+        {/* Route Steps Section */}
+        {routeInfo && routeSteps.length > 0 && (
+          <View style={styles.routeStepsCard}>
+            <View style={styles.routeStepsHeader}>
+              <MaterialIcons name="directions" size={24} color={COLORS.darkGreen} />
+              <Text style={styles.routeStepsTitle}>Turn-by-Turn Directions</Text>
+              <TouchableOpacity 
+                style={styles.toggleStepsButton}
+                onPress={() => setShowRouteSteps(!showRouteSteps)}
+              >
+                <MaterialIcons 
+                  name={showRouteSteps ? "expand-less" : "expand-more"} 
+                  size={24} 
+                  color={COLORS.darkGreen} 
+                />
+              </TouchableOpacity>
+            </View>
+            
+            {showRouteSteps && (
+              <View style={styles.routeStepsList}>
+                {routeSteps.slice(0, 5).map((step, index) => (
+                  <View key={index} style={styles.routeStep}>
+                    <View style={styles.stepNumber}>
+                      <Text style={styles.stepNumberText}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.stepContent}>
+                      <Text style={styles.stepInstruction}>{step.instruction}</Text>
+                      <View style={styles.stepDetails}>
+                        <Text style={styles.stepDistance}>{step.distance}</Text>
+                        <Text style={styles.stepDuration}>{step.duration}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+                {routeSteps.length > 5 && (
+                  <Text style={styles.moreStepsText}>
+                    +{routeSteps.length - 5} more steps
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Live Navigation Map */}
         <View style={styles.mapContainer}>
@@ -551,8 +774,12 @@ export default function RecyclerNavigation() {
               {isNavigating ? '🔴 Live Navigation' : '🗺️ Route Preview'}
             </Text>
             <Text style={styles.mapSubtitle}>
-              {isNavigating 
-                ? `Real-time tracking • ${distanceToDestination.toFixed(1)} km remaining`
+              {isCalculatingRoute 
+                ? 'Calculating shortest route...'
+                : isNavigating 
+                ? `Real-time tracking • ${distanceToDestination.toFixed(1)} km remaining${isMoving ? ` • Moving at ${movementSpeed.toFixed(1)} km/h` : ' • Stopped'}`
+                : routeInfo 
+                ? `Shortest route calculated • ${routeInfo.distance} • ${routeInfo.duration}`
                 : 'Tap Start Navigation to begin live tracking'
               }
             </Text>
@@ -564,8 +791,11 @@ export default function RecyclerNavigation() {
                 id: 'current',
                 coordinate: currentLocation,
                 title: 'Your Location',
-                description: 'Recycler current position',
+                description: isMoving 
+                  ? `Moving towards pickup at ${movementSpeed.toFixed(1)} km/h`
+                  : 'Recycler current position',
                 type: 'recycler',
+                isMoving: isMoving && isNavigating,
               },
               {
                 id: 'destination',
@@ -1053,5 +1283,120 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray,
     fontFamily: 'monospace',
+  },
+  
+  // Movement indicator styles
+  movementIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.green,
+  },
+  movementIcon: {
+    marginRight: 12,
+  },
+  movementInfo: {
+    flex: 1,
+  },
+  movementStatus: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.darkGreen,
+    marginBottom: 2,
+  },
+  movementSpeed: {
+    fontSize: 14,
+    color: COLORS.secondary,
+    fontWeight: '500',
+  },
+  
+  // Route steps styles
+  routeStepsCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  routeStepsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  routeStepsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.black,
+    marginLeft: 8,
+    flex: 1,
+  },
+  toggleStepsButton: {
+    padding: 4,
+  },
+  routeStepsList: {
+    marginTop: 8,
+  },
+  routeStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGray,
+  },
+  stepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.darkGreen,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  stepNumberText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepInstruction: {
+    fontSize: 14,
+    color: COLORS.black,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  stepDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stepDistance: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginRight: 12,
+  },
+  stepDuration: {
+    fontSize: 12,
+    color: COLORS.gray,
+  },
+  moreStepsText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
   },
 }); 

@@ -6,7 +6,7 @@ import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import { COLORS } from '../../constants';
-import { useNotificationCount } from '../../hooks/useNotificationCount';
+import { useNotificationCountSimple as useNotificationCount } from '../../hooks/useNotificationCountSimple';
 import { supabase } from '../../lib/supabase';
 
 export default function UserScreen() {
