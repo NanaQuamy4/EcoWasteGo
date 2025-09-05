@@ -2,11 +2,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    StyleSheet,
-    TouchableOpacity,
-    View
+  Alert,
+  Dimensions,
+  StyleSheet,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from 'react-native-maps';
 import { COLORS } from '../constants';
@@ -123,7 +123,7 @@ export default function MapComponent({
       case 'recycler':
         return 'local-shipping';
       case 'destination':
-        return 'flag';
+        return 'place';
       case 'search':
         return 'search';
       case 'user':
@@ -188,11 +188,12 @@ export default function MapComponent({
             <View style={[
               styles.marker, 
               { backgroundColor: getMarkerColor(marker.type) },
-              marker.isMoving && marker.type === 'recycler' && styles.pulsingMarker
+              marker.isMoving && marker.type === 'recycler' && styles.pulsingMarker,
+              marker.type === 'destination' && styles.destinationMarker
             ]}>
               <MaterialIcons
                 name={getMarkerIcon(marker.type)}
-                size={20}
+                size={marker.type === 'destination' ? 24 : 20}
                 color={COLORS.white}
               />
             </View>
@@ -266,6 +267,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4.65,
     elevation: 8,
   },
+  destinationMarker: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 4,
+    borderColor: '#FF4444',
+    backgroundColor: '#FF4444',
+    shadowColor: '#FF4444',
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 10,
+  },
   locationButton: {
     position: 'absolute',
     top: 20,
@@ -314,4 +327,4 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 12,
   },
-}); 
+});

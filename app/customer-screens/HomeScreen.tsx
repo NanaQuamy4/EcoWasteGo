@@ -14,92 +14,6 @@ import { useNotificationCountSimple as useNotificationCount } from '../../hooks/
 // This replaces the backend API calls with local mock data
 // In a real app, this would come from a database or location service
 
-// Mock nearby recyclers data with recycling trucks and facilities (around Ghana)
-const mockRecyclers = [
-  {
-    id: '1',
-    name: 'Green Waste Solutions Truck',
-    coordinate: { latitude: 6.6734, longitude: -1.5714 }, // Kumasi area
-    rating: 4.5,
-    distance: '0.5 km',
-    type: 'recycler',
-    status: 'Available',
-    truckType: 'Recycling Truck',
-    completedPickups: 150,
-    estimatedTime: '15 mins'
-  },
-  {
-    id: '2',
-    name: 'Eco Collectors Mobile Unit',
-    coordinate: { latitude: 6.6834, longitude: -1.5814 }, // Nearby Kumasi
-    rating: 4.2,
-    distance: '1.2 km',
-    type: 'recycler',
-    status: 'On Route',
-    truckType: 'Mobile Collection Unit',
-    completedPickups: 89,
-    estimatedTime: '25 mins'
-  },
-  {
-    id: '3',
-    name: 'Recycle Pro Facility',
-    coordinate: { latitude: 6.6634, longitude: -1.5614 }, // Kumasi area
-    rating: 4.8,
-    distance: '0.8 km',
-    type: 'destination',
-    status: 'Open',
-    truckType: 'Recycling Center',
-    completedPickups: 320,
-    estimatedTime: '10 mins'
-  },
-  {
-    id: '4',
-    name: 'Waste Management Truck',
-    coordinate: { latitude: 6.6934, longitude: -1.5914 }, // Nearby Kumasi
-    rating: 4.6,
-    distance: '1.5 km',
-    type: 'recycler',
-    status: 'Available',
-    truckType: 'Waste Collection Truck',
-    completedPickups: 210,
-    estimatedTime: '20 mins'
-  },
-  {
-    id: '5',
-    name: 'EcoWaste Mobile Unit',
-    coordinate: { latitude: 6.6534, longitude: -1.5514 }, // Kumasi area
-    rating: 4.3,
-    distance: '0.3 km',
-    type: 'recycler',
-    status: 'Nearby',
-    truckType: 'Mobile Recycling Unit',
-    completedPickups: 95,
-    estimatedTime: '8 mins'
-  },
-];
-
-// Mock location suggestions for search
-const mockLocationSuggestions = [
-  'Gold Hostel, komfo anokye',
-  'Atonsu unity oil',
-  'Kumasi Central Market',
-  'KNUST Campus',
-  'Adum Business District',
-  'Kejetia Market',
-  'Manhyia Palace',
-  'Kumasi Airport'
-];
-
-// Mock user stats and recent activity
-const mockUserStats = {
-  totalPickups: 12,
-  totalPoints: 250,
-  currentLevel: 'Bronze',
-  nextLevel: 'Silver',
-  pointsToNextLevel: 50,
-  monthlySavings: '₵180',
-  environmentalImpact: '24 kg CO2 saved'
-};
 
 const SUGGESTIONS = [
   'Gold Hostel, komfo anokye',
@@ -120,38 +34,35 @@ export default function HomeScreen() {
   const [selectedLocation, setSelectedLocation] = useState<any | null>(null);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const user = { id: "user_001", username: "User", email: "user@example.com", phone: "+233 24 123 4567", role: "customer", verification_status: "verified", created_at: "2024-01-15T10:30:00Z", profile_image: null, company_name: "Green Team Recycling" };
+  // User data will be fetched from database
   const router = useRouter();
 
   // ===== INITIALIZATION EFFECT =====
   // This effect runs when the component first loads
   useEffect(() => {
-    loadMockData();
+    loadRecyclerData();
     getCurrentLocation();
   }, []);
 
-  // ===== MOCK DATA LOADING FUNCTION =====
-  // This replaces the backend API call to fetch nearby recyclers
-  // It loads data from our mock data arrays
-  const loadMockData = async () => {
+  // ===== REAL DATA LOADING FUNCTION =====
+  // This fetches real nearby recyclers from the database
+  const loadRecyclerData = async () => {
     try {
-      console.log('HomeScreen: Loading mock data...');
+      console.log('HomeScreen: Loading recycler data...');
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // TODO: Implement real database calls to fetch nearby recyclers
+      // This should connect to the recyclers table and filter by location
       
-      // Load mock recyclers
-      setNearbyRecyclers([...mockRecyclers]);
+      // For now, set empty arrays
+      setNearbyRecyclers([]);
+      setLocationSuggestions(SUGGESTIONS);
       
-      // Load mock location suggestions
-      setLocationSuggestions([...mockLocationSuggestions]);
-      
-      console.log('HomeScreen: Mock data loaded successfully');
+      console.log('HomeScreen: Recycler data loaded successfully');
     } catch (error) {
-      console.error('HomeScreen: Error loading mock data:', error);
-      // Fallback to default mock data
-      setNearbyRecyclers(mockRecyclers);
-      setLocationSuggestions(mockLocationSuggestions);
+      console.error('HomeScreen: Error loading recycler data:', error);
+      // Fallback to empty arrays
+      setNearbyRecyclers([]);
+      setLocationSuggestions(SUGGESTIONS);
     }
   };
 
@@ -471,14 +382,7 @@ export default function HomeScreen() {
           {/* Interactive Map */}
           <MapComponent
             markers={[
-              // Test marker to ensure markers are working
-              {
-                id: 'test-marker',
-                coordinate: { latitude: 6.6734, longitude: -1.5714 },
-                title: 'Test Truck',
-                description: 'Test marker to verify visibility',
-                type: 'recycler' as const,
-              },
+              // Recycler markers will be loaded from database
               ...nearbyRecyclers.map(recycler => ({
                 id: recycler.id,
                 coordinate: recycler.coordinate,

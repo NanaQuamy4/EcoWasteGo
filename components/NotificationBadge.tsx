@@ -1,18 +1,33 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '../constants';
+import { supabase } from '../lib/supabase';
 
-// ===== MOCK NOTIFICATION SERVICE =====
-// This replaces the notificationService with local mock functions
-// In a real app, this would handle actual notification counts
+// ===== REAL NOTIFICATION SERVICE =====
+// This handles actual notification counts from the database
 
-const mockNotificationService = {
+const notificationService = {
   getUnreadCount: async (): Promise<number> => {
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-    // Mock unread count - in a real app this would come from backend
-    return Math.floor(Math.random() * 5) + 1; // Random count between 1-5
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return 0;
+
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+
+      if (error) {
+        console.error('Error fetching unread count:', error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+      return 0;
+    }
   }
 };
 
@@ -30,12 +45,11 @@ export default function NotificationBadge({
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
-        const count = await mockNotificationService.getUnreadCount();
+        const count = await notificationService.getUnreadCount();
         setUnreadCount(count);
       } catch (error) {
-        console.error('Error fetching mock unread count:', error);
-        // Fallback to a default count
-        setUnreadCount(3);
+        console.error('Error fetching unread count:', error);
+        setUnreadCount(0);
       }
     };
 

@@ -1,7 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
+import { supabase } from '../../lib/supabase';
 import CommonHeader from '../components/CommonHeader';
 
 // ===== MOCK DATA FOR RECYCLER PAYMENT SUMMARY SCREEN =====
@@ -47,12 +48,23 @@ export default function RecyclerPaymentSummary() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     requestId?: string;
-    customerName?: string;
-    customerPhone?: string;
+    userName?: string;
     pickup?: string;
     wasteType?: string;
     weight?: string;
-    rate?: string;
+    wasteQuality?: string;
+    contaminationLevel?: string;
+    collectionNotes?: string;
+    baseRate?: string;
+    qualityMultiplier?: string;
+    subtotal?: string;
+    environmentalTax?: string;
+    totalAmount?: string;
+    collectionId?: string;
+    isEdit?: string;
+    paymentSummaryId?: string;
+    rejectionReason?: string;
+    selectedReason?: string;
   }>();
 
   // ===== LOCAL STATE MANAGEMENT =====
@@ -68,67 +80,76 @@ export default function RecyclerPaymentSummary() {
   // ===== INITIALIZATION EFFECT =====
   // This effect runs when the component first loads
   useEffect(() => {
-    loadMockData();
+    loadCollectionData();
   }, []);
 
-  // ===== MOCK DATA LOADING FUNCTION =====
-  // This replaces the backend API call to fetch waste collection data
-  // It loads data from our mock data arrays
-  const loadMockData = async () => {
+  // ===== LOAD REAL DATA FROM PARAMETERS =====
+  const loadCollectionData = async () => {
     try {
       setIsLoading(true);
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Load mock waste collection data
+      // Create collection data from parameters passed from weight entry screen
       const collection = {
-        ...mockWasteCollection,
-        customer_name: params.customerName || mockWasteCollection.customer_name,
-        customer_phone: params.customerPhone || mockWasteCollection.customer_phone,
-        customer_address: params.pickup || mockWasteCollection.customer_address,
-        waste_type: params.wasteType || mockWasteCollection.waste_type,
-        weight: parseFloat(params.weight || mockWasteCollection.weight.toString()),
-        id: params.requestId || mockWasteCollection.id
+        id: params.requestId || 'unknown',
+        customer_name: params.userName || 'Unknown Customer',
+        customer_phone: '+233000000000', // Default phone
+        customer_address: params.pickup || 'Unknown Location',
+        waste_type: params.wasteType || 'Mixed Waste',
+        weight: parseFloat(params.weight || '0'),
+        waste_quality: params.wasteQuality || 'good',
+        contamination_level: parseFloat(params.contaminationLevel || '0'),
+        collection_notes: params.collectionNotes || '',
+        status: 'completed',
+        created_at: new Date().toISOString(),
+        pickup_completed_at: new Date().toISOString()
       };
       
       setWasteCollection(collection);
-      setRecyclerData(mockRecyclerData);
       
-      // Use rate from params or fallback to mock data
-      const rateFromParams = parseFloat(params.rate || mockRecyclerData.baseRate.toString());
+      // Get recycler data from database
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: recyclerData, error } = await supabase
+          .from('recyclers')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (recyclerData) {
+          setRecyclerData(recyclerData);
+        } else {
+          // Fallback to mock data if recycler not found
+          setRecyclerData(mockRecyclerData);
+        }
+      } else {
+        setRecyclerData(mockRecyclerData);
+      }
       
-      // Initialize payment calculation
-      const initialCalculation = {
-        ...mockPaymentCalculation,
-        baseRate: rateFromParams
+      // Use pricing data from parameters
+      const baseRate = parseFloat(params.baseRate || '1.20');
+      const qualityMultiplier = parseFloat(params.qualityMultiplier || '1.0');
+      const subtotal = parseFloat(params.subtotal || '0');
+      const environmentalTax = parseFloat(params.environmentalTax || '0');
+      const totalAmount = parseFloat(params.totalAmount || '0');
+      
+      const paymentCalc = {
+        baseRate,
+        qualityMultiplier,
+        baseAmount: subtotal,
+        environmentalTax,
+        totalAmount,
+        taxRate: 0.05,
+        currency: "₵"
       };
       
-      setPaymentCalculation(initialCalculation);
+      setPaymentCalculation(paymentCalc);
       setWeight(collection.weight.toString());
-      setRate(rateFromParams.toString());
+      setRate(baseRate.toString());
       
-      // Calculate initial payment
-      const weightValue = collection.weight;
-      const rateValue = rateFromParams;
-      const baseAmount = weightValue * rateValue;
-      const environmentalTax = baseAmount * initialCalculation.taxRate;
-      const totalAmount = baseAmount + environmentalTax;
-      
-      setPaymentCalculation({
-        ...initialCalculation,
-        baseAmount,
-        environmentalTax,
-        totalAmount
-      });
-      
-      console.log('RecyclerPaymentSummary: Mock data loaded successfully');
+      console.log('RecyclerPaymentSummary: Real data loaded successfully');
     } catch (error) {
-      console.error('RecyclerPaymentSummary: Error loading mock data:', error);
-      // Fallback to default mock data
-      setWasteCollection(mockWasteCollection);
-      setRecyclerData(mockRecyclerData);
-      setPaymentCalculation(mockPaymentCalculation);
+      console.error('RecyclerPaymentSummary: Error loading data:', error);
+      Alert.alert('Error', 'Failed to load collection data. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -185,29 +206,97 @@ export default function RecyclerPaymentSummary() {
     setIsSubmitting(true);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to send payment summaries.');
+        return;
+      }
+
+      // Get recycler data
+      const { data: recyclerData, error: recyclerError } = await supabase
+        .from('recyclers')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (recyclerError || !recyclerData) {
+        Alert.alert('Error', 'Recycler profile not found. Please contact support.');
+        return;
+      }
+
+      // Check if this is an edit (rejection case)
+      const isEdit = params.isEdit === 'true';
+      const originalPaymentSummaryId = params.paymentSummaryId;
+
+      let paymentSummary;
+      let insertError;
+
+      if (isEdit && originalPaymentSummaryId) {
+        // Update existing payment summary
+        const { data, error } = await supabase
+          .from('payment_summaries')
+          .update({
+            weight: `${weightValue} kg`,
+            waste_type: wasteCollection.waste_type,
+            rate: `${paymentCalculation.currency} ${rateValue}/kg`,
+            base_amount: paymentCalculation.baseAmount,
+            environmental_tax: paymentCalculation.environmentalTax,
+            total_amount: paymentCalculation.totalAmount,
+            status: 'pending',
+            notes: wasteCollection.collection_notes || '',
+            quality_rating: wasteCollection.waste_quality || 'good',
+            contamination_level: wasteCollection.contamination_level || 0.00,
+            rejection_acknowledged: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', originalPaymentSummaryId)
+          .select()
+          .single();
+        
+        paymentSummary = data;
+        insertError = error;
+      } else {
+        // Create new payment summary
+        const { data, error } = await supabase
+          .from('payment_summaries')
+          .insert({
+            request_id: wasteCollection.id,
+            recycler_id: recyclerData.id,
+            customer_id: wasteCollection.customer_id,
+            weight: `${weightValue} kg`,
+            waste_type: wasteCollection.waste_type,
+            rate: `${paymentCalculation.currency} ${rateValue}/kg`,
+            base_amount: paymentCalculation.baseAmount,
+            environmental_tax: paymentCalculation.environmentalTax,
+            total_amount: paymentCalculation.totalAmount,
+            status: 'pending',
+            notes: wasteCollection.collection_notes || '',
+            quality_rating: wasteCollection.waste_quality || 'good',
+            contamination_level: wasteCollection.contamination_level || 0.00
+          })
+          .select()
+          .single();
+        
+        paymentSummary = data;
+        insertError = error;
+      }
+
+      if (insertError) {
+        console.error('Error inserting payment summary:', insertError);
+        Alert.alert('Error', 'Failed to save payment summary to database. Please try again.');
+        return;
+      }
       
-      // Create payment summary data
-      const paymentSummary = {
-        id: `pay_sum_${Date.now()}`,
-        requestId: wasteCollection.id,
-        recyclerId: recyclerData.id,
-        weight: `${weightValue} kg`,
-        wasteType: wasteCollection.waste_type,
-        rate: `${paymentCalculation.currency} ${rateValue}/kg`,
-        subtotal: `${paymentCalculation.currency} ${paymentCalculation.baseAmount.toFixed(2)}`,
-        environmentalTax: `${paymentCalculation.currency} ${paymentCalculation.environmentalTax.toFixed(2)}`,
-        totalAmount: `${paymentCalculation.currency} ${paymentCalculation.totalAmount.toFixed(2)}`,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      };
+      console.log('RecyclerPaymentSummary: Payment summary saved successfully:', paymentSummary);
       
-      console.log('RecyclerPaymentSummary: Payment summary created successfully');
+      const successMessage = isEdit 
+        ? 'Your updated payment summary has been sent to the customer for review. The changes have been made based on their feedback.'
+        : 'Your payment summary has been sent to the customer for review. You can now wait for their response or track the payment status.';
       
       Alert.alert(
-        'Payment Summary Sent!',
-        'Your payment summary has been sent to the customer for review. You can now wait for their response or track the payment status.',
+        isEdit ? 'Payment Summary Updated!' : 'Payment Summary Sent!',
+        successMessage,
         [
           {
             text: 'OK',
@@ -267,7 +356,7 @@ export default function RecyclerPaymentSummary() {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>Failed to load collection information</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={loadMockData}>
+        <TouchableOpacity style={styles.retryButton} onPress={loadCollectionData}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -308,7 +397,9 @@ export default function RecyclerPaymentSummary() {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Pickup Location</Text>
               <View style={styles.detailValue}>
-                <Text style={styles.valueText}>{wasteCollection.customer_address}</Text>
+                <Text style={styles.valueTextTruncated} numberOfLines={1} ellipsizeMode="tail">
+                  {wasteCollection.customer_address}
+                </Text>
               </View>
             </View>
 
@@ -322,67 +413,65 @@ export default function RecyclerPaymentSummary() {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Weight (kg)</Text>
               <View style={styles.detailValue}>
-                <TextInput
-                  style={styles.valueInput}
-                  value={weight}
-                  onChangeText={setWeight}
-                  keyboardType="numeric"
-                  placeholder="Enter weight"
-                  placeholderTextColor="#999"
-                />
+                <Text style={styles.valueText}>{wasteCollection.weight} kg</Text>
               </View>
             </View>
 
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Rate (GHS/kg)</Text>
+              <Text style={styles.detailLabel}>Waste Quality</Text>
               <View style={styles.detailValue}>
-                <TextInput
-                  style={styles.valueInput}
-                  value={rate}
-                  onChangeText={setRate}
-                  keyboardType="numeric"
-                  placeholder="Enter rate"
-                  placeholderTextColor="#999"
-                />
+                <Text style={styles.valueText}>{wasteCollection.waste_quality?.toUpperCase() || 'GOOD'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Base Rate (GHS/kg)</Text>
+              <View style={styles.detailValue}>
+                <Text style={styles.valueText}>₵{paymentCalculation.baseRate?.toFixed(2) || '1.20'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Quality Multiplier</Text>
+              <View style={styles.detailValue}>
+                <Text style={styles.valueText}>{paymentCalculation.qualityMultiplier?.toFixed(2)}x</Text>
               </View>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Subtotal</Text>
               <View style={styles.detailValue}>
-                <Text style={styles.valueText}>GHS {paymentCalculation.baseAmount.toFixed(2)}</Text>
+                <Text style={styles.valueText}>₵{paymentCalculation.baseAmount?.toFixed(2) || '0.00'}</Text>
               </View>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Environmental Tax (5%)</Text>
               <View style={styles.detailValue}>
-                <Text style={styles.valueText}>GHS {paymentCalculation.environmentalTax.toFixed(2)}</Text>
+                <Text style={styles.valueText}>₵{paymentCalculation.environmentalTax?.toFixed(2) || '0.00'}</Text>
               </View>
             </View>
 
             <View style={[styles.detailRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total Amount</Text>
               <View style={styles.totalValue}>
-                <Text style={styles.totalText}>GHS {paymentCalculation.totalAmount.toFixed(2)}</Text>
+                <Text style={styles.totalText}>₵{paymentCalculation.totalAmount?.toFixed(2) || '0.00'}</Text>
               </View>
             </View>
           </View>
           
-          {/* Calculate Button */}
-          <TouchableOpacity 
-            style={styles.calculateButton} 
-            onPress={calculatePayment}
-          >
-            <Text style={styles.calculateButtonText}>Recalculate Bill</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Note Section */}
         <View style={styles.noteSection}>
-          <Text style={styles.noteTitle}>Note:</Text>
-          <Text style={styles.noteText}>This bill includes a 5% Environmental Excise Tax as required by Ghana&apos;s environmental protection regulations.</Text>
-          <Text style={styles.noteText}>The user will receive this payment summary and can accept or reject the payment.</Text>
+          <Text style={styles.noteTitle}>Important Notes:</Text>
+          <Text style={styles.noteText}>• This bill includes a 5% Environmental Excise Tax as required by Ghana&apos;s environmental protection regulations.</Text>
+          <Text style={styles.noteText}>• The user will receive this payment summary and can accept or reject the payment.</Text>
+          <Text style={styles.noteText}>• Payment must be completed before waste collection is finalized.</Text>
+          <Text style={styles.noteText}>• All prices are in Ghana Cedis (₵) and include applicable taxes.</Text>
+          <Text style={styles.noteText}>• Weight is measured at the time of collection and may vary from estimates.</Text>
+          <Text style={styles.noteText}>• Quality adjustments are applied based on waste condition and contamination levels.</Text>
+          <Text style={styles.noteText}>• For disputes or questions, contact EcoWasteGo support at +233-XXX-XXXX.</Text>
         </View>
 
 
@@ -574,6 +663,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.darkGreen,
     fontWeight: '600',
+  },
+  valueTextTruncated: {
+    fontSize: 14,
+    color: COLORS.darkGreen,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
   },
   valueInput: {
     fontSize: 14,

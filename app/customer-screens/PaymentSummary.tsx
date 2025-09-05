@@ -3,39 +3,45 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
+import { supabase } from '../../lib/supabase';
 
-// ===== MOCK DATA FOR PAYMENT SUMMARY SCREEN =====
-// This replaces the backend API calls with local mock data
-// In a real app, this would come from a database or payment service
+// Payment summary data will be fetched from database
 
-// Mock payment summary data
-const mockPaymentSummary = {
-  id: "pay_sum_001",
-  requestId: "req_001",
-  recyclerId: "recycler_001",
-  recyclerName: "GreenFleet GH",
-  recyclerPhone: "+233241234568",
-  wasteType: "Mixed Waste",
-  weight: "10 kg",
-  rate: "GHS 1.20/kg",
-  subtotal: "GHS 12.00",
-  environmentalTax: "GHS 0.60",
-  totalAmount: "GHS 12.60",
-  status: "pending",
-  createdAt: "2025-06-26T14:30:00Z",
-  pickupAddress: "123 Main Street, Accra Central",
-  specialInstructions: "Please call before arrival",
-  estimatedPickupTime: "15:30"
-};
+// Customer data will be fetched from database
 
-// Mock customer data
-const mockCustomerData = {
-  id: "user_001",
-  name: "John Doe",
-  phone: "+233241234567",
-  email: "john.doe@example.com",
-  address: "123 Main Street, Accra Central"
-};
+// Predefined rejection reasons
+const predefinedReasons = [
+  {
+    id: 'price_too_high',
+    text: 'Price is too high for the service provided',
+    description: 'The quoted amount exceeds what I expected for this waste collection'
+  },
+  {
+    id: 'weight_discrepancy',
+    text: 'Weight measurement seems incorrect',
+    description: 'The weight recorded does not match what I observed'
+  },
+  {
+    id: 'quality_issue',
+    text: 'Waste quality assessment is unfair',
+    description: 'The quality rating does not reflect the actual condition of my waste'
+  },
+  {
+    id: 'service_issue',
+    text: 'Poor service quality or attitude',
+    description: 'The recycler provided unsatisfactory service or was unprofessional'
+  },
+  {
+    id: 'timing_issue',
+    text: 'Collection took too long or was delayed',
+    description: 'The pickup was significantly delayed or took longer than expected'
+  },
+  {
+    id: 'other',
+    text: 'Other reason (please specify)',
+    description: 'I have a different reason for rejecting this payment'
+  }
+];
 
 export default function PaymentSummary() {
   const router = useRouter();
@@ -61,48 +67,110 @@ export default function PaymentSummary() {
   const [isAccepting, setIsAccepting] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [selectedReason, setSelectedReason] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
 
   // ===== INITIALIZATION EFFECT =====
   // This effect runs when the component first loads
   useEffect(() => {
-    loadMockData();
+    loadPaymentData();
   }, []);
 
-  // ===== MOCK DATA LOADING FUNCTION =====
-  // This replaces the backend API call to fetch payment summary data
-  // It loads data from our mock data arrays
-  const loadMockData = async () => {
+  // ===== REAL DATA LOADING FUNCTION =====
+  // This fetches real payment summary data from the database
+  const loadPaymentData = async () => {
     try {
       setIsLoading(true);
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
       
-      // Create payment summary from params or use mock data
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Fetch payment summary from database
+      const { data: paymentData, error: paymentError } = await supabase
+        .from('payment_summaries')
+        .select(`
+          *,
+          pickup_requests!inner(
+            id,
+            customer_id,
+            pickup_address,
+            waste_type,
+            estimated_weight,
+            status
+          ),
+          recyclers!inner(
+            id,
+            full_name,
+            phone
+          )
+        `)
+        .eq('id', params.paymentSummaryId)
+        .single();
+
+      if (paymentError) {
+        console.error('Error fetching payment summary:', paymentError);
+        throw paymentError;
+      }
+
+      // Fetch customer data
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (customerError) {
+        console.error('Error fetching customer data:', customerError);
+        // Continue without customer data
+      }
+
+      // Format payment summary data
       const summary = {
-        ...mockPaymentSummary,
-        requestId: params.requestId || mockPaymentSummary.requestId,
-        recyclerId: params.recyclerId || mockPaymentSummary.recyclerId,
-        recyclerName: params.recyclerName || mockPaymentSummary.recyclerName,
-        pickup: params.pickup || mockPaymentSummary.pickupAddress,
-        weight: params.weight || mockPaymentSummary.weight,
-        wasteType: params.wasteType || mockPaymentSummary.wasteType,
-        rate: params.rate || mockPaymentSummary.rate,
-        subtotal: params.subtotal || mockPaymentSummary.subtotal,
-        environmentalTax: params.environmentalTax || mockPaymentSummary.environmentalTax,
-        totalAmount: params.totalAmount || mockPaymentSummary.totalAmount,
-        id: params.paymentSummaryId || mockPaymentSummary.id
+        id: paymentData.id,
+        requestId: paymentData.request_id,
+        recyclerId: paymentData.recycler_id,
+        recyclerName: paymentData.recyclers?.full_name || params.recyclerName || 'Unknown Recycler',
+        recyclerPhone: paymentData.recyclers?.phone || '',
+        pickup: paymentData.pickup_requests?.pickup_address || params.pickup || 'Selected Location',
+        weight: `${paymentData.weight} kg`,
+        wasteType: paymentData.waste_type || params.wasteType || 'Mixed Waste',
+        rate: `GHS ${paymentData.rate_per_kg}/kg`,
+        subtotal: `GHS ${paymentData.base_amount.toFixed(2)}`,
+        environmentalTax: `GHS ${paymentData.environmental_tax.toFixed(2)}`,
+        totalAmount: `GHS ${paymentData.total_amount.toFixed(2)}`,
+        status: paymentData.status,
+        customerId: paymentData.pickup_requests?.customer_id
       };
       
       setPaymentSummary(summary);
-      setCustomerData(mockCustomerData);
-      console.log('PaymentSummary: Mock data loaded successfully');
+      setCustomerData(customerData);
+      console.log('PaymentSummary: Real data loaded successfully');
     } catch (error) {
-      console.error('PaymentSummary: Error loading mock data:', error);
-      // Fallback to default mock data
-      setPaymentSummary(mockPaymentSummary);
-      setCustomerData(mockCustomerData);
+      console.error('PaymentSummary: Error loading data:', error);
+      // Set fallback data from params
+      const fallbackSummary = {
+        id: params.paymentSummaryId || 'unknown',
+        requestId: params.requestId || 'unknown',
+        recyclerId: params.recyclerId || 'unknown',
+        recyclerName: params.recyclerName || 'Unknown Recycler',
+        recyclerPhone: '',
+        pickup: params.pickup || 'Selected Location',
+        weight: params.weight || '0 kg',
+        wasteType: params.wasteType || 'Mixed Waste',
+        rate: params.rate || 'GHS 1.20/kg',
+        subtotal: params.subtotal || 'GHS 0.00',
+        environmentalTax: params.environmentalTax || 'GHS 0.00',
+        totalAmount: params.totalAmount || 'GHS 0.00',
+        status: 'pending',
+        customerId: 'unknown'
+      };
+      setPaymentSummary(fallbackSummary);
+      setCustomerData(null);
     } finally {
       setIsLoading(false);
     }
@@ -116,18 +184,153 @@ export default function PaymentSummary() {
     setIsAccepting(true);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Update payment summary status in database
+      const { error: paymentError } = await supabase
+        .from('payment_summaries')
+        .update({
+          status: 'accepted',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', paymentSummary?.id);
+
+      if (paymentError) {
+        console.error('Error updating payment summary:', paymentError);
+        Alert.alert('Error', 'Failed to accept payment. Please try again.');
+        return;
+      }
+
+      // Update pickup request status to completed
+      const { error: requestError } = await supabase
+        .from('pickup_requests')
+        .update({
+          status: 'completed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', paymentSummary?.requestId);
+
+      if (requestError) {
+        console.error('Error updating pickup request:', requestError);
+        // Don't block the flow, just log the error
+      }
+
+      // Calculate eco points based on weight and waste type
+      const weightInKg = parseFloat(paymentSummary?.weight?.replace(' kg', '') || '0');
+      const basePointsPerKg = 1.0; // Base points per kg
+      let bonusPoints = 0;
       
-      // Update mock data status
+      // Bonus points for special waste types
+      switch (paymentSummary?.wasteType?.toLowerCase()) {
+        case 'electronic waste':
+        case 'e-waste':
+          bonusPoints = Math.floor(weightInKg * 2); // 2x bonus for e-waste
+          break;
+        case 'plastic':
+          bonusPoints = Math.floor(weightInKg * 1.5); // 1.5x bonus for plastic
+          break;
+        case 'paper':
+          bonusPoints = Math.floor(weightInKg * 1.2); // 1.2x bonus for paper
+          break;
+        case 'mixed waste':
+        default:
+          bonusPoints = 0; // No bonus for mixed waste
+          break;
+      }
+      
+      const totalEcoPoints = Math.floor(weightInKg * basePointsPerKg) + bonusPoints;
+
+      // Create recycler earnings record
+      const { error: earningsError } = await supabase
+        .from('recycler_earnings')
+        .insert({
+          recycler_id: paymentSummary?.recyclerId,
+          request_id: paymentSummary?.requestId,
+          payment_summary_id: paymentSummary?.id,
+          waste_type: paymentSummary?.wasteType,
+          weight: paymentSummary?.weight,
+          base_amount: parseFloat(paymentSummary?.subtotal?.replace('GHS ', '') || '0'),
+          environmental_tax: parseFloat(paymentSummary?.environmentalTax?.replace('GHS ', '') || '0'),
+          total_amount: parseFloat(paymentSummary?.totalAmount?.replace('GHS ', '') || '0'),
+          recycler_earnings: parseFloat(paymentSummary?.totalAmount?.replace('GHS ', '') || '0'), // Full amount goes to recycler
+          platform_fee: 0, // No platform fee for now
+          eco_points_earned: totalEcoPoints,
+          points_per_kg: basePointsPerKg,
+          bonus_points: bonusPoints,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        });
+
+      if (earningsError) {
+        console.error('Error creating recycler earnings:', earningsError);
+        // Don't block the flow, just log the error
+      }
+
+      // Calculate environmental impact
+      const co2Saved = weightInKg * 0.5; // 0.5kg CO2 saved per kg of waste recycled
+      const treesEquivalent = weightInKg * 0.02; // 0.02 trees equivalent per kg
+      const landfillSpaceSaved = weightInKg * 0.5; // 0.5m³ landfill space saved per kg
+      const energySaved = weightInKg * 1.4; // 1.4kWh energy saved per kg
+
+      // Create customer earnings record
+      const { error: customerEarningsError } = await supabase
+        .from('customer_earnings')
+        .insert({
+          customer_id: paymentSummary?.customerId,
+          request_id: paymentSummary?.requestId,
+          waste_type: paymentSummary?.wasteType,
+          weight_kg: weightInKg,
+          base_points: Math.floor(weightInKg * basePointsPerKg),
+          bonus_points: bonusPoints,
+          total_points: totalEcoPoints,
+          co2_saved: co2Saved,
+          trees_equivalent: treesEquivalent,
+          landfill_space_saved: landfillSpaceSaved,
+          energy_saved: energySaved,
+          achievements_earned: [], // Will be calculated by achievement system
+          new_achievements: [], // Will be calculated by achievement system
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        });
+
+      if (customerEarningsError) {
+        console.error('Error creating customer earnings:', customerEarningsError);
+        // Don't block the flow, just log the error
+      }
+
+      // Create notification for recycler about payment acceptance
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: paymentSummary?.recyclerId,
+          type: 'payment_accepted',
+          title: 'Payment Accepted!',
+          message: `Customer has accepted your payment summary of ${paymentSummary?.totalAmount}. You earned ${paymentSummary?.totalAmount} and ${totalEcoPoints} eco points from this pickup! 🌱`,
+          data: {
+            request_id: paymentSummary?.requestId,
+            payment_summary_id: paymentSummary?.id,
+            total_amount: paymentSummary?.totalAmount,
+            recycler_earnings: paymentSummary?.totalAmount,
+            eco_points_earned: totalEcoPoints,
+            status: 'completed'
+          },
+          created_at: new Date().toISOString()
+        });
+
+      if (notificationError) {
+        console.error('Error creating notification:', notificationError);
+        // Don't block the flow, just log the error
+      }
+
+      // Update local state
       if (paymentSummary) {
         paymentSummary.status = 'accepted';
         setPaymentSummary({ ...paymentSummary });
       }
       
-      console.log('PaymentSummary: Payment accepted successfully');
+      console.log('PaymentSummary: Payment accepted and pickup process completed successfully');
       
-      // Navigate directly to payment made screen
+      // Navigate to payment made screen
       router.push({
         pathname: '/customer-screens/PaymentMade',
         params: {
@@ -148,35 +351,85 @@ export default function PaymentSummary() {
 
   // Reject the payment summary
   const handleRejectPayment = async () => {
-    if (!rejectionReason.trim()) {
-      Alert.alert('Reason Required', 'Please provide a reason for rejection.');
+    if (!selectedReason) {
+      Alert.alert('Reason Required', 'Please select a reason for rejection.');
+      return;
+    }
+    
+    if (selectedReason === 'other' && !rejectionReason.trim()) {
+      Alert.alert('Reason Required', 'Please provide a detailed reason for rejection.');
+      return;
+    }
+    
+    if (rejectionReason.trim() && rejectionReason.trim().length < 10) {
+      Alert.alert('Reason Too Short', 'Please provide a more detailed reason (at least 10 characters).');
       return;
     }
 
     setIsRejecting(true);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Update mock data status
+      // Update payment summary in database
+      const { error: updateError } = await supabase
+        .from('payment_summaries')
+        .update({
+          status: 'rejected',
+          rejection_reason: rejectionReason,
+          selected_reason: selectedReason,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', paymentSummary?.id);
+
+      if (updateError) {
+        console.error('Error updating payment summary:', updateError);
+        Alert.alert('Error', 'Failed to reject payment. Please try again.');
+        return;
+      }
+
+      // Create notification for recycler
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: paymentSummary?.recycler_id,
+          type: 'payment_rejected',
+          title: 'Payment Rejected',
+          message: `Customer ${customerData?.name || 'Unknown'} has rejected your payment summary. Reason: ${selectedReason === 'other' ? rejectionReason : predefinedReasons.find(r => r.id === selectedReason)?.text}`,
+          data: {
+            payment_summary_id: paymentSummary?.id,
+            request_id: paymentSummary?.requestId,
+            customer_name: customerData?.name,
+            rejection_reason: rejectionReason,
+            selected_reason: selectedReason,
+            can_edit: true
+          },
+          created_at: new Date().toISOString()
+        });
+
+      if (notificationError) {
+        console.error('Error creating notification:', notificationError);
+        // Continue anyway as the rejection was saved
+      }
+
+      // Update local state
       if (paymentSummary) {
         paymentSummary.status = 'rejected';
         paymentSummary.rejectionReason = rejectionReason;
+        paymentSummary.selectedReason = selectedReason;
         setPaymentSummary({ ...paymentSummary });
       }
       
-      console.log('PaymentSummary: Payment rejected successfully');
+      console.log('PaymentSummary: Payment rejected successfully and recycler notified');
       
       Alert.alert(
         'Payment Rejected',
-        'Your payment summary has been rejected. The recycler will be notified and may provide a new summary.',
+        'Your payment rejection has been sent to the recycler. They will review your feedback and may send a revised payment summary.',
         [
           {
             text: 'OK',
             onPress: () => {
               setShowRejectionModal(false);
               setRejectionReason('');
+              setSelectedReason('');
               // Navigate back to tracking screen
               router.back();
             }
@@ -200,6 +453,18 @@ export default function PaymentSummary() {
   const cancelRejection = () => {
     setShowRejectionModal(false);
     setRejectionReason('');
+    setSelectedReason('');
+  };
+
+  // Handle predefined reason selection
+  const handleReasonSelection = (reasonId: string) => {
+    setSelectedReason(reasonId);
+    const reason = predefinedReasons.find(r => r.id === reasonId);
+    if (reason && reasonId !== 'other') {
+      setRejectionReason(reason.description);
+    } else if (reasonId === 'other') {
+      setRejectionReason('');
+    }
   };
 
   // Contact recycler
@@ -245,7 +510,7 @@ export default function PaymentSummary() {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>Failed to load payment summary</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={loadMockData}>
+        <TouchableOpacity style={styles.retryButton} onPress={loadPaymentData}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -360,21 +625,6 @@ export default function PaymentSummary() {
         </TouchableOpacity>
       </View>
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/customer-screens/HomeScreen')}>
-          <MaterialIcons name="home" size={28} color="#22330B" />
-          <Text style={styles.navLabel}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/customer-screens/history')}>
-          <MaterialIcons name="history" size={28} color="#22330B" />
-          <Text style={styles.navLabel}>History</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(tabs)/user')}>
-          <MaterialIcons name="person" size={28} color="#22330B" />
-          <Text style={styles.navLabel}>User</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* Rejection Reason Input */}
       {showRejectionModal && (
@@ -386,35 +636,52 @@ export default function PaymentSummary() {
           
           <View style={styles.rejectionExamples}>
             <Text style={styles.rejectionExamplesTitle}>Select a reason:</Text>
+            {predefinedReasons.map((reason) => (
             <TouchableOpacity 
-              style={styles.rejectionExampleButton}
-              onPress={() => {
-                // No specific reason selection in mock data, so no action
-              }}
+                key={reason.id}
+                style={[
+                  styles.rejectionExampleButton,
+                  selectedReason === reason.id && styles.selectedReasonButton
+                ]}
+                onPress={() => handleReasonSelection(reason.id)}
             >
               <View style={styles.reasonContent}>
                 <View style={styles.reasonHeader}>
-                  <Text style={styles.rejectionExample}>
-                    • Placeholder Reason
+                    <Text style={[
+                      styles.rejectionExample,
+                      selectedReason === reason.id && styles.selectedReasonText
+                    ]}>
+                      • {reason.text}
                   </Text>
+                    {selectedReason === reason.id && (
+                      <View style={styles.selectedIndicator}>
+                        <Text style={styles.selectedIndicatorText}>✓</Text>
+                      </View>
+                    )}
                 </View>
               </View>
             </TouchableOpacity>
+            ))}
           </View>
           
           <View style={styles.selectedReasonContainer}>
             <Text style={styles.selectedReasonLabel}>
-              Custom Reason:
+              {selectedReason === 'other' ? 'Please specify your reason:' : 'Additional Details (Optional):'}
             </Text>
             <TextInput
               style={styles.rejectionInput}
               value={rejectionReason}
               onChangeText={setRejectionReason}
-              placeholder="Enter your detailed reason for rejection..."
+              placeholder={
+                selectedReason === 'other' 
+                  ? "Enter your detailed reason for rejection..." 
+                  : "Add any additional details or clarifications..."
+              }
               multiline
               numberOfLines={4}
               placeholderTextColor="#999"
               maxLength={500}
+              editable={selectedReason !== ''}
             />
             
             <View style={styles.rejectionCharCount}>
@@ -434,10 +701,10 @@ export default function PaymentSummary() {
             <TouchableOpacity 
               style={[
                 styles.confirmRejectionButton, 
-                (!rejectionReason.trim() || rejectionReason.trim().length < 10) && styles.disabledButton
+                (!selectedReason || (selectedReason === 'other' && (!rejectionReason.trim() || rejectionReason.trim().length < 10))) && styles.disabledButton
               ]} 
               onPress={handleRejectPayment}
-              disabled={!rejectionReason.trim() || rejectionReason.trim().length < 10 || isRejecting}
+              disabled={!selectedReason || (selectedReason === 'other' && (!rejectionReason.trim() || rejectionReason.trim().length < 10)) || isRejecting}
             >
               <Text style={styles.confirmRejectionButtonText}>
                 {isRejecting ? 'Processing...' : 'Confirm Rejection'}
@@ -800,9 +1067,18 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   selectedIndicator: {
-    fontSize: 16,
-    color: '#1C3301',
+    backgroundColor: '#1C3301',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginLeft: 8,
+  },
+  selectedIndicatorText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   logoContainer: {
     flexDirection: 'row',
@@ -820,28 +1096,5 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     paddingVertical: 8,
     paddingHorizontal: 15,
-  },
-  navItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  navLabel: {
-    fontSize: 12,
-    color: '#22330B',
-    marginTop: 4,
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: '#fff',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
 }); 

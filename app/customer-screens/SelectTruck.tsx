@@ -225,7 +225,7 @@ export default function SelectTruck() {
               .insert({
                 id: userId,
                 full_name: 'Customer',
-                email: 'customer@example.com',
+                email: currentUser?.email || '',
                 latitude: customerLocation.latitude,
                 longitude: customerLocation.longitude,
                 last_location_updated: new Date().toISOString()
@@ -296,6 +296,12 @@ export default function SelectTruck() {
       return;
     }
     
+    // Check if currentUser is available
+    if (!currentUser) {
+      console.log('SelectTruck: No current user, skipping fetchAvailableRecyclers...');
+      return;
+    }
+    
     try {
       console.log('SelectTruck: Starting fetchAvailableRecyclers...');
       isFetchingRecyclers.current = true;
@@ -341,6 +347,7 @@ export default function SelectTruck() {
       const { data, error } = await Promise.race([rpcPromise, timeoutPromise]) as any;
       
       console.log('SelectTruck: RPC response - data:', data, 'error:', error);
+      console.log('SelectTruck: Data type:', typeof data, 'Is array:', Array.isArray(data));
       
       if (error) {
         console.error('Error fetching available recyclers:', error);
@@ -484,7 +491,9 @@ export default function SelectTruck() {
       }
       
       // Transform the data to match our Recycler interface
-      const transformedData: Recycler[] = (data || []).map((recycler: any) => ({
+      // Handle null/undefined data properly
+      const safeData = Array.isArray(data) ? data : [];
+      const transformedData: Recycler[] = safeData.map((recycler: any) => ({
         id: recycler.id,
         fullName: recycler.full_name,
         phone: recycler.phone,
@@ -522,7 +531,7 @@ export default function SelectTruck() {
       hasFetchedRecyclers.current = true;
       setLoadingAvailable(false);
     }
-  }, []); // Removed onlineRecyclers dependency to prevent infinite loop
+  }, [currentUser, onlineRecyclers]); // Include currentUser and onlineRecyclers dependencies
 
   // ===== TRANSFORM AVAILABLE RECYCLERS =====
   const transformedRecyclers = useMemo(() => {
@@ -811,7 +820,7 @@ export default function SelectTruck() {
 
       return () => clearTimeout(timeoutId);
     }
-  }, [currentUser, userLocation, isInitialized]); // Removed fetchAvailableRecyclers and onlineRecyclers to prevent infinite loop
+  }, [currentUser, userLocation, isInitialized]); // Removed fetchAvailableRecyclers to prevent infinite loop
 
   // ===== LOADING TIMEOUT EFFECT =====
   useEffect(() => {

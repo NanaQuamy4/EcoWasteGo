@@ -1,41 +1,39 @@
 import { Feather, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react'; // Ensures JSX namespace is available
-import { Alert, Animated, Easing, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import ConfettiCannon from 'react-native-confetti-cannon'; // Uncomment when implementing confetti
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Animated, Easing, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ConfettiCannon from 'react-native-confetti-cannon';
 import Modal from 'react-native-modal';
 import { useSharedValue, withTiming } from 'react-native-reanimated';
-// Mock customer stats (replacing utils/customerStats)
-const customerStats = {
-  getTotalPickups: () => 12,
-  getTotalWeight: () => '156.8 kg',
-  getCo2Saved: () => '78.4 kg',
-  initializeMockData: () => {},
-  addCompletedPickup: (pickup: any) => {},
-  getStats: () => ({ 
-    totalPickups: 12, 
-    totalWeight: '156.8 kg', 
-    co2Saved: '78.4 kg',
-    totalWasteRecycled: 156.8,
-    totalPoints: 1250
-  }),
-  getEarnedAchievements: () => [],
-  getAchievements: () => new Map([
-    ['first_pickup', { earned: true, date: '2024-01-15', points: 50 }],
-    ['eco_warrior', { earned: true, date: '2024-01-20', points: 100 }],
-    ['waste_reducer', { earned: true, date: '2024-01-25', points: 75 }],
-    ['environmental_champion', { earned: true, date: '2024-02-01', points: 150 }],
-    ['recycling_master', { earned: false, date: '', points: 200 }],
-    ['planet_protector', { earned: false, date: '', points: 300 }]
-  ]),
-  getEnvironmentalImpact: () => ({ 
-    co2Saved: 78.4, 
-    treesEquivalent: 3, 
-    landfillSpaceSaved: 78.4,
-    energySaved: 219.5
-  })
-};
+import { supabase } from '../../lib/supabase';
+// Customer stats interface
+interface CustomerStats {
+  totalPoints: number;
+  totalPickups: number;
+  totalWeight: string;
+  totalWasteRecycled: number;
+  co2Saved: string;
+  co2SavedKg: number;
+}
+
+interface EnvironmentalImpact {
+  co2Saved: number;
+  treesEquivalent: number;
+  landfillSpaceSaved: number;
+  energySaved: number;
+}
+
+interface Achievement {
+  achievement_key: string;
+  title: string;
+  description: string;
+  points: number;
+  earned: boolean;
+  earned_date: string;
+  current_progress: number;
+  required_progress: number;
+}
 
 export const config = {
   headerShown: false,
@@ -57,100 +55,201 @@ type Badge = {
 export default function RewardsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const [lockedModal, setLockedModal] = useState<{visible: boolean, badge: Badge | null}>({visible: false, badge: null});
   const [pressedBadgeKey, setPressedBadgeKey] = useState<string | null>(null);
   const scale = useSharedValue(1);
-  const progress = useSharedValue(0);
-  const progressPercent = 0.7; // 70% progress
-  const userName = 'Williams'; // Replace with dynamic user name if available
 
   const [badgeModalVisible, setBadgeModalVisible] = useState(false);
   const [modalBadge, setModalBadge] = useState<Badge | null>(null);
   const glitterAnim = React.useRef(new Animated.Value(0)).current;
-  // Sparkle animation state
   const sparkleAnim = React.useRef(new Animated.Value(0)).current;
-  // Add state for share sheet visibility
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
   const [badges, setBadges] = useState<Badge[]>([]);
   const [showNewAchievementConfetti, setShowNewAchievementConfetti] = useState(false);
 
-  // Initialize badges from customerStats
+  // Real data states
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [customerStats, setCustomerStats] = useState<CustomerStats>({
+    totalPoints: 0,
+    totalPickups: 0,
+    totalWeight: '0 kg',
+    totalWasteRecycled: 0,
+    co2Saved: '0 kg',
+    co2SavedKg: 0
+  });
+  const [environmentalImpact, setEnvironmentalImpact] = useState<EnvironmentalImpact>({
+    co2Saved: 0,
+    treesEquivalent: 0,
+    landfillSpaceSaved: 0,
+    energySaved: 0
+  });
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [earningsHistory, setEarningsHistory] = useState<any[]>([]);
+
+  // Fetch customer data from database
+  const fetchCustomerData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error('Error getting user:', userError);
+        return;
+      }
+
+      // Get customer stats
+      const { data: statsData, error: statsError } = await supabase
+        .rpc('get_customer_total_stats', { p_customer_id: user.id });
+      
+      if (statsError) {
+        console.error('Error fetching customer stats:', statsError);
+        return;
+      }
+
+      if (statsData && statsData.length > 0) {
+        const stats = statsData[0];
+        setCustomerStats({
+          totalPoints: stats.total_points || 0,
+          totalPickups: stats.total_pickups || 0,
+          totalWeight: `${stats.total_weight_kg || 0} kg`,
+          totalWasteRecycled: stats.total_weight_kg || 0,
+          co2Saved: `${stats.total_co2_saved || 0} kg`,
+          co2SavedKg: stats.total_co2_saved || 0
+        });
+
+        setEnvironmentalImpact({
+          co2Saved: stats.total_co2_saved || 0,
+          treesEquivalent: stats.total_trees_equivalent || 0,
+          landfillSpaceSaved: stats.total_landfill_saved || 0,
+          energySaved: stats.total_energy_saved || 0
+        });
+      }
+
+      // Get customer achievements
+      const { data: achievementsData, error: achievementsError } = await supabase
+        .rpc('get_customer_achievements', { p_customer_id: user.id });
+      
+      if (achievementsError) {
+        console.error('Error fetching achievements:', achievementsError);
+        return;
+      }
+
+      if (achievementsData) {
+        setAchievements(achievementsData);
+      }
+
+      // Get earnings history
+      const { data: historyData, error: historyError } = await supabase
+        .rpc('get_customer_earnings_history', { 
+          p_customer_id: user.id, 
+          p_limit: 20 
+        });
+      
+      if (historyError) {
+        console.error('Error fetching earnings history:', historyError);
+        return;
+      }
+
+      if (historyData) {
+        setEarningsHistory(historyData);
+      }
+
+    } catch (error) {
+      console.error('Error fetching customer data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initialize badges from achievements
   useEffect(() => {
-    customerStats.initializeMockData();
-    
-    // Get achievements from customerStats
-    const achievements = customerStats.getAchievements();
-    const stats = customerStats.getStats();
-    
+    if (achievements.length > 0) {
     // Map achievements to badges
-    const badgesFromStats: Badge[] = [
-      { 
-        key: 'first_pickup', 
-        icon: <Feather name="star" size={28} color="#FFD700" />, 
-        title: 'First Pickup', 
-        desc: 'Earned for your first waste pickup.', 
-        earned: achievements.get('first_pickup')?.earned || false, 
-        earnedDate: achievements.get('first_pickup')?.date || '', 
-        points: achievements.get('first_pickup')?.points || 50 
-      },
-      { 
-        key: 'eco_warrior', 
-        icon: <FontAwesome5 name="leaf" size={28} color="#4CAF50" />, 
-        title: 'Eco Warrior', 
-        desc: 'Awarded for 5 eco-friendly pickups.', 
-        earned: achievements.get('eco_warrior')?.earned || false, 
-        earnedDate: achievements.get('eco_warrior')?.date || '', 
-        points: achievements.get('eco_warrior')?.points || 100,
-        current: stats.totalPickups,
-        required: 5
-      },
-      { 
-        key: 'waste_reducer', 
-        icon: <MaterialIcons name="eco" size={28} color="#2196F3" />, 
-        title: 'Waste Reducer', 
-        desc: 'Unlocked for recycling 20kg of waste.', 
-        earned: achievements.get('waste_reducer')?.earned || false, 
-        lockedDesc: 'Recycle 20kg of waste to unlock.', 
-        points: achievements.get('waste_reducer')?.points || 75,
-        current: Math.round(stats.totalWasteRecycled),
-        required: 20
-      },
-      { 
-        key: 'environmental_champion', 
-        icon: <Feather name="award" size={28} color="#9C27B0" />, 
-        title: 'Environmental Champion', 
-        desc: 'Earned for recycling 50kg of waste.', 
-        earned: achievements.get('environmental_champion')?.earned || false, 
-        lockedDesc: 'Recycle 50kg of waste to unlock.', 
-        points: achievements.get('environmental_champion')?.points || 150,
-        current: Math.round(stats.totalWasteRecycled),
-        required: 50
-      },
-      { 
-        key: 'recycling_master', 
-        icon: <FontAwesome5 name="medal" size={28} color="#FF9800" />, 
-        title: 'Recycling Master', 
-        desc: 'Awarded for recycling 100kg of waste.', 
-        earned: achievements.get('recycling_master')?.earned || false, 
-        lockedDesc: 'Recycle 100kg of waste to unlock.', 
-        points: achievements.get('recycling_master')?.points || 200,
-        current: Math.round(stats.totalWasteRecycled),
-        required: 100
-      },
-      { 
-        key: 'planet_protector', 
-        icon: <MaterialIcons name="emoji-events" size={28} color="#00BCD4" />, 
-        title: 'Planet Protector', 
-        desc: 'Awarded for recycling 200kg of waste.', 
-        earned: achievements.get('planet_protector')?.earned || false, 
-        lockedDesc: 'Recycle 200kg of waste to unlock.', 
-        points: achievements.get('planet_protector')?.points || 300,
-        current: Math.round(stats.totalWasteRecycled),
-        required: 200
-      },
-    ];
-    
-    setBadges(badgesFromStats);
+      const badgesFromAchievements: Badge[] = achievements.map(achievement => {
+        let icon;
+        switch (achievement.achievement_key) {
+          case 'first_pickup':
+            icon = <Feather name="star" size={28} color="#FFD700" />;
+            break;
+          case 'eco_warrior':
+            icon = <FontAwesome5 name="leaf" size={28} color="#4CAF50" />;
+            break;
+          case 'waste_reducer':
+            icon = <MaterialIcons name="eco" size={28} color="#2196F3" />;
+            break;
+          case 'environmental_champion':
+            icon = <Feather name="award" size={28} color="#9C27B0" />;
+            break;
+          case 'recycling_master':
+            icon = <FontAwesome5 name="medal" size={28} color="#FF9800" />;
+            break;
+          case 'planet_protector':
+            icon = <MaterialIcons name="emoji-events" size={28} color="#00BCD4" />;
+            break;
+          default:
+            icon = <Feather name="award" size={28} color="#666" />;
+        }
+
+        return {
+          key: achievement.achievement_key,
+          icon,
+          title: achievement.title,
+          desc: achievement.earned ? achievement.description : achievement.description,
+          earned: achievement.earned,
+          earnedDate: achievement.earned_date ? new Date(achievement.earned_date).toISOString().split('T')[0] : '',
+          points: achievement.points,
+          current: achievement.current_progress,
+          required: achievement.required_progress,
+          lockedDesc: !achievement.earned ? achievement.description : undefined
+        };
+      });
+      
+      setBadges(badgesFromAchievements);
+    }
+  }, [achievements]);
+
+  // Load data on mount
+  useEffect(() => {
+    fetchCustomerData();
+  }, [fetchCustomerData]);
+
+  // Real-time subscription for customer earnings
+  useEffect(() => {
+    const setupRealtimeSubscription = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const channel = supabase
+        .channel(`customer-earnings-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'customer_earnings',
+            filter: `customer_id=eq.${user.id}`
+          },
+          (payload) => {
+            console.log('New customer earnings:', payload);
+            // Refresh data when new earnings are added
+            fetchCustomerData();
+            
+            // Show confetti for new achievements
+            if (payload.new.achievements_earned && payload.new.achievements_earned.length > 0) {
+              setShowNewAchievementConfetti(true);
+              setTimeout(() => setShowNewAchievementConfetti(false), 3000);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    };
+
+    setupRealtimeSubscription();
   }, []);
 
   // Handle new achievements from EcoImpactCelebration
@@ -169,6 +268,13 @@ export default function RewardsScreen() {
       })));
     }
   }, [params.newAchievements, params.achievementsEarned]);
+
+  // Refresh control
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await fetchCustomerData();
+    setIsRefreshing(false);
+  }, [fetchCustomerData]);
 
   // Glittering animation for earned badges
   React.useEffect(() => {
@@ -227,8 +333,7 @@ export default function RewardsScreen() {
   const handleShareOption = async (type: string) => {
     setShareSheetVisible(false);
     
-    const stats = customerStats.getStats();
-    const shareText = `I've earned ${stats.totalPoints} points on EcoWasteGo by recycling ${stats.totalWasteRecycled}kg of waste! 🌱♻️`;
+    const shareText = `I've earned ${customerStats.totalPoints} points on EcoWasteGo by recycling ${customerStats.totalWasteRecycled}kg of waste! 🌱♻️`;
     
     if (type === 'copy') {
       await Clipboard.setStringAsync(shareText);
@@ -243,12 +348,22 @@ export default function RewardsScreen() {
     }
   };
 
-  // Get current stats
-  const stats = customerStats.getStats();
-  const environmentalImpact = customerStats.getEnvironmentalImpact();
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Text style={styles.loadingText}>Loading your rewards...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+      }
+      showsVerticalScrollIndicator={false}
+    >
       {/* Confetti for new achievements */}
       {showNewAchievementConfetti && (
         <ConfettiCannon
@@ -271,15 +386,15 @@ export default function RewardsScreen() {
       {/* Stats Summary */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{stats.totalPoints}</Text>
+          <Text style={styles.statNumber}>{customerStats.totalPoints}</Text>
           <Text style={styles.statLabel}>Total Points</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{stats.totalPickups}</Text>
+          <Text style={styles.statNumber}>{customerStats.totalPickups}</Text>
           <Text style={styles.statLabel}>Pickups</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{stats.totalWasteRecycled}kg</Text>
+          <Text style={styles.statNumber}>{customerStats.totalWasteRecycled}kg</Text>
           <Text style={styles.statLabel}>Waste Recycled</Text>
         </View>
         <View style={styles.statCard}>
@@ -294,17 +409,17 @@ export default function RewardsScreen() {
         <View style={styles.impactGrid}>
           <View style={styles.impactItem}>
             <Text style={styles.impactIcon}>🌳</Text>
-            <Text style={styles.impactValue}>{environmentalImpact.treesEquivalent}</Text>
+            <Text style={styles.impactValue}>{environmentalImpact.treesEquivalent.toFixed(1)}</Text>
             <Text style={styles.impactLabel}>Trees Equivalent</Text>
           </View>
           <View style={styles.impactItem}>
             <Text style={styles.impactIcon}>⚡</Text>
-            <Text style={styles.impactValue}>{environmentalImpact.energySaved}</Text>
+            <Text style={styles.impactValue}>{environmentalImpact.energySaved.toFixed(1)}</Text>
             <Text style={styles.impactLabel}>kWh Saved</Text>
           </View>
           <View style={styles.impactItem}>
             <Text style={styles.impactIcon}>🗑️</Text>
-            <Text style={styles.impactValue}>{environmentalImpact.landfillSpaceSaved}m³</Text>
+            <Text style={styles.impactValue}>{environmentalImpact.landfillSpaceSaved.toFixed(1)}m³</Text>
             <Text style={styles.impactLabel}>Landfill Saved</Text>
           </View>
         </View>
@@ -448,7 +563,7 @@ export default function RewardsScreen() {
           </TouchableOpacity>
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -456,6 +571,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FFF0',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 18,
+    color: '#1C3301',
+    fontWeight: '600',
   },
   header: {
     alignItems: 'center',

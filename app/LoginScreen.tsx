@@ -229,7 +229,7 @@ export default function LoginScreen() {
                  />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter your email (e.g., john.doe@example.com)"
+                  placeholder="Enter your email"
                   value={email}
                   onChangeText={handleEmailChange}
                   keyboardType="email-address"
@@ -254,7 +254,7 @@ export default function LoginScreen() {
                 />
                 <TextInput
                   style={[styles.input, { color: COLORS.darkGreen }]}
-                  placeholder="Enter your password (min. 8 characters)"
+                  placeholder="Enter your password"
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}

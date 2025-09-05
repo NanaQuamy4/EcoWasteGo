@@ -1,42 +1,29 @@
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS } from '../../constants';
 import { supabase } from '../../lib/supabase';
+import CommonHeader from '../components/CommonHeader';
 
 interface Notification {
   id: string;
+  type: string;
   title: string;
   message: string;
-  type: string;
-  is_read: boolean;
-  action_data?: {
-    action_type: string;
-    deep_link: string;
-    button_text: string;
-    section?: string;
-  } | null;
+  data: any;
   created_at: string;
+  read: boolean;
 }
-
-export const config = {
-  headerShown: false,
-};
-
-type FilterType = 'all' | 'unread' | 'read';
 
 export default function RecyclerNotificationScreen() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<FilterType>('all');
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  const fetchNotifications = async () => {
+  // Load notifications
+  const loadNotifications = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -45,110 +32,41 @@ export default function RecyclerNotificationScreen() {
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (error) {
-        console.error('Error fetching notifications:', error);
+        console.error('Error loading notifications:', error);
         return;
       }
 
       setNotifications(data || []);
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('Error loading notifications:', error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
       setRefreshing(false);
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchNotifications();
-  };
-
-  // Filter notifications based on selected filter
-  const getFilteredNotifications = () => {
-    switch (filter) {
-      case 'unread':
-        return notifications.filter(notif => !notif.is_read);
-      case 'read':
-        return notifications.filter(notif => notif.is_read);
-      case 'all':
-      default:
-        return notifications;
-    }
-  };
-
-  const filteredNotifications = getFilteredNotifications();
-
-  const handleNotificationPress = async (notification: Notification) => {
-    // Mark notification as read
-    await markAsRead(notification.id);
-
-    // Handle different notification types
-    if (notification.type === 'new_pickup_request') {
-      // Navigate to requests screen for pickup request notifications
-      router.push('/recycler-screens/RecyclerRequests');
-    } else if (notification.type === 'help_response') {
-      // Navigate to help screen for help response notifications
-      router.push('/customer-screens/Help');
-    } else if (notification.action_data) {
-      // Handle notifications with action data
-      const { action_type, deep_link, section } = notification.action_data;
-
-      if (action_type === 'retry_verification') {
-        // Navigate to edit profile screen
-        router.push('/recycler-screens/RecyclerEditProfileScreen');
-        
-        // Show alert to guide user to verification section
-        Alert.alert(
-          'Retry Verification',
-          'You have been taken to your profile page. Please scroll down to the "Verification Information" section to review the admin feedback and make necessary corrections.',
-          [{ text: 'OK' }]
-        );
-      } else if (action_type === 'view_help') {
-        // Navigate to help screen
-        router.push(deep_link || '/customer-screens/Help');
-      }
-    } else {
-      // For other notifications, just mark as read
-      console.log('Notification tapped:', notification.title);
-    }
-  };
-
-  const handleActionButton = async (notification: Notification) => {
-    if (!notification.action_data) return;
-
-    const { action_type, deep_link, section } = notification.action_data;
-
-    if (action_type === 'retry_verification') {
-      // Mark notification as read
-      await markAsRead(notification.id);
-      
-      // Navigate to edit profile screen
-      router.push('/recycler-screens/RecyclerEditProfileScreen');
-      
-      // Show alert to guide user to verification section
-      Alert.alert(
-        'Retry Verification',
-        'You have been taken to your profile page. Please scroll down to the "Verification Information" section to review the admin feedback and make necessary corrections.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
-
+  // Mark notification as read
   const markAsRead = async (notificationId: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('notifications')
-        .update({ is_read: true })
+        .update({ read: true })
         .eq('id', notificationId);
-      
+
+      if (error) {
+        console.error('Error marking notification as read:', error);
+        return;
+      }
+
       // Update local state
       setNotifications(prev => 
         prev.map(notif => 
           notif.id === notificationId 
-            ? { ...notif, is_read: true }
+            ? { ...notif, read: true }
             : notif
         )
       );
@@ -157,165 +75,226 @@ export default function RecyclerNotificationScreen() {
     }
   };
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'verification':
-        return 'checkmark-circle';
-      case 'pickup':
-      case 'new_pickup_request':
-        return 'car';
-      case 'payment':
-        return 'card';
-      case 'help_response':
-        return 'chatbubble';
-      case 'request_confirmed':
-      case 'request_accepted':
-      case 'request_rejected':
-      case 'request_completed':
-      case 'request_cancelled':
-        return 'time';
+  // Handle notification press
+  const handleNotificationPress = async (notification: Notification) => {
+    // Mark as read
+    await markAsRead(notification.id);
+
+    // Handle different notification types
+    switch (notification.type) {
+      case 'payment_rejected':
+        handlePaymentRejected(notification);
+        break;
+      case 'payment_accepted':
+        handlePaymentAccepted(notification);
+        break;
+      case 'new_request':
+        handleNewRequest(notification);
+        break;
       default:
-        return 'notifications';
+        console.log('Unknown notification type:', notification.type);
     }
   };
 
-  const getNotificationIconColor = (type: string) => {
-    switch (type) {
-      case 'verification':
-        return '#4CAF50';
-      case 'pickup':
-      case 'new_pickup_request':
-        return '#2196F3';
-      case 'payment':
-        return '#FF9800';
-      case 'help_response':
-        return '#9C27B0';
-      case 'request_confirmed':
-      case 'request_accepted':
-        return '#4CAF50';
-      case 'request_rejected':
-      case 'request_cancelled':
-        return '#F44336';
-      case 'request_completed':
-        return '#FF9800';
-      default:
-        return '#22330B';
-    }
+  // Handle payment rejection
+  const handlePaymentRejected = (notification: Notification) => {
+    const data = notification.data;
+    
+    Alert.alert(
+      'Payment Rejected',
+      `Customer ${data.customer_name} has rejected your payment summary.\n\nReason: ${data.selected_reason}\n\nDetails: ${data.rejection_reason}`,
+      [
+        { text: 'View Details', style: 'cancel' },
+        { 
+          text: 'Edit & Resend', 
+          onPress: () => {
+            // Navigate to weight entry screen to edit
+            router.push({
+              pathname: '/recycler-screens/RecyclerWeightEntry',
+              params: {
+                requestId: data.request_id,
+                isEdit: 'true',
+                paymentSummaryId: data.payment_summary_id,
+                rejectionReason: data.rejection_reason,
+                selectedReason: data.selected_reason
+              }
+            });
+          }
+        }
+      ]
+    );
   };
 
-  const renderItem = ({ item }: { item: Notification }) => (
-    <TouchableOpacity 
+  // Handle payment accepted
+  const handlePaymentAccepted = (notification: Notification) => {
+    Alert.alert(
+      'Payment Accepted',
+      'Customer has accepted your payment summary. You can now proceed with the collection.',
+      [
+        { text: 'OK', onPress: () => {
+          // Navigate to payment summary or celebration screen
+          router.push({
+            pathname: '/recycler-screens/RecyclerPaymentSummary',
+            params: {
+              requestId: notification.data.request_id
+            }
+          });
+        }}
+      ]
+    );
+  };
+
+  // Handle new request
+  const handleNewRequest = (notification: Notification) => {
+    router.push({
+      pathname: '/recycler-screens/RecyclerTextUserScreen',
+      params: {
+        newRequest: 'true'
+      }
+    });
+  };
+
+  // Load notifications on mount
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  // Real-time subscription for notifications
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+    // Subscribe to notifications for this recycler
+    const subscription = supabase
+      .channel('recycler-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('New notification received:', payload);
+          // Add new notification to the list
+          setNotifications(prev => [payload.new as Notification, ...prev]);
+          
+          // Show alert for important notifications
+          if (payload.new.type === 'payment_rejected') {
+            Alert.alert(
+              'Payment Rejected',
+              'A customer has rejected your payment summary. Tap to view details.',
+              [
+                { text: 'View', onPress: () => handleNotificationPress(payload.new as Notification) },
+                { text: 'Later', style: 'cancel' }
+              ]
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+    };
+
+    getUser();
+  }, []);
+
+
+  // Render notification item
+  const renderNotification = ({ item }: { item: Notification }) => (
+    <TouchableOpacity
       style={[
-        styles.notificationCard, 
-        !item.is_read && styles.unreadCard,
-        styles.clickableCard
+        styles.notificationItem,
+        !item.read && styles.unreadNotification
       ]}
       onPress={() => handleNotificationPress(item)}
-      activeOpacity={0.7}
     >
-      <Ionicons 
-        name={getNotificationIcon(item.type)} 
-        size={28} 
-        color={getNotificationIconColor(item.type)} 
-        style={{ marginRight: 16 }} 
-      />
-      <View style={{ flex: 1 }}>
-        <View style={styles.notificationHeader}>
-          <Text style={[styles.notificationTitle, !item.is_read && styles.unreadTitle]}>
-            {item.title}
-          </Text>
-          {!item.is_read && <View style={styles.unreadDot} />}
-        </View>
-        <Text style={styles.notificationMessage}>{item.message}</Text>
-        <Text style={styles.notificationTime}>
-          {new Date(item.created_at).toLocaleDateString()} at {new Date(item.created_at).toLocaleTimeString()}
-        </Text>
-        
-        {/* Action Button */}
-        {item.action_data && (
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => handleActionButton(item)}
-          >
-            <Text style={styles.actionButtonText}>{item.action_data.button_text}</Text>
-            <Ionicons name="arrow-forward" size={16} color="#fff" />
-          </TouchableOpacity>
-        )}
+      <View style={styles.notificationIcon}>
+        <MaterialIcons 
+          name={
+            item.type === 'payment_rejected' ? 'cancel' :
+            item.type === 'payment_accepted' ? 'check-circle' :
+            item.type === 'new_request' ? 'add-circle' :
+            'notifications'
+          } 
+          size={24} 
+          color={
+            item.type === 'payment_rejected' ? '#FF4444' :
+            item.type === 'payment_accepted' ? '#4CAF50' :
+            item.type === 'new_request' ? '#2196F3' :
+            '#666'
+          } 
+        />
       </View>
+      
+      <View style={styles.notificationContent}>
+        <Text style={[
+          styles.notificationTitle,
+          !item.read && styles.unreadText
+        ]}>
+          {item.title}
+        </Text>
+        <Text style={styles.notificationMessage}>
+          {item.message}
+        </Text>
+        <Text style={styles.notificationTime}>
+          {new Date(item.created_at).toLocaleString()}
+        </Text>
+      </View>
+
+      {!item.read && <View style={styles.unreadDot} />}
     </TouchableOpacity>
   );
 
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading notifications...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
+      <CommonHeader />
+      
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#22330B" />
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Notifications</Text>
-        <View style={styles.headerRight}>
-          <Text style={styles.notificationCount}>
-            {notifications.filter(n => !n.is_read).length}
-          </Text>
-        </View>
+        <Text style={styles.headerSubtitle}>
+          {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
+        </Text>
       </View>
 
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
-          onPress={() => setFilter('all')}
-        >
-          <Text style={[styles.filterButtonText, filter === 'all' && styles.filterButtonTextActive]}>
-            All ({notifications.length})
+      {notifications.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <MaterialIcons name="notifications-none" size={64} color="#ccc" />
+          <Text style={styles.emptyTitle}>No Notifications</Text>
+          <Text style={styles.emptyMessage}>
+            You'll receive notifications about payment updates, new requests, and other important updates here.
           </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'unread' && styles.filterButtonActive]}
-          onPress={() => setFilter('unread')}
-        >
-          <Text style={[styles.filterButtonText, filter === 'unread' && styles.filterButtonTextActive]}>
-            Unread ({notifications.filter(n => !n.is_read).length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'read' && styles.filterButtonActive]}
-          onPress={() => setFilter('read')}
-        >
-          <Text style={[styles.filterButtonText, filter === 'read' && styles.filterButtonTextActive]}>
-            Read ({notifications.filter(n => n.is_read).length})
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <FlatList
-        data={filteredNotifications}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#4CAF50']}
-            tintColor="#4CAF50"
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>
-              {filter === 'all' ? 'No notifications yet' : 
-               filter === 'unread' ? 'No unread notifications' : 
-               'No read notifications'}
-            </Text>
-            <Text style={styles.emptySubtext}>
-              {filter === 'all' ? 'You\'ll see updates about your verification status and pickup requests here.' :
-               filter === 'unread' ? 'All your notifications have been read.' :
-               'You haven\'t read any notifications yet.'}
-            </Text>
-          </View>
-        }
-      />
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          renderItem={renderNotification}
+          keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadNotifications();
+              }}
+            />
+          }
+          contentContainerStyle={styles.listContainer}
+        />
+      )}
     </View>
   );
 }
@@ -323,170 +302,105 @@ export default function RecyclerNotificationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7FAF2',
+    backgroundColor: '#F8FFF0',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FFF0',
+  },
+  loadingText: {
+    fontSize: 18,
+    color: '#666',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 56,
-    paddingBottom: 18,
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
+    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E3F0D5',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-  },
-  backButton: {
-    marginRight: 12,
-    padding: 4,
+    borderBottomColor: '#E0E0E0',
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#22330B',
-    flex: 1,
+    color: COLORS.darkGreen,
+    marginBottom: 4,
   },
-  headerRight: {
-    alignItems: 'center',
+  headerSubtitle: {
+    fontSize: 16,
+    color: '#666',
   },
-  notificationCount: {
-    backgroundColor: '#F44336',
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    minWidth: 24,
-    textAlign: 'center',
+  listContainer: {
+    padding: 16,
   },
-  listContent: {
-    padding: 20,
-  },
-  notificationCard: {
+  notificationItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 8,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 1,
+    elevation: 2,
+    position: 'relative',
   },
-  unreadCard: {
+  unreadNotification: {
     borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
-    backgroundColor: '#F8FFF8',
+    borderLeftColor: COLORS.darkGreen,
   },
-  clickableCard: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+  notificationIcon: {
+    marginRight: 12,
+    marginTop: 2,
   },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+  notificationContent: {
+    flex: 1,
   },
   notificationTitle: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  unreadText: {
     fontWeight: 'bold',
-    color: '#22330B',
-    flex: 1,
-  },
-  unreadTitle: {
-    color: '#2E7D32',
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#4CAF50',
-    marginLeft: 8,
   },
   notificationMessage: {
     fontSize: 14,
-    color: '#444',
-    marginBottom: 8,
+    color: '#666',
     lineHeight: 20,
+    marginBottom: 8,
   },
   notificationTime: {
     fontSize: 12,
-    color: '#888',
-    marginBottom: 12,
+    color: '#999',
   },
-  actionButton: {
-    backgroundColor: '#4CAF50',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginRight: 8,
+  unreadDot: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.darkGreen,
   },
   emptyContainer: {
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
-    paddingVertical: 60,
+    alignItems: 'center',
+    padding: 40,
   },
-  emptyText: {
-    fontSize: 18,
+  emptyTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#666',
     marginTop: 16,
     marginBottom: 8,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#888',
+  emptyMessage: {
+    fontSize: 16,
+    color: '#999',
     textAlign: 'center',
-    paddingHorizontal: 40,
-    lineHeight: 20,
+    lineHeight: 24,
   },
-  separator: {
-    height: 10,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E3F0D5',
-  },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginHorizontal: 4,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterButtonActive: {
-    backgroundColor: '#4CAF50',
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  filterButtonTextActive: {
-    color: '#fff',
-  },
-}); 
+});

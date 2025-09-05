@@ -117,9 +117,13 @@ BEGIN
         -- Get updated request details for logging
         SELECT * INTO request_record FROM pickup_requests WHERE id = p_request_id;
         
+        -- Send arrival notification to customer
+        PERFORM send_arrival_notification(p_request_id);
+        
         RAISE NOTICE 'Recycler arrived at pickup location for request %', p_request_id;
         RAISE NOTICE 'Arrival coordinates: %, %', p_recycler_latitude, p_recycler_longitude;
         RAISE NOTICE 'Arrival time: %', request_record.arrived_at;
+        RAISE NOTICE 'Arrival notification sent to customer';
         
         RETURN TRUE;
     ELSE
@@ -199,8 +203,28 @@ BEGIN
         'high'
     ) RETURNING id INTO notification_id;
     
-    RAISE NOTICE 'Arrival notification sent to customer % for request %', 
-        request_record.customer_id, p_request_id;
+    -- Send notification to recycler
+    INSERT INTO notifications (
+        user_id,
+        type,
+        title,
+        message,
+        related_request_id,
+        related_user_id,
+        priority
+    ) VALUES (
+        request_record.recycler_id,
+        'recycler_arrived',
+        '🎯 You Have Arrived!',
+        'You have arrived at the pickup location (' || request_record.pickup_address || '). ' ||
+        'Please contact the customer and begin waste collection.',
+        p_request_id,
+        request_record.customer_id,
+        'high'
+    );
+    
+    RAISE NOTICE 'Arrival notifications sent to customer % and recycler % for request %', 
+        request_record.customer_id, request_record.recycler_id, p_request_id;
     
     RETURN notification_id;
 END;

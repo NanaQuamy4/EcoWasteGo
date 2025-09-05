@@ -19,7 +19,7 @@ interface Notification {
   user_id: string;
   title: string;
   message: string;
-  type: 'general' | 'verification' | 'pickup' | 'request_confirmed' | 'request_accepted' | 'request_rejected' | 'request_completed' | 'request_cancelled' | 'pickup_started' | 'pickup_completed' | 'help_response' | 'recycler_started_navigation';
+  type: 'general' | 'verification' | 'pickup' | 'request_confirmed' | 'request_accepted' | 'request_rejected' | 'request_completed' | 'request_cancelled' | 'pickup_started' | 'pickup_completed' | 'help_response' | 'recycler_started_navigation' | 'message_received' | 'new_message' | 'recycler_location_update' | 'navigation_started' | 'recycler_started' | 'recycler_arrived' | 'request_pending' | 'request_assigned' | 'request_in_progress' | 'request_failed' | 'payment_received' | 'payment_failed' | 'rating_submitted' | 'feedback_received' | 'system_announcement' | 'maintenance_notice' | 'admin_action' | 'verification_request' | 'user_registration' | 'help_message';
   is_read: boolean;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   read_at?: string;
@@ -185,6 +185,26 @@ export default function CustomerNotificationScreen() {
       case 'help_response': return 'chatbubble';
       case 'verification': return 'shield-checkmark';
       case 'general': return 'information-circle';
+      case 'message_received':
+      case 'new_message': return 'chatbubble-ellipses';
+      case 'recycler_location_update': return 'location';
+      case 'navigation_started': return 'navigate-circle';
+      case 'recycler_started': return 'play-circle';
+      case 'recycler_arrived': return 'checkmark-circle-outline';
+      case 'request_pending': return 'time';
+      case 'request_assigned': return 'person-add';
+      case 'request_in_progress': return 'refresh-circle';
+      case 'request_failed': return 'alert-circle';
+      case 'payment_received': return 'card';
+      case 'payment_failed': return 'card-outline';
+      case 'rating_submitted': return 'star';
+      case 'feedback_received': return 'thumbs-up';
+      case 'system_announcement': return 'megaphone';
+      case 'maintenance_notice': return 'construct';
+      case 'admin_action': return 'shield';
+      case 'verification_request': return 'document-text';
+      case 'user_registration': return 'person-add';
+      case 'help_message': return 'help-circle';
       default: return 'notifications';
     }
   };
@@ -200,6 +220,26 @@ export default function CustomerNotificationScreen() {
       case 'help_response': return COLORS.blue;
       case 'verification': return COLORS.purple;
       case 'general': return COLORS.darkBlue;
+      case 'message_received':
+      case 'new_message': return COLORS.blue;
+      case 'recycler_location_update': return COLORS.primary;
+      case 'navigation_started': return COLORS.darkGreen;
+      case 'recycler_started': return COLORS.orange;
+      case 'recycler_arrived': return COLORS.green;
+      case 'request_pending': return COLORS.orange;
+      case 'request_assigned': return COLORS.primary;
+      case 'request_in_progress': return COLORS.blue;
+      case 'request_failed': return COLORS.red;
+      case 'payment_received': return COLORS.green;
+      case 'payment_failed': return COLORS.red;
+      case 'rating_submitted': return COLORS.orange;
+      case 'feedback_received': return COLORS.blue;
+      case 'system_announcement': return COLORS.purple;
+      case 'maintenance_notice': return COLORS.orange;
+      case 'admin_action': return COLORS.purple;
+      case 'verification_request': return COLORS.blue;
+      case 'user_registration': return COLORS.green;
+      case 'help_message': return COLORS.blue;
       default: return COLORS.orange;
     }
   };
@@ -239,44 +279,57 @@ export default function CustomerNotificationScreen() {
 
   // Render notification item
   const renderItem = ({ item }: { item: Notification }) => (
-    <TouchableOpacity 
-      style={[
-        styles.notificationCard,
-        !item.is_read && styles.unreadNotification
-      ]}
-      onPress={() => handleNotificationTap(item)}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.iconContainer, { backgroundColor: getNotificationColor(item.type) + '20' }]}>
-        <Ionicons 
-          name={getNotificationIcon(item.type) as any} 
-          size={24} 
-          color={getNotificationColor(item.type)} 
-        />
-      </View>
-      
-      <View style={styles.notificationContent}>
-        <View style={styles.notificationHeader}>
-          <Text style={[
-            styles.notificationTitle,
-            !item.is_read && styles.unreadTitle
-          ]}>
-            {item.title}
-          </Text>
-          <Text style={styles.notificationTime}>
-            {formatDate(item.created_at)}
-          </Text>
+    <View style={[
+      styles.notificationCard,
+      !item.is_read && styles.unreadNotification
+    ]}>
+      <TouchableOpacity 
+        style={styles.notificationMainContent}
+        onPress={() => handleNotificationTap(item)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.iconContainer, { backgroundColor: getNotificationColor(item.type) + '20' }]}>
+          <Ionicons 
+            name={getNotificationIcon(item.type) as any} 
+            size={24} 
+            color={getNotificationColor(item.type)} 
+          />
         </View>
         
-        <Text style={styles.notificationMessage}>
-          {item.message}
-        </Text>
-        
-        {!item.is_read && (
-          <View style={styles.unreadIndicator} />
-        )}
-      </View>
-    </TouchableOpacity>
+        <View style={styles.notificationContent}>
+          <View style={styles.notificationHeader}>
+            <Text style={[
+              styles.notificationTitle,
+              !item.is_read && styles.unreadTitle
+            ]}>
+              {item.title}
+            </Text>
+            <Text style={styles.notificationTime}>
+              {formatDate(item.created_at)}
+            </Text>
+          </View>
+          
+          <Text style={styles.notificationMessage}>
+            {item.message}
+          </Text>
+          
+          {!item.is_read && (
+            <View style={styles.unreadIndicator} />
+          )}
+        </View>
+      </TouchableOpacity>
+      
+      {!item.is_read && (
+        <TouchableOpacity 
+          style={styles.markAsReadButton}
+          onPress={() => markAsRead(item.id)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="checkmark" size={16} color={COLORS.white} />
+          <Text style={styles.markAsReadText}>Mark as Read</Text>
+        </TouchableOpacity>
+      )}
+    </View>
   );
 
   // Render empty state
@@ -485,11 +538,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   notificationCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     backgroundColor: COLORS.white,
     borderRadius: 16,
-    padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -498,6 +548,12 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: '#F1F3F4',
+    overflow: 'hidden',
+  },
+  notificationMainContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
   },
   unreadNotification: {
     borderLeftWidth: 4,
@@ -626,5 +682,22 @@ const styles = StyleSheet.create({
   },
   filterButtonTextActive: {
     color: COLORS.white,
+  },
+  markAsReadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    margin: 16,
+    marginTop: 0,
+    borderRadius: 8,
+  },
+  markAsReadText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
 });

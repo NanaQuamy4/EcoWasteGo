@@ -1,7 +1,7 @@
 import { Feather, FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Animated, Dimensions, Linking, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Dimensions, Linking, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 
 // Menu items for recyclers
@@ -182,7 +182,23 @@ export default function DrawerMenu({ open, onClose, menuItems }: DrawerMenuProps
               } else if (item.key === 'rewards') {
                 setShowContactCard(false);
                 onClose();
-                router.push('/customer-screens/Rewards');
+                if (isRecycler) {
+                  console.log('DrawerMenu: Navigating to RecyclerRewardsScreen');
+                  try {
+                    router.push('/recycler-screens/RecyclerRewardsScreen' as any);
+                  } catch (error) {
+                    console.error('DrawerMenu: Navigation error:', error);
+                    Alert.alert('Navigation Error', 'Could not navigate to rewards screen');
+                  }
+                } else {
+                  console.log('DrawerMenu: Navigating to customer Rewards');
+                  try {
+                    router.push('/customer-screens/Rewards' as any);
+                  } catch (error) {
+                    console.error('DrawerMenu: Navigation error:', error);
+                    Alert.alert('Navigation Error', 'Could not navigate to rewards screen');
+                  }
+                }
               } else if (item.key === 'notification') {
                 setShowContactCard(false);
                 onClose();

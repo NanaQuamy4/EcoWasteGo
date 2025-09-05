@@ -14,6 +14,7 @@ import { supabase } from '../../lib/supabase';
 
 interface NavigationData {
   requestId: string;
+  customerId: string;
   customerName: string;
   customerPhone: string;
   pickupAddress: string;
@@ -42,6 +43,7 @@ export default function RecyclerNavigation() {
   const [navigationData, setNavigationData] = useState<NavigationData | null>(null);
   const [locationPermission, setLocationPermission] = useState(false);
   const [locationSubscription, setLocationSubscription] = useState<Location.LocationSubscription | null>(null);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [routeCoordinates, setRouteCoordinates] = useState<Array<{latitude: number, longitude: number}>>([]);
   const [distanceToDestination, setDistanceToDestination] = useState(0);
   const [etaToDestination, setEtaToDestination] = useState(0);
@@ -179,6 +181,7 @@ export default function RecyclerNavigation() {
 
       setNavigationData({
         requestId: requestData.id,
+        customerId: requestData.customer_id,
         customerName: requestData.customers?.full_name || 'Customer',
         customerPhone: requestData.customers?.phone || 'Unknown',
         pickupAddress: requestData.pickup_address || 'Location not specified',
@@ -203,13 +206,37 @@ export default function RecyclerNavigation() {
     }
   }, [requestId]);
 
+  // Load notification count
+  const loadNotificationCount = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+
+      if (error) {
+        console.error('Error fetching notification count:', error);
+        return;
+      }
+
+      setNotificationCount(count || 0);
+    } catch (error) {
+      console.error('Error fetching notification count:', error);
+    }
+  }, []);
+
   // Get request details when component mounts
   useEffect(() => {
     if (requestId) {
       loadRequestData();
+      loadNotificationCount();
     }
     requestLocationPermission();
-  }, [requestId, loadRequestData]);
+  }, [requestId, loadRequestData, loadNotificationCount]);
 
   // Calculate route when locations are available
   useEffect(() => {
@@ -367,11 +394,49 @@ export default function RecyclerNavigation() {
 
   const updateCustomerTracking = async (recyclerLocation: {latitude: number, longitude: number}) => {
     try {
-      // Update the waste collection status to 'in_progress' if not already done
-      // This mock function does nothing, as there's no backend API
-      console.log('Updating customer tracking with recycler location:', recyclerLocation);
+      if (!navigationData?.customerId || !requestId) {
+        console.log('Missing customer ID or request ID for tracking update');
+        return;
+      }
+
+      console.log('Updating customer tracking with recycler location:', {
+        recyclerLocation,
+        customerId: navigationData.customerId,
+        requestId
+      });
       
-      // You could also update a separate tracking table or use WebSockets for real-time updates
+      // Update recycler location in the pickup_requests table for customer tracking
+      const { error: updateError } = await supabase
+        .from('pickup_requests')
+        .update({
+          recycler_latitude: recyclerLocation.latitude,
+          recycler_longitude: recyclerLocation.longitude,
+          recycler_location_updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (updateError) {
+        console.error('Error updating recycler location for tracking:', updateError);
+        return;
+      }
+
+      // Send real-time notification to customer about recycler location update
+      const { error: notificationError } = await supabase.rpc('send_notification', {
+        p_user_id: navigationData.customerId,
+        p_type: 'recycler_location_update',
+        p_title: '🚛 Recycler Location Update',
+        p_message: `Your recycler is at ${recyclerLocation.latitude.toFixed(4)}, ${recyclerLocation.longitude.toFixed(4)}. Tap to track their progress.`,
+        p_related_request_id: requestId,
+        p_related_user_id: (await supabase.auth.getUser()).data.user?.id,
+        p_priority: 'low'
+      });
+
+      if (notificationError) {
+        console.error('Error sending location update notification:', notificationError);
+        // Don't block tracking if notification fails
+      }
+
+      console.log('Customer tracking updated successfully');
     } catch (error) {
       console.error('Error updating customer tracking:', error);
     }
@@ -555,7 +620,9 @@ export default function RecyclerNavigation() {
       pathname: '/recycler-screens/RecyclerTextUserScreen' as any,
       params: {
         requestId: requestId,
-        userName: navigationData.customerName,
+        customerId: navigationData.customerId,
+        customerName: navigationData.customerName,
+        customerPhone: navigationData.customerPhone,
         pickup: navigationData.pickupAddress
       }
     });
@@ -616,7 +683,7 @@ export default function RecyclerNavigation() {
           rightIcon="truck"
           onLeftPress={() => router.back()}
           onRightPress={() => router.push('/recycler-screens/RecyclerRequests' as any)}
-          notificationCount={0}
+          notificationCount={notificationCount}
         />
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading navigation data...</Text>
@@ -632,7 +699,7 @@ export default function RecyclerNavigation() {
         rightIcon="truck"
         onLeftPress={() => router.back()}
         onRightPress={() => router.push('/recycler-screens/RecyclerRequests' as any)}
-        notificationCount={0}
+        notificationCount={notificationCount}
       />
       
       <ScrollView style={styles.content}>
@@ -831,6 +898,13 @@ export default function RecyclerNavigation() {
               >
                 <Text style={styles.actionButtonText}>💬 Text</Text>
               </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.cancelButton} 
+                onPress={handleCancelRide}
+              >
+                <Text style={styles.cancelButtonText}>❌ Cancel</Text>
+              </TouchableOpacity>
             </>
           ) : (
             <>
@@ -846,6 +920,13 @@ export default function RecyclerNavigation() {
                 onPress={handleTextUser}
               >
                 <Text style={styles.actionButtonText}>💬 Text</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.actionButton} 
+                onPress={handleCallUser}
+              >
+                <Text style={styles.actionButtonText}>📞 Call</Text>
               </TouchableOpacity>
             </>
           )}
@@ -1398,5 +1479,20 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     marginTop: 8,
+  },
+  cancelButton: {
+    backgroundColor: COLORS.red,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  cancelButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
   },
 }); 

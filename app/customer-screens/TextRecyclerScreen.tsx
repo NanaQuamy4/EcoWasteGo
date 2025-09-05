@@ -1,46 +1,11 @@
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Image, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Image, ImageBackground, Linking, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../../lib/supabase';
 
-// ===== MOCK DATA FOR TEXT RECYCLER SCREEN =====
-// This replaces the backend API calls with local mock data
-// In a real app, this would come from a database or messaging service
-
-// Mock chat messages
-const mockChatMessages = [
-  {
-    id: 1,
-    text: "Hi! I'm ready for pickup. What's your location?",
-    sender: "customer"
-  },
-  {
-    id: 2,
-    text: "Great! I'll be there in 10 minutes. Please have your waste ready.",
-    sender: "recycler"
-  },
-  {
-    id: 3,
-    text: "Perfect, I'll be waiting at the gate. I have mixed waste.",
-    sender: "customer"
-  },
-  {
-    id: 4,
-    text: "I'm at the gate now. Can you come out with your waste?",
-    sender: "recycler"
-  }
-];
-
-// Mock recycler data
-const mockRecyclerData = {
-  id: "recycler_001",
-  name: "Green Team",
-  phone: "+233241234568",
-  rating: 4.8,
-  completedPickups: 150,
-  vehicle: "Recycling Truck",
-  photo: null
-};
+// ===== REAL-TIME MESSAGING SYSTEM =====
+// This implements real-time messaging between customers and recyclers
 
 // FAQ suggestion sets for customers
 const FAQ_SUGGESTION_SETS = [
@@ -88,17 +53,19 @@ export default function TextRecyclerScreen() {
     pickup?: string;
   }>();
 
-  // ===== LOCAL STATE MANAGEMENT =====
+  // ===== STATE MANAGEMENT =====
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState(mockChatMessages);
+  const [messages, setMessages] = useState<any[]>([]);
   const [faqSetIndex, setFaqSetIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [recyclerData, setRecyclerData] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
+  const [isSending, setIsSending] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // ===== INITIALIZATION EFFECT =====
   useEffect(() => {
-    loadMockData();
+    initializeChat();
   }, []);
 
   // Auto-scroll to bottom when new messages arrive
@@ -116,65 +83,300 @@ export default function TextRecyclerScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // ===== MOCK DATA LOADING FUNCTION =====
-  const loadMockData = async () => {
+  // Real-time message subscription
+  useEffect(() => {
+    if (!params.requestId || !user?.id) return;
+
+    console.log('TextRecyclerScreen: Setting up real-time subscription for request:', params.requestId);
+
+    const channel = supabase
+      .channel(`customer-messages-${params.requestId}`)
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `request_id=eq.${params.requestId}`
+        }, 
+        (payload) => {
+          console.log('TextRecyclerScreen: New message received:', payload);
+          
+          const newMessage = payload.new;
+          
+          // Only process messages from the recycler (not from current user)
+          if (newMessage.sender_id === user.id) {
+            console.log('TextRecyclerScreen: Ignoring own message');
+            return;
+          }
+
+          const formattedMessage = {
+            id: newMessage.id,
+            text: newMessage.message,
+            sender: newMessage.sender_type === 'customer' ? 'customer' : 'recycler',
+            timestamp: new Date(newMessage.created_at),
+            formattedTime: new Date(newMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isRead: newMessage.is_read,
+            senderName: 'Recycler' // Real-time messages from recycler
+          };
+
+          setMessages(prev => {
+            // Check if message already exists to avoid duplicates
+            const exists = prev.some(msg => msg.id === newMessage.id);
+            if (exists) {
+              console.log('TextRecyclerScreen: Message already exists, skipping');
+              return prev;
+            }
+            console.log('TextRecyclerScreen: Adding new message to UI');
+            return [...prev, formattedMessage];
+          });
+          
+          // Mark as read
+          supabase.rpc('mark_messages_read', {
+            p_request_id: params.requestId,
+            p_user_id: user.id,
+            p_user_type: 'customer'
+          }).then(({ error }) => {
+            if (error) {
+              console.error('TextRecyclerScreen: Error marking message as read:', error);
+            }
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('TextRecyclerScreen: Subscription status:', status);
+      });
+
+    return () => {
+      console.log('TextRecyclerScreen: Cleaning up subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [params.requestId, user?.id]);
+
+  // ===== REAL-TIME MESSAGING FUNCTIONS =====
+  const fetchUserData = useCallback(async () => {
+    try {
+      const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+      
+      if (error) {
+        console.error('TextRecyclerScreen: Error fetching user:', error);
+        return null;
+      }
+
+      if (currentUser) {
+        const userData = {
+          id: currentUser.id,
+          email: currentUser.email,
+          name: currentUser.user_metadata?.full_name || 'User',
+          role: currentUser.user_metadata?.role || 'customer'
+        };
+        console.log('TextRecyclerScreen: User data fetched:', userData);
+        return userData;
+      }
+      return null;
+    } catch (error) {
+      console.error('TextRecyclerScreen: Unexpected error:', error);
+      return null;
+    }
+  }, []);
+
+  const loadRecyclerData = useCallback(async () => {
+    if (!params.requestId) return null;
+    
+    try {
+      const { data: requestData, error } = await supabase
+        .from('pickup_requests')
+        .select(`
+          id,
+          recyclers!inner(
+            id,
+            full_name,
+            phone,
+            rating,
+            verification_status
+          )
+        `)
+        .eq('id', params.requestId)
+        .single();
+
+      if (error) {
+        console.error('TextRecyclerScreen: Error loading recycler data:', error);
+        return null;
+      }
+
+      const recycler = (requestData.recyclers as any);
+      return {
+        id: recycler.id,
+        name: recycler.full_name,
+        phone: recycler.phone,
+        rating: recycler.rating,
+        verification_status: recycler.verification_status
+      };
+    } catch (error) {
+      console.error('TextRecyclerScreen: Error loading recycler data:', error);
+      return null;
+    }
+  }, [params.requestId]);
+
+  const loadMessages = useCallback(async () => {
+    if (!user?.id || !params.requestId) return;
+    
+    try {
+      console.log('TextRecyclerScreen: Loading messages for request:', params.requestId, 'user:', user.id);
+      
+      const { data, error } = await supabase.rpc('get_messages_for_request', {
+        p_request_id: params.requestId,
+        p_user_id: user.id,
+        p_user_type: 'customer'
+      });
+
+      if (error) {
+        console.error('TextRecyclerScreen: Error loading messages:', error);
+        return;
+      }
+
+      console.log('TextRecyclerScreen: Raw messages from database:', data);
+
+      const formattedMessages = data?.map((msg: any) => ({
+        id: msg.id,
+        text: msg.message,
+        sender: msg.sender_type === 'customer' ? 'customer' : 'recycler',
+        timestamp: new Date(msg.created_at),
+        formattedTime: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isRead: msg.is_read,
+        senderName: msg.sender_name
+      })) || [];
+
+      console.log('TextRecyclerScreen: Formatted messages:', formattedMessages);
+      setMessages(formattedMessages);
+    } catch (error) {
+      console.error('TextRecyclerScreen: Error loading messages:', error);
+    }
+  }, [user?.id, params.requestId]);
+
+  const initializeChat = async () => {
     try {
       setIsLoading(true);
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Load mock recycler data
-      const recycler = {
-        ...mockRecyclerData,
-        name: params.recyclerName || mockRecyclerData.name,
-        phone: params.recyclerPhone || mockRecyclerData.phone
-      };
-      
-      setRecyclerData(recycler);
-      console.log('TextRecyclerScreen: Mock data loaded successfully');
+      // Fetch user data
+      const userData = await fetchUserData();
+      if (!userData) {
+        Alert.alert('Error', 'Please log in to use messaging');
+        router.back();
+        return;
+      }
+      setUser(userData);
+
+      // Load recycler data
+      const recyclerData = await loadRecyclerData();
+      if (!recyclerData) {
+        Alert.alert('Error', 'Unable to load recycler information');
+        router.back();
+        return;
+      }
+      setRecyclerData(recyclerData);
+
+      // Load messages
+      await loadMessages();
+
+      // Mark messages as read
+      if (userData.id && params.requestId) {
+        await supabase.rpc('mark_messages_read', {
+          p_request_id: params.requestId,
+          p_user_id: userData.id,
+          p_user_type: 'customer'
+        });
+      }
+
+      console.log('TextRecyclerScreen: Chat initialized successfully');
     } catch (error) {
-      console.error('TextRecyclerScreen: Error loading mock data:', error);
-      // Fallback to default mock data
-      setRecyclerData(mockRecyclerData);
+      console.error('TextRecyclerScreen: Error initializing chat:', error);
+      Alert.alert('Error', 'Failed to initialize chat. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   // ===== MESSAGE HANDLING =====
-  const sendMessage = (text?: string) => {
+  const sendMessage = async (text?: string) => {
     const messageText = text !== undefined ? text : input;
-    if (!messageText.trim()) return;
+    if (!messageText.trim() || !user?.id || !params.requestId || isSending) return;
     
-    const customerMsg = { id: Date.now(), text: messageText, sender: "customer" };
-    setMessages(prev => [...prev, customerMsg]);
+    setIsSending(true);
+    
+    // Add message to UI immediately
+    const tempMessage = { 
+      id: `temp_${Date.now()}`, 
+      text: messageText, 
+      sender: "customer",
+      timestamp: new Date(),
+      formattedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isRead: false,
+      senderName: user?.user_metadata?.full_name || 'You'
+    };
+    setMessages(prev => [...prev, tempMessage]);
     setInput("");
     
-    // Simulate recycler response after 1-3 seconds
-    setTimeout(() => {
-      const dummy = DUMMY_RESPONSES[Math.floor(Math.random() * DUMMY_RESPONSES.length)];
-      setMessages(prev => [...prev, { id: Date.now() + 1, text: dummy, sender: "recycler" }]);
-    }, Math.random() * 2000 + 1000);
+    try {
+      // Send message to database
+      const { data: messageId, error } = await supabase.rpc('send_message', {
+        p_request_id: params.requestId,
+        p_sender_id: user.id,
+        p_sender_type: 'customer',
+        p_message: messageText
+      });
+
+      if (error) {
+        console.error('TextRecyclerScreen: Error sending message:', error);
+        Alert.alert('Error', 'Failed to send message. Please try again.');
+        // Remove the temporary message
+        setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
+        return;
+      }
+
+      // Update the temporary message with real ID
+      setMessages(prev => prev.map(msg => 
+        msg.id === tempMessage.id 
+          ? { ...msg, id: messageId }
+          : msg
+      ));
+
+      console.log('TextRecyclerScreen: Message sent successfully:', messageId);
+    } catch (error) {
+      console.error('TextRecyclerScreen: Error sending message:', error);
+      Alert.alert('Error', 'Failed to send message. Please try again.');
+      // Remove the temporary message
+      setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
+    } finally {
+      setIsSending(false);
+    }
   };
 
   // ===== ACTION HANDLERS =====
   const handleCallRecycler = () => {
     if (recyclerData?.phone) {
+      const phoneNumber = recyclerData.phone.startsWith('+') 
+        ? recyclerData.phone 
+        : `+${recyclerData.phone}`;
+      
       Alert.alert(
         'Call Recycler',
-        `Call ${recyclerData.name} at ${recyclerData.phone}?`,
+        `Call ${recyclerData.name} at ${phoneNumber}?`,
         [
           { text: 'Cancel', style: 'cancel' },
           { 
             text: 'Call', 
             onPress: () => {
-              console.log('Calling recycler:', recyclerData.phone);
-              Alert.alert('Call Recycler', 'Phone call functionality would be implemented here.');
+              console.log('Calling recycler:', phoneNumber);
+              Linking.openURL(`tel:${phoneNumber}`).catch(err => {
+                console.error('Error opening phone dialer:', err);
+                Alert.alert('Error', 'Unable to open phone dialer. Please try calling manually.');
+              });
             }
           }
         ]
       );
+    } else {
+      Alert.alert('No Contact', 'Recycler contact number not available');
     }
   };
 
@@ -194,16 +396,16 @@ export default function TextRecyclerScreen() {
     );
   }
 
-  if (!recyclerData) {
+  if (!recyclerData || !user) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <Text style={{ color: '#22330B', fontSize: 18, textAlign: 'center', marginBottom: 20 }}>
-            Failed to load recycler information
+            Failed to load chat information
           </Text>
           <TouchableOpacity 
             style={{ backgroundColor: '#E3F0D5', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10 }}
-            onPress={loadMockData}
+            onPress={initializeChat}
           >
             <Text style={{ color: '#22330B', fontSize: 16, fontWeight: 'bold' }}>Retry</Text>
           </TouchableOpacity>
@@ -302,6 +504,12 @@ export default function TextRecyclerScreen() {
               }
             >
               <Text style={msg.sender === 'customer' ? styles.customerText : styles.recyclerText}>{msg.text}</Text>
+              <Text style={[styles.messageTime, { 
+                color: msg.sender === 'customer' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(34, 51, 11, 0.6)',
+                textAlign: msg.sender === 'customer' ? 'right' : 'left'
+              }]}>
+                {msg.formattedTime || new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
             </View>
           ))}
         </ScrollView>
@@ -317,9 +525,18 @@ export default function TextRecyclerScreen() {
           onChangeText={setInput}
           onSubmitEditing={() => sendMessage()}
           returnKeyType="send"
+          editable={!isSending}
         />
-        <TouchableOpacity style={styles.inputSendBtn} onPress={() => sendMessage()}>
-          <Feather name="send" size={22} color="#263A13" />
+        <TouchableOpacity 
+          style={[styles.inputSendBtn, isSending && styles.inputSendBtnDisabled]} 
+          onPress={() => sendMessage()}
+          disabled={isSending}
+        >
+          <Feather 
+            name={isSending ? "clock" : "send"} 
+            size={22} 
+            color={isSending ? "#999" : "#263A13"} 
+          />
         </TouchableOpacity>
       </View>
 
@@ -406,6 +623,11 @@ const styles = StyleSheet.create({
     color: '#22330B',
     fontSize: 15,
   },
+  messageTime: {
+    fontSize: 11,
+    marginTop: 4,
+    fontWeight: '400',
+  },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -435,6 +657,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 8,
   },
+  inputSendBtnDisabled: {
+    backgroundColor: '#F0F0F0',
+    opacity: 0.6,
+  },
   bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -461,4 +687,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-});
+}); 

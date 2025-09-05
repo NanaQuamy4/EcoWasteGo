@@ -118,16 +118,26 @@ export default function RecyclerUserTab() {
 
   const isVerified = user?.is_verified || user?.verification_status === 'approved';
 
+  // Real pickup data state
+  const [realPickupData, setRealPickupData] = useState({
+    totalPickups: 0,
+    completedPickups: 0,
+    totalEarnings: 0,
+    todayEarnings: 0,
+    totalEcoPoints: 0,
+    todayEcoPoints: 0
+  });
+
   const recycler = {
     name: user?.username || 'Recycler',
     email: user?.email || '',
     phone: user?.phone || '',
     status: user?.verification_status || 'unverified',
-    totalPickups: isVerified ? 156 : 0,
-    totalEarnings: isVerified ? '₵2,450.80' : '₵0.00',
+    totalPickups: isVerified ? (realPickupData?.totalPickups || 0) : 0,
+    totalEarnings: isVerified ? `₵${(realPickupData?.totalEarnings || 0).toFixed(2)}` : '₵0.00',
     memberSince: formatCreationDate(user?.created_at),
     rating: isVerified ? 4.8 : 0,
-    completedPickups: isVerified ? 142 : 0,
+    completedPickups: isVerified ? (realPickupData?.completedPickups || 0) : 0,
   };
 
   const [currentStatus, setCurrentStatus] = useState(recycler.status);
@@ -140,6 +150,71 @@ export default function RecyclerUserTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const router = useRouter();
 
+  // Fetch real pickup data
+  const fetchPickupData = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      console.log('Fetching real pickup data for recycler:', user.id);
+      
+      // Fetch recycler earnings with eco points
+      const { data: earningsData, error: earningsError } = await supabase
+        .from('recycler_earnings')
+        .select('*')
+        .eq('recycler_id', user.id)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false });
+
+      if (earningsError) {
+        console.error('Error fetching earnings:', earningsError);
+        return;
+      }
+
+      // Calculate real statistics
+      const completedPickups = earningsData?.length || 0;
+      const totalPickups = completedPickups; // Use completed as total
+      
+      // Calculate earnings from completed pickups
+      const totalEarnings = earningsData
+        ?.reduce((sum, r) => sum + (r.recycler_earnings || 0), 0) || 0;
+      
+      // Calculate today's earnings
+      const today = new Date().toISOString().split('T')[0];
+      const todayEarnings = earningsData
+        ?.filter(r => r.completed_at?.startsWith(today))
+        .reduce((sum, r) => sum + (r.recycler_earnings || 0), 0) || 0;
+
+      // Calculate eco points
+      const totalEcoPoints = earningsData
+        ?.reduce((sum, r) => sum + (r.eco_points_earned || 0), 0) || 0;
+      
+      const todayEcoPoints = earningsData
+        ?.filter(r => r.completed_at?.startsWith(today))
+        .reduce((sum, r) => sum + (r.eco_points_earned || 0), 0) || 0;
+
+      console.log('Real pickup data calculated:', {
+        completedPickups,
+        totalPickups,
+        totalEarnings,
+        todayEarnings,
+        totalEcoPoints,
+        todayEcoPoints
+      });
+
+      setRealPickupData({
+        totalPickups: completedPickups, // Use completed as total
+        completedPickups,
+        totalEarnings,
+        todayEarnings,
+        totalEcoPoints,
+        todayEcoPoints
+      });
+
+    } catch (error) {
+      console.error('Error fetching pickup data:', error);
+    }
+  }, [user?.id]);
+
   // Update currentStatus when user data changes
   useEffect(() => {
     if (user) {
@@ -148,6 +223,59 @@ export default function RecyclerUserTab() {
       console.log('RecyclerUserTab: Updated currentStatus to:', newStatus);
     }
   }, [user]);
+
+  // Fetch real pickup data when user is verified
+  useEffect(() => {
+    if (isVerified && user?.id) {
+      fetchPickupData();
+    }
+  }, [isVerified, user?.id, fetchPickupData]);
+
+  // Set up real-time subscription for recycler earnings
+  useEffect(() => {
+    let subscription: any;
+
+    const setupRealtimeSubscription = async () => {
+      try {
+        if (!isVerified || !user?.id) {
+          return;
+        }
+
+        // Subscribe to recycler_earnings changes for this recycler
+        subscription = supabase
+          .channel('recycler-earnings-user-tab')
+          .on(
+            'postgres_changes',
+            {
+              event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+              schema: 'public',
+              table: 'recycler_earnings',
+              filter: `recycler_id=eq.${user.id}`
+            },
+            (payload) => {
+              console.log('RecyclerUserTab: Real-time earnings update:', payload);
+              // Refresh data when earnings change
+              fetchPickupData();
+            }
+          )
+          .subscribe();
+
+        console.log('RecyclerUserTab: Real-time subscription established');
+      } catch (error) {
+        console.error('Error setting up real-time subscription in user tab:', error);
+      }
+    };
+
+    setupRealtimeSubscription();
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (subscription) {
+        console.log('RecyclerUserTab: Cleaning up real-time subscription');
+        subscription.unsubscribe();
+      }
+    };
+  }, [isVerified, user?.id, fetchPickupData]);
 
   // Mock functions (replacing useAuth)
   const deleteAccount = async () => {
@@ -307,7 +435,6 @@ export default function RecyclerUserTab() {
 
   const handleNotificationPress = () => {
     router.push('/recycler-screens/RecyclerNotificationScreen' as any);
-    setNotificationCount(0);
   };
 
   const handleRefreshProfile = () => {
@@ -441,11 +568,30 @@ export default function RecyclerUserTab() {
             <Text style={styles.statLabel}>Total Earnings</Text>
           </View>
           <View style={styles.statCard}>
+            <MaterialIcons name="eco" size={24} color={COLORS.darkGreen} />
+            <Text style={styles.statNumber}>{realPickupData.totalEcoPoints}</Text>
+            <Text style={styles.statLabel}>Eco Points</Text>
+          </View>
+        </View>
+
+        {/* Additional Stats Row */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <MaterialIcons name="trending-up" size={24} color={COLORS.orange} />
+            <Text style={styles.statNumber}>{realPickupData.todayEcoPoints}</Text>
+            <Text style={styles.statLabel}>Today's Points</Text>
+          </View>
+          <View style={styles.statCard}>
             <MaterialIcons name="event" size={24} color={COLORS.darkGreen} />
             <Text style={styles.statNumber}>
               {formatCreationDate(user?.created_at)}
             </Text>
             <Text style={styles.statLabel}>Member Since</Text>
+          </View>
+          <View style={styles.statCard}>
+            <MaterialIcons name="emoji-events" size={24} color={COLORS.purple} />
+            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statLabel}>Achievements</Text>
           </View>
         </View>
 

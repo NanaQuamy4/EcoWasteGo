@@ -39,13 +39,19 @@ export default function UserScreen() {
 
       if (error) {
         console.error('UserScreen: Error fetching user:', error);
+        // If it's an auth session error, redirect to login
+        if (error.message?.includes('Auth session missing') || error.message?.includes('session')) {
+          console.log('UserScreen: Auth session missing, redirecting to login');
+          router.replace('/LoginScreen');
+          return;
+        }
         setIsLoadingUser(false);
         return;
       }
 
       if (!currentUser) {
-        console.log('UserScreen: No authenticated user found');
-        setIsLoadingUser(false);
+        console.log('UserScreen: No authenticated user found, redirecting to login');
+        router.replace('/LoginScreen');
         return;
       }
 
@@ -339,22 +345,10 @@ export default function UserScreen() {
           <Text style={styles.userEmail}>Please log in to view your profile</Text>
           <TouchableOpacity 
             style={[styles.actionButton, { marginTop: 20 }]}
-            onPress={() => router.push('/LoginScreen')}
+            onPress={() => router.replace('/LoginScreen')}
           >
             <MaterialIcons name="login" size={20} color="white" />
             <Text style={[styles.actionText, { color: 'white' }]}>Login</Text>
-          </TouchableOpacity>
-          
-          {/* Debug button */}
-          <TouchableOpacity 
-            style={[styles.actionButton, { marginTop: 10, backgroundColor: 'orange' }]}
-            onPress={() => {
-              // Mock debug info since we no longer have apiService
-              const debugInfo = `User ID: ${user?.id || 'N/A'}\nRole: ${user?.role || 'N/A'}\nAuthenticated: ${!!user}\nToken: Mock Token (Frontend Only)`;
-              Alert.alert('Debug Info', debugInfo);
-            }}
-          >
-            <Text style={[styles.actionText, { color: 'white' }]}>Debug Auth</Text>
           </TouchableOpacity>
         </View>
       </View>

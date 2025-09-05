@@ -17,6 +17,7 @@ export default function RecyclerLayout() {
       <Stack.Screen name="RecyclerNotificationScreen" options={{ headerShown: false }} />
       <Stack.Screen name="RecyclerEditProfileScreen" options={{ headerShown: false }} />
       <Stack.Screen name="RecyclerTextUserScreen" options={{ headerShown: false }} />
+      <Stack.Screen name="RecyclerRewardsScreen" options={{ headerShown: false }} />
     </Stack>
   );
 }

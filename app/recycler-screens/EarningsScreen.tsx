@@ -14,81 +14,12 @@ import {
   View,
 } from 'react-native';
 import { COLORS } from '../../constants';
-// Mock user data (replacing useAuth)
+import { supabase } from '../../lib/supabase';
 
-// ===== MOCK DATA FOR EARNINGS =====
-// This replaces the backend API calls with local mock data
-// In a real app, this would come from a database or payment service
-const mockEarningsStats = {
-  totalEarnings: 12500,
-  completedPickups: 45,
-  averagePerPickup: 278,
-  weeklyEarnings: 3200,
-  monthlyEarnings: 12500,
-  todayEarnings: 450,
-  yesterdayEarnings: 380
-};
-
-const mockPaymentHistory = [
-  {
-    id: "pay_001",
-    date: "2024-01-15",
-    time: "14:30",
-    pickupId: "req_002",
-    amount: 250,
-    status: "completed",
-    customer: "Jane Smith",
-    wasteType: "Mixed Waste",
-    weight: "8 kg"
-  },
-  {
-    id: "pay_002",
-    date: "2024-01-14", 
-    time: "16:45",
-    pickupId: "req_004",
-    amount: 180,
-    status: "completed",
-    customer: "David Wilson",
-    wasteType: "Paper",
-    weight: "6 kg"
-  },
-  {
-    id: "pay_003",
-    date: "2024-01-13",
-    time: "11:20", 
-    pickupId: "req_005",
-    amount: 320,
-    status: "completed",
-    customer: "Sarah Johnson",
-    wasteType: "Electronic Waste",
-    weight: "12 kg"
-  },
-  {
-    id: "pay_004",
-    date: "2024-01-12",
-    time: "09:15",
-    pickupId: "req_006", 
-    amount: 150,
-    status: "completed",
-    customer: "Michael Afia",
-    wasteType: "Plastic",
-    weight: "5 kg"
-  },
-  {
-    id: "pay_005",
-    date: "2024-01-11",
-    time: "13:45",
-    pickupId: "req_007",
-    amount: 280,
-    status: "completed", 
-    customer: "John Doe",
-    wasteType: "Mixed Waste",
-    weight: "9 kg"
-  }
-];
 
 export default function EarningsScreen() {
-  const user = { id: "user_001", username: "User", email: "user@example.com", phone: "+233 24 123 4567", role: "customer", verification_status: "verified", created_at: "2024-01-15T10:30:00Z", profile_image: null, company_name: "Green Team Recycling" };
+  // Get current user from Supabase
+  const [currentUser, setCurrentUser] = useState<any>(null);
   
   // ===== LOCAL STATE MANAGEMENT =====
   // These state variables manage the UI state and data
@@ -99,6 +30,7 @@ export default function EarningsScreen() {
   
   // Real-time state
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [allEarningsData, setAllEarningsData] = useState<any[]>([]);
   const [earningsStats, setEarningsStats] = useState({
     totalEarnings: 0,
     completedPickups: 0,
@@ -107,6 +39,11 @@ export default function EarningsScreen() {
     monthlyEarnings: 0,
     todayEarnings: 0,
     yesterdayEarnings: 0,
+  });
+  const [filteredStats, setFilteredStats] = useState({
+    totalEarnings: 0,
+    completedPickups: 0,
+    averagePerPickup: 0,
   });
 
   // Animation states for real-time updates
@@ -118,27 +55,81 @@ export default function EarningsScreen() {
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const borderColorAnim = useRef(new Animated.Value(0)).current;
 
-  // ===== MOCK DATA LOADING FUNCTION =====
-  // This replaces the backend API calls to fetch earnings data
-  // It loads data from our mock data arrays
-  const loadMockEarningsData = useCallback(async (showLoading = true) => {
+  // ===== REAL DATA LOADING FUNCTION =====
+  // This fetches real earnings data from the database
+  const loadEarningsData = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) setIsLoading(true);
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Load mock payment history
-      setPaymentHistory([...mockPaymentHistory]);
-      
-      // Load mock earnings stats
-      setEarningsStats({ ...mockEarningsStats });
-      
+      if (!currentUser) {
+        console.log('No current user, skipping earnings data load');
+        return;
+      }
+
+      // Fetch recycler earnings from database
+      const { data: earningsData, error: earningsError } = await supabase
+        .from('recycler_earnings')
+        .select(`
+          *,
+          pickup_requests!inner(
+            id,
+            customer_id,
+            pickup_address,
+            waste_type,
+            status
+          )
+        `)
+        .eq('recycler_id', currentUser.id)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false });
+
+      if (earningsError) {
+        console.error('Error fetching earnings data:', earningsError);
+        throw earningsError;
+      }
+
+      // Calculate earnings statistics
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const totalEarnings = earningsData?.reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0) || 0;
+      const completedPickups = earningsData?.length || 0;
+      const averagePerPickup = completedPickups > 0 ? totalEarnings / completedPickups : 0;
+
+      const todayEarnings = earningsData?.filter(earning => 
+        new Date(earning.completed_at) >= today
+      ).reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0) || 0;
+
+      const yesterdayEarnings = earningsData?.filter(earning => {
+        const earningDate = new Date(earning.completed_at);
+        return earningDate >= yesterday && earningDate < today;
+      }).reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0) || 0;
+
+      const weeklyEarnings = earningsData?.filter(earning => 
+        new Date(earning.completed_at) >= weekAgo
+      ).reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0) || 0;
+
+      const monthlyEarnings = earningsData?.filter(earning => 
+        new Date(earning.completed_at) >= monthAgo
+      ).reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0) || 0;
+
+      // Store all earnings data for filtering
+      setAllEarningsData(earningsData || []);
+
+      // Calculate filtered data based on selected period
+      calculateFilteredEarnings(earningsData || [], selectedPeriod);
       setLastUpdated(new Date());
-      console.log('Mock earnings data loaded successfully');
+      console.log('Earnings data loaded successfully:', {
+        totalEarnings: Math.round(totalEarnings),
+        completedPickups,
+        todayEarnings: Math.round(todayEarnings)
+      });
       
     } catch (error) {
-      console.error('Error loading mock earnings data:', error);
+      console.error('Error loading earnings data:', error);
       // Fallback to default values
       setPaymentHistory([]);
       setEarningsStats({
@@ -153,93 +144,248 @@ export default function EarningsScreen() {
     } finally {
       setIsLoading(false);
     }
+  }, [currentUser]);
+
+  // ===== FILTERED EARNINGS CALCULATION =====
+  // This calculates earnings based on the selected period
+  const calculateFilteredEarnings = useCallback((earningsData: any[], period: string) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const yearAgo = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000);
+
+    let filteredData = earningsData;
+
+    // Filter data based on selected period
+    switch (period) {
+      case 'day':
+        filteredData = earningsData.filter(earning => 
+          new Date(earning.completed_at) >= today
+        );
+        break;
+      case 'week':
+        filteredData = earningsData.filter(earning => 
+          new Date(earning.completed_at) >= weekAgo
+        );
+        break;
+      case 'month':
+        filteredData = earningsData.filter(earning => 
+          new Date(earning.completed_at) >= monthAgo
+        );
+        break;
+      case 'year':
+        filteredData = earningsData.filter(earning => 
+          new Date(earning.completed_at) >= yearAgo
+        );
+        break;
+      default:
+        filteredData = earningsData; // All time
+    }
+
+    // Calculate statistics for filtered data
+    const filteredTotalEarnings = filteredData.reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0);
+    const filteredCompletedPickups = filteredData.length;
+    const filteredAveragePerPickup = filteredCompletedPickups > 0 ? filteredTotalEarnings / filteredCompletedPickups : 0;
+
+    // Calculate all-time statistics for reference
+    const allTimeEarnings = earningsData.reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0);
+    const allTimeCompletedPickups = earningsData.length;
+    const allTimeAveragePerPickup = allTimeCompletedPickups > 0 ? allTimeEarnings / allTimeCompletedPickups : 0;
+    
+    const todayEarnings = earningsData.filter(earning => 
+      new Date(earning.completed_at) >= today
+    ).reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0);
+    const yesterdayEarnings = earningsData.filter(earning => {
+      const earningDate = new Date(earning.completed_at);
+      return earningDate >= yesterday && earningDate < today;
+    }).reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0);
+    const weeklyEarnings = earningsData.filter(earning => 
+      new Date(earning.completed_at) >= weekAgo
+    ).reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0);
+    const monthlyEarnings = earningsData.filter(earning => 
+      new Date(earning.completed_at) >= monthAgo
+    ).reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0);
+
+    // Format payment history for filtered data
+    const formattedHistory = filteredData.map(earning => ({
+      id: earning.id,
+      date: new Date(earning.completed_at).toISOString().split('T')[0],
+      time: new Date(earning.completed_at).toTimeString().split(' ')[0].substring(0, 5),
+      pickupId: earning.request_id,
+      amount: Math.round(earning.recycler_earnings || 0),
+      status: 'completed',
+      customer: `Customer ${earning.pickup_requests?.customer_id?.substring(0, 8) || 'Unknown'}`,
+      wasteType: earning.waste_type || 'Mixed Waste',
+      weight: `${earning.weight || 0} kg`,
+      ecoPoints: earning.eco_points_earned || 0
+    }));
+
+    // Update state
+    setEarningsStats({
+      totalEarnings: Math.round(allTimeEarnings),
+      completedPickups: allTimeCompletedPickups,
+      averagePerPickup: Math.round(allTimeAveragePerPickup),
+      weeklyEarnings: Math.round(weeklyEarnings),
+      monthlyEarnings: Math.round(monthlyEarnings),
+      todayEarnings: Math.round(todayEarnings),
+      yesterdayEarnings: Math.round(yesterdayEarnings),
+    });
+
+    setFilteredStats({
+      totalEarnings: Math.round(filteredTotalEarnings),
+      completedPickups: filteredCompletedPickups,
+      averagePerPickup: Math.round(filteredAveragePerPickup),
+    });
+
+    setPaymentHistory(formattedHistory);
+
+    console.log(`Filtered earnings for ${period}:`, {
+      filteredEarnings: Math.round(filteredTotalEarnings),
+      filteredPickups: filteredCompletedPickups,
+      allTimeEarnings: Math.round(allTimeEarnings),
+      allTimePickups: allTimeCompletedPickups
+    });
+  }, []);
+
+  // ===== ANIMATION FUNCTIONS =====
+  // This triggers the payment animation when new earnings are received
+  const triggerPaymentAnimation = useCallback(() => {
+    setShowPaymentAnimation(true);
+
+    // Animate the payment notification
+    Animated.sequence([
+      Animated.parallel([
+      Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+        useNativeDriver: true,
+      }),
+        Animated.timing(opacityAnim, {
+        toValue: 1,
+          duration: 300,
+        useNativeDriver: true,
+      }),
+        Animated.timing(borderColorAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+      ]),
+      Animated.delay(2000),
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(borderColorAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+      ]),
+    ]).start(() => {
+      setShowPaymentAnimation(false);
+    });
+  }, [scaleAnim, opacityAnim, borderColorAnim]);
+
+  // ===== USER AUTHENTICATION EFFECT =====
+  // Get current user from Supabase
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error('Error getting current user:', error);
+          return;
+        }
+        if (user) {
+          setCurrentUser(user);
+          console.log('Current user loaded:', user.id);
+        }
+      } catch (error) {
+        console.error('Error in getCurrentUser:', error);
+      }
+    };
+
+    getCurrentUser();
   }, []);
 
   // ===== INITIALIZATION EFFECT =====
   // This effect runs when the component first loads
   useEffect(() => {
-    loadMockEarningsData();
-  }, []); // Remove loadMockEarningsData dependency to prevent infinite loop
+    if (currentUser) {
+      loadEarningsData();
+    }
+  }, [currentUser, loadEarningsData]);
 
-  // ===== REAL-TIME SIMULATION EFFECT =====
-  // This simulates real-time updates by occasionally adding new payments
-  // In a real app, this would be WebSocket or push notifications
+  // ===== REAL-TIME UPDATES EFFECT =====
+  // Subscribe to real-time updates for recycler earnings
   useEffect(() => {
-    const interval = setInterval(() => {
-      // 5% chance of getting a new payment every 30 seconds
-      if (Math.random() < 0.05) {
-        simulateNewPayment();
-      }
-    }, 30000);
+    if (!currentUser) return;
 
-    return () => clearInterval(interval);
-  }, []);
+    console.log('Setting up real-time earnings updates for user:', currentUser.id);
 
-  // ===== NEW PAYMENT SIMULATION =====
-  // This simulates receiving a new payment notification
-  const simulateNewPayment = () => {
-    const newPayment = {
-      id: `pay_${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toTimeString().split(' ')[0].substring(0, 5),
-      pickupId: `req_${Math.floor(Math.random() * 1000)}`,
-      amount: Math.floor(Math.random() * 300) + 100, // Random amount between 100-400
-      status: "completed",
-      customer: `Customer ${Math.floor(Math.random() * 1000)}`,
-      wasteType: "Mixed Waste",
-      weight: `${Math.floor(Math.random() * 20) + 1} kg`
+    const subscription = supabase
+      .channel(`recycler-earnings-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'recycler_earnings',
+          filter: `recycler_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          console.log('Real-time earnings update received:', payload);
+          // Trigger payment animation for new earnings
+          if (payload.eventType === 'INSERT' && payload.new?.recycler_earnings) {
+            setLastPaymentAmount(payload.new.recycler_earnings);
+            triggerPaymentAnimation();
+          }
+          // Refresh earnings data when changes occur
+          loadEarningsData(false);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('Cleaning up real-time earnings subscription');
+      subscription.unsubscribe();
     };
+  }, [currentUser, loadEarningsData]);
 
-    // Add to payment history
-    setPaymentHistory(prev => [newPayment, ...prev]);
-    
-    // Update earnings stats
-    setEarningsStats(prev => ({
-      ...prev,
-      totalEarnings: prev.totalEarnings + newPayment.amount,
-      todayEarnings: prev.todayEarnings + newPayment.amount,
-      completedPickups: prev.completedPickups + 1,
-      averagePerPickup: Math.round((prev.totalEarnings + newPayment.amount) / (prev.completedPickups + 1))
-    }));
-
-    // Show payment animation
-    setLastPaymentAmount(newPayment.amount);
-    setShowPaymentAnimation(true);
-    
-    // Hide animation after 3 seconds
-    setTimeout(() => {
-      setShowPaymentAnimation(false);
-    }, 3000);
-
-    // Animate the payment notification
-    Animated.sequence([
-      Animated.timing(scaleAnim, {
-        toValue: 1.2,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
+  // ===== PERIOD FILTER EFFECT =====
+  // Recalculate earnings when period changes
+  useEffect(() => {
+    if (allEarningsData.length > 0) {
+      calculateFilteredEarnings(allEarningsData, selectedPeriod);
+    }
+  }, [selectedPeriod, allEarningsData, calculateFilteredEarnings]);
 
   // ===== REFRESH HANDLER =====
   // This handles pull-to-refresh functionality
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await loadMockEarningsData(false);
+    await loadEarningsData(false);
     setIsRefreshing(false);
-  }, [loadMockEarningsData]);
+  }, [loadEarningsData]);
 
   // ===== PERIOD CHANGE HANDLER =====
   // This handles changing between different time periods
   const handlePeriodChange = (period: string) => {
     setSelectedPeriod(period);
-    // In a real app, you would fetch data for the selected period
-    // For now, we'll just update the UI
+    // Recalculate earnings based on the new period
+    if (allEarningsData.length > 0) {
+      calculateFilteredEarnings(allEarningsData, period);
+    }
   };
 
   // ===== PAYMENT DETAILS HANDLER =====
@@ -262,12 +408,44 @@ export default function EarningsScreen() {
       <View style={styles.summaryCard}>
         <View style={styles.summaryHeader}>
           <FontAwesome5 name="money-bill-wave" size={24} color={COLORS.green} />
-          <Text style={styles.summaryTitle}>Total Earnings</Text>
+          <Text style={styles.summaryTitle}>
+            {selectedPeriod === 'day' ? 'Today\'s Earnings' : 
+             selectedPeriod === 'week' ? 'This Week\'s Earnings' :
+             selectedPeriod === 'month' ? 'This Month\'s Earnings' :
+             selectedPeriod === 'year' ? 'This Year\'s Earnings' : 'Total Earnings'}
+          </Text>
         </View>
         <Text style={styles.summaryAmount}>₵{earningsStats.totalEarnings.toLocaleString()}</Text>
         <Text style={styles.summarySubtext}>{earningsStats.completedPickups} pickups completed</Text>
       </View>
 
+      {/* Dynamic Secondary Cards based on selected period */}
+      {selectedPeriod === 'day' && (
+        <>
+          {/* Yesterday's Earnings Card */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryHeader}>
+              <FontAwesome5 name="calendar-day" size={24} color={COLORS.gray} />
+              <Text style={styles.summaryTitle}>Yesterday</Text>
+            </View>
+            <Text style={styles.summaryAmount}>₵{earningsStats.yesterdayEarnings}</Text>
+            <Text style={styles.summarySubtext}>Yesterday's earnings</Text>
+          </View>
+
+          {/* This Week's Earnings Card */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryHeader}>
+              <FontAwesome5 name="calendar-week" size={24} color={COLORS.blue} />
+              <Text style={styles.summaryTitle}>This Week</Text>
+            </View>
+            <Text style={styles.summaryAmount}>₵{earningsStats.weeklyEarnings}</Text>
+            <Text style={styles.summarySubtext}>Weekly earnings</Text>
+          </View>
+        </>
+      )}
+
+      {selectedPeriod === 'week' && (
+        <>
       {/* Today's Earnings Card */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryHeader}>
@@ -278,7 +456,21 @@ export default function EarningsScreen() {
         <Text style={styles.summarySubtext}>Today's earnings</Text>
       </View>
 
-      {/* Weekly Earnings Card */}
+          {/* Yesterday's Earnings Card */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryHeader}>
+              <FontAwesome5 name="calendar-day" size={24} color={COLORS.gray} />
+              <Text style={styles.summaryTitle}>Yesterday</Text>
+            </View>
+            <Text style={styles.summaryAmount}>₵{earningsStats.yesterdayEarnings}</Text>
+            <Text style={styles.summarySubtext}>Yesterday's earnings</Text>
+          </View>
+        </>
+      )}
+
+      {selectedPeriod === 'month' && (
+        <>
+          {/* This Week's Earnings Card */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryHeader}>
           <FontAwesome5 name="calendar-week" size={24} color={COLORS.blue} />
@@ -288,7 +480,21 @@ export default function EarningsScreen() {
         <Text style={styles.summarySubtext}>Weekly earnings</Text>
       </View>
 
-      {/* Monthly Earnings Card */}
+          {/* Today's Earnings Card */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryHeader}>
+              <FontAwesome5 name="calendar-day" size={24} color={COLORS.orange} />
+              <Text style={styles.summaryTitle}>Today</Text>
+            </View>
+            <Text style={styles.summaryAmount}>₵{earningsStats.todayEarnings}</Text>
+            <Text style={styles.summarySubtext}>Today's earnings</Text>
+          </View>
+        </>
+      )}
+
+      {selectedPeriod === 'year' && (
+        <>
+          {/* This Month's Earnings Card */}
               <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
             <FontAwesome5 name="calendar-alt" size={24} color={COLORS.blue} />
@@ -297,6 +503,18 @@ export default function EarningsScreen() {
           <Text style={styles.summaryAmount}>₵{earningsStats.monthlyEarnings.toLocaleString()}</Text>
           <Text style={styles.summarySubtext}>Monthly earnings</Text>
         </View>
+
+          {/* This Week's Earnings Card */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryHeader}>
+              <FontAwesome5 name="calendar-week" size={24} color={COLORS.blue} />
+              <Text style={styles.summaryTitle}>This Week</Text>
+            </View>
+            <Text style={styles.summaryAmount}>₵{earningsStats.weeklyEarnings}</Text>
+            <Text style={styles.summarySubtext}>Weekly earnings</Text>
+          </View>
+        </>
+      )}
     </View>
   );
 
@@ -341,6 +559,12 @@ export default function EarningsScreen() {
       <View style={styles.paymentDetails}>
         <Text style={styles.paymentWasteType}>{payment.wasteType}</Text>
         <Text style={styles.paymentWeight}>{payment.weight}</Text>
+        {payment.ecoPoints > 0 && (
+          <View style={styles.ecoPointsContainer}>
+            <MaterialIcons name="eco" size={16} color={COLORS.green} />
+            <Text style={styles.ecoPointsText}>+{payment.ecoPoints} eco points</Text>
+          </View>
+        )}
       </View>
       
       <View style={styles.paymentStatus}>
@@ -384,40 +608,6 @@ export default function EarningsScreen() {
           </View>
         </View>
 
-        {/* Demo Section - Remove in production */}
-        <View style={styles.demoContainer}>
-          <Text style={styles.demoTitle}>🧪 Demo Real-time Updates</Text>
-          <View style={styles.demoButtons}>
-            <TouchableOpacity 
-              style={styles.demoButton}
-              onPress={() => {
-                const demoPayment = {
-                  amount: Math.floor(Math.random() * 50) + 10, // Random amount between 10-60
-                  pickupId: `demo_${Date.now()}`,
-                  customer_name: 'Demo Customer',
-                  waste_type: 'Mixed Waste',
-                  weight: Math.floor(Math.random() * 10) + 5
-                };
-                // emitPaymentReceived(demoPayment); // This line is removed as per the edit hint
-              }}
-            >
-              <Text style={styles.demoButtonText}>Simulate Payment</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.demoButton}
-              onPress={() => {
-                const demoPickup = {
-                  pickupId: `demo_pickup_${Date.now()}`,
-                  status: 'completed',
-                  completedAt: new Date()
-                };
-                // emitPickupCompleted(demoPickup); // This line is removed as per the edit hint
-              }}
-            >
-              <Text style={styles.demoButtonText}>Simulate Pickup</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* Payment Animation */}
         {showPaymentAnimation && (
@@ -560,24 +750,7 @@ export default function EarningsScreen() {
         </View>
 
         {/* Period Selector */}
-        <View style={styles.periodSelector}>
-          <TouchableOpacity 
-            style={[styles.periodButton, selectedPeriod === 'week' && styles.periodButtonActive]}
-            onPress={() => setSelectedPeriod('week')}
-          >
-            <Text style={[styles.periodText, selectedPeriod === 'week' && styles.periodTextActive]}>
-              This Week
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.periodButton, selectedPeriod === 'month' && styles.periodButtonActive]}
-            onPress={() => setSelectedPeriod('month')}
-          >
-            <Text style={[styles.periodText, selectedPeriod === 'month' && styles.periodTextActive]}>
-              This Month
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {renderPeriodSelector()}
 
         {/* Loading State */}
         {isLoading && (
@@ -662,7 +835,24 @@ export default function EarningsScreen() {
           </View>
           
           <View style={styles.paymentHistoryContainer}>
-            {paymentHistory.map(renderPaymentItem)}
+            {paymentHistory.length > 0 ? (
+              paymentHistory.map(renderPaymentItem)
+            ) : (
+              <View style={styles.emptyStateContainer}>
+                <MaterialIcons name="payment" size={48} color={COLORS.gray} />
+                <Text style={styles.emptyStateTitle}>No Payments Yet</Text>
+                <Text style={styles.emptyStateText}>
+                  {selectedPeriod === 'day' ? 'No payments today' :
+                   selectedPeriod === 'week' ? 'No payments this week' :
+                   selectedPeriod === 'month' ? 'No payments this month' :
+                   selectedPeriod === 'year' ? 'No payments this year' :
+                   'No payments found'}
+                </Text>
+                <Text style={styles.emptyStateSubtext}>
+                  Complete your first pickup to see payment history here
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -1294,5 +1484,40 @@ const styles = StyleSheet.create({
   periodButtonTextActive: {
     color: COLORS.white,
     fontWeight: 'bold',
+  },
+  ecoPointsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  ecoPointsText: {
+    fontSize: 12,
+    color: COLORS.green,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.black,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 12,
+    color: COLORS.lightGray,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

@@ -1,7 +1,9 @@
 import { Feather, FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
+    RefreshControl,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -9,72 +11,194 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-// Mock recycler stats (replacing utils/recyclerStats)
-const recyclerStats = {
-  getTotalAvailableRequestsCount: () => 5,
-  isPaymentRequired: () => false,
-  getSubscriptionFeeString: () => '₵0.00',
-  getActivePickupsCount: () => 3,
-  getTodayEarnings: () => 45.80,
-  getCompletedPickupsCount: () => 8
-};
-
-const COLORS = {
-  primary: '#4CAF50',
-  secondary: '#8BC34A',
-  accent: '#FF9800',
-  success: '#4CAF50',
-  warning: '#FF9800',
-  error: '#F44336',
-  text: '#333333',
-  textLight: '#666666',
-  background: '#F5F5F5',
-  white: '#FFFFFF',
-  gray: '#9E9E9E',
-  lightGray: '#E0E0E0',
-  darkGreen: '#2E7D32',
-  lightGreen: '#C8E6C9',
-  blue: '#2196F3',
-  purple: '#9C27B0',
-};
+import { COLORS } from '../../constants';
+import { supabase } from '../../lib/supabase';
 
 export default function AnalyticsScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState('week');
-
-  // Real data based on recycler's actual performance
-  const recyclerPerformanceData = {
-    week: {
-      totalPickups: recyclerStats.getCompletedPickupsCount(),
-      totalEarnings: recyclerStats.getTodayEarnings(),
-      averagePickupValue: recyclerStats.getTodayEarnings() / Math.max(recyclerStats.getCompletedPickupsCount(), 1),
-      efficiency: 85, // percentage
-      dailyPerformance: [
-        { day: 'Mon', pickups: 8, earnings: 120 },
-        { day: 'Tue', pickups: 12, earnings: 180 },
-        { day: 'Wed', pickups: 10, earnings: 150 },
-        { day: 'Thu', pickups: 15, earnings: 225 },
-        { day: 'Fri', pickups: 14, earnings: 210 },
-        { day: 'Sat', pickups: 6, earnings: 90 },
-        { day: 'Sun', pickups: 4, earnings: 60 },
-      ]
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Analytics data state
+  const [analyticsData, setAnalyticsData] = useState({
+    totalPickups: 0,
+    totalEarnings: 0,
+    averagePickupValue: 0,
+    efficiency: 0,
+    dailyPerformance: [] as Array<{ day: string; pickups: number; earnings: number; }>,
+    environmentalImpact: {
+      wasteDiverted: 0,
+      co2Reduced: 0,
+      treesEquivalent: 0,
+      landfillSpaceSaved: 0,
+      energySaved: 0,
     }
-  };
+  });
 
-  // Calculate environmental impact based on actual completed pickups
-  const getEnvironmentalImpact = () => {
-    const completedPickups = recyclerStats.getCompletedPickupsCount();
-    const avgWastePerPickup = 12; // kg average per pickup
+  // ===== DATA FETCHING FUNCTIONS =====
+  const loadAnalyticsData = useCallback(async (showLoading = true) => {
+    try {
+      if (showLoading) setIsLoading(true);
+      
+      if (!currentUser) {
+        console.log('No current user, skipping analytics data load');
+        return;
+      }
+
+      // Calculate date range based on selected period
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      const startDate = selectedPeriod === 'week' ? weekAgo : monthAgo;
+
+      // Fetch recycler earnings data
+      const { data: earningsData, error: earningsError } = await supabase
+        .from('recycler_earnings')
+        .select(`
+          *,
+          pickup_requests!inner(
+            id,
+            customer_id,
+            pickup_address,
+            waste_type,
+            status
+          )
+        `)
+        .eq('recycler_id', currentUser.id)
+        .eq('status', 'completed')
+        .gte('completed_at', startDate.toISOString())
+        .order('completed_at', { ascending: false });
+
+      if (earningsError) {
+        console.error('Error fetching analytics data:', earningsError);
+        throw earningsError;
+      }
+
+      // Calculate analytics metrics
+      const totalPickups = earningsData?.length || 0;
+      const totalEarnings = earningsData?.reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0) || 0;
+      const averagePickupValue = totalPickups > 0 ? totalEarnings / totalPickups : 0;
+      
+      // Calculate efficiency based on actual performance vs target
+      // Target: 20 pickups per week, 80 per month
+      const targetPickups = selectedPeriod === 'week' ? 20 : 80;
+      const efficiency = totalPickups > 0 ? Math.min(100, Math.round((totalPickups / targetPickups) * 100)) : 0;
+
+      // Calculate daily performance
+      const dailyPerformance = calculateDailyPerformance(earningsData || [], selectedPeriod);
+
+      // Calculate environmental impact based on waste type and weight
+      const totalWaste = earningsData?.reduce((sum, earning) => sum + (earning.weight || 0), 0) || 0;
+      
+      // Environmental impact factors (these could be stored in database as configuration)
+      const ENVIRONMENTAL_FACTORS = {
+        co2PerKg: 0.5, // kg CO2 equivalent per kg of waste
+        co2PerTree: 20, // kg CO2 per tree
+        landfillSpacePerKg: 0.7, // cubic meters per kg
+        energyPerKg: 1.4, // kWh per kg
+      };
+      
+      const environmentalImpact = {
+        wasteDiverted: totalWaste,
+        co2Reduced: totalWaste * ENVIRONMENTAL_FACTORS.co2PerKg,
+        treesEquivalent: Math.floor(totalWaste * ENVIRONMENTAL_FACTORS.co2PerKg / ENVIRONMENTAL_FACTORS.co2PerTree),
+        landfillSpaceSaved: totalWaste * ENVIRONMENTAL_FACTORS.landfillSpacePerKg,
+        energySaved: totalWaste * ENVIRONMENTAL_FACTORS.energyPerKg,
+      };
+
+      setAnalyticsData({
+        totalPickups,
+        totalEarnings,
+        averagePickupValue,
+        efficiency,
+        dailyPerformance,
+        environmentalImpact,
+      });
+
+      console.log('Analytics data loaded successfully:', {
+        totalPickups,
+        totalEarnings: Math.round(totalEarnings),
+        efficiency
+      });
+      
+    } catch (error) {
+      console.error('Error loading analytics data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser, selectedPeriod]);
+
+  // Calculate daily performance data
+  const calculateDailyPerformance = (earningsData: any[], period: string) => {
+    const days = period === 'week' ? 7 : 30;
+    const performance = [];
     
-    return {
-      wasteDiverted: completedPickups * avgWastePerPickup, // kg
-      co2Reduced: completedPickups * avgWastePerPickup * 0.5, // kg CO2 equivalent
-      treesEquivalent: Math.floor(completedPickups * avgWastePerPickup * 0.5 / 20), // 20kg CO2 per tree
-      landfillSpaceSaved: completedPickups * avgWastePerPickup * 0.7, // cubic meters
-      energySaved: completedPickups * avgWastePerPickup * 1.4, // kWh
-    };
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      
+      const dayEarnings = earningsData.filter(earning => {
+        const earningDate = new Date(earning.completed_at);
+        return earningDate >= dayStart && earningDate < dayEnd;
+      });
+      
+      const pickups = dayEarnings.length;
+      const earnings = dayEarnings.reduce((sum, earning) => sum + (earning.recycler_earnings || 0), 0);
+      
+      performance.push({
+        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        pickups,
+        earnings: Math.round(earnings),
+      });
+    }
+    
+    return performance;
   };
 
-  const environmentalImpact = getEnvironmentalImpact();
+  // ===== USER AUTHENTICATION EFFECT =====
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error('Error getting current user:', error);
+          return;
+        }
+        if (user) {
+          setCurrentUser(user);
+          console.log('Current user loaded:', user.id);
+        }
+      } catch (error) {
+        console.error('Error in getCurrentUser:', error);
+      }
+    };
+
+    getCurrentUser();
+  }, []);
+
+  // ===== INITIALIZATION EFFECT =====
+  useEffect(() => {
+    if (currentUser) {
+      loadAnalyticsData();
+    }
+  }, [currentUser, loadAnalyticsData]);
+
+  // ===== REFRESH HANDLER =====
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await loadAnalyticsData(false);
+    setIsRefreshing(false);
+  }, [loadAnalyticsData]);
+
+  // ===== PERIOD CHANGE HANDLER =====
+  const handlePeriodChange = (period: string) => {
+    setSelectedPeriod(period);
+  };
 
   const renderProgressBar = (percentage: number, color: string) => (
     <View style={styles.progressContainer}>
@@ -124,8 +248,6 @@ export default function AnalyticsScreen() {
     </View>
   );
 
-  const performanceData = recyclerPerformanceData.week;
-
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -137,26 +259,47 @@ export default function AnalyticsScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Period Selector */}
-        <View style={styles.periodSelector}>
-          <TouchableOpacity 
-            style={[styles.periodButton, selectedPeriod === 'week' && styles.periodButtonActive]}
-            onPress={() => setSelectedPeriod('week')}
-          >
-            <Text style={[styles.periodText, selectedPeriod === 'week' && styles.periodTextActive]}>
-              This Week
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.periodButton, selectedPeriod === 'month' && styles.periodButtonActive]}
-            onPress={() => setSelectedPeriod('month')}
-          >
-            <Text style={[styles.periodText, selectedPeriod === 'month' && styles.periodTextActive]}>
-              This Month
-            </Text>
-          </TouchableOpacity>
-        </View>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
+      >
+        {/* Loading State */}
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading analytics...</Text>
+          </View>
+        )}
+
+        {!isLoading && (
+          <>
+            {/* Period Selector */}
+            <View style={styles.periodSelector}>
+              <TouchableOpacity 
+                style={[styles.periodButton, selectedPeriod === 'week' && styles.periodButtonActive]}
+                onPress={() => handlePeriodChange('week')}
+              >
+                <Text style={[styles.periodText, selectedPeriod === 'week' && styles.periodTextActive]}>
+                  This Week
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.periodButton, selectedPeriod === 'month' && styles.periodButtonActive]}
+                onPress={() => handlePeriodChange('month')}
+              >
+                <Text style={[styles.periodText, selectedPeriod === 'month' && styles.periodTextActive]}>
+                  This Month
+                </Text>
+              </TouchableOpacity>
+            </View>
 
         {/* Waste Reduction Overview */}
         <View style={styles.section}>
@@ -169,17 +312,17 @@ export default function AnalyticsScreen() {
             <View style={styles.overviewRow}>
               <View style={styles.overviewItem}>
                 <Text style={styles.overviewLabel}>Waste Diverted</Text>
-                <Text style={styles.overviewValue}>{environmentalImpact.wasteDiverted} kg</Text>
+                <Text style={styles.overviewValue}>{analyticsData.environmentalImpact.wasteDiverted.toFixed(1)} kg</Text>
               </View>
               <View style={styles.overviewItem}>
                 <Text style={styles.overviewLabel}>Pickups Completed</Text>
-                <Text style={styles.overviewValue}>{recyclerStats.getCompletedPickupsCount()}</Text>
+                <Text style={styles.overviewValue}>{analyticsData.totalPickups}</Text>
               </View>
             </View>
             
             <View style={styles.reductionContainer}>
               <Text style={styles.reductionTitle}>Impact Rate</Text>
-              {renderProgressBar(100, COLORS.success)} {/* 100% impact for completed pickups */}
+              {renderProgressBar(analyticsData.totalPickups > 0 ? 100 : 0, COLORS.success)} {/* 100% impact for completed pickups */}
             </View>
           </View>
         </View>
@@ -194,28 +337,28 @@ export default function AnalyticsScreen() {
           <View style={styles.metricsGrid}>
             {renderMetricCard(
               'Total Pickups',
-              performanceData.totalPickups.toString(),
-              'Completed this week',
+              analyticsData.totalPickups.toString(),
+              `Completed this ${selectedPeriod}`,
               <MaterialIcons name="local-shipping" size={20} color={COLORS.blue} />,
               COLORS.blue
             )}
             {renderMetricCard(
               'Total Earnings',
-              `GHS ${performanceData.totalEarnings.toFixed(2)}`,
-              'This week&apos;s income',
+              `₵${analyticsData.totalEarnings.toFixed(2)}`,
+              `This ${selectedPeriod}'s income`,
               <FontAwesome5 name="dollar-sign" size={18} color={COLORS.success} />,
               COLORS.success
             )}
             {renderMetricCard(
               'Avg. Pickup Value',
-              `GHS ${performanceData.averagePickupValue.toFixed(2)}`,
+              `₵${analyticsData.averagePickupValue.toFixed(2)}`,
               'Per pickup average',
               <MaterialIcons name="trending-up" size={20} color={COLORS.accent} />,
               COLORS.accent
             )}
             {renderMetricCard(
               'Efficiency Rate',
-              `${performanceData.efficiency}%`,
+              `${analyticsData.efficiency}%`,
               'Performance score',
               <MaterialIcons name="speed" size={20} color={COLORS.purple} />,
               COLORS.purple
@@ -233,22 +376,22 @@ export default function AnalyticsScreen() {
           <View style={styles.impactGrid}>
             <View style={styles.impactCard}>
               <Ionicons name="leaf-outline" size={24} color={COLORS.darkGreen} />
-              <Text style={styles.impactValue}>{environmentalImpact.co2Reduced} kg</Text>
+              <Text style={styles.impactValue}>{analyticsData.environmentalImpact.co2Reduced.toFixed(1)} kg</Text>
               <Text style={styles.impactLabel}>CO₂ Reduced</Text>
             </View>
             <View style={styles.impactCard}>
               <MaterialIcons name="park" size={24} color={COLORS.darkGreen} />
-              <Text style={styles.impactValue}>{environmentalImpact.treesEquivalent}</Text>
+              <Text style={styles.impactValue}>{analyticsData.environmentalImpact.treesEquivalent}</Text>
               <Text style={styles.impactLabel}>Trees Equivalent</Text>
             </View>
             <View style={styles.impactCard}>
               <MaterialIcons name="storage" size={24} color={COLORS.darkGreen} />
-              <Text style={styles.impactValue}>{environmentalImpact.landfillSpaceSaved} m³</Text>
+              <Text style={styles.impactValue}>{analyticsData.environmentalImpact.landfillSpaceSaved.toFixed(1)} m³</Text>
               <Text style={styles.impactLabel}>Landfill Space Saved</Text>
             </View>
             <View style={styles.impactCard}>
               <MaterialIcons name="flash-on" size={24} color={COLORS.darkGreen} />
-              <Text style={styles.impactValue}>{environmentalImpact.energySaved} kWh</Text>
+              <Text style={styles.impactValue}>{analyticsData.environmentalImpact.energySaved.toFixed(1)} kWh</Text>
               <Text style={styles.impactLabel}>Energy Saved</Text>
             </View>
           </View>
@@ -262,15 +405,20 @@ export default function AnalyticsScreen() {
           </View>
           
           <View style={styles.chartContainer}>
-            {performanceData.dailyPerformance.map((day, index) => (
-              <View key={index} style={styles.chartRow}>
-                <Text style={styles.chartDay}>{day.day}</Text>
-                <View style={styles.chartBars}>
-                  {renderChartBar('Pickups', day.pickups, 15, COLORS.blue)}
-                  {renderChartBar('Earnings', day.earnings, 250, COLORS.success)}
+            {analyticsData.dailyPerformance.map((day, index) => {
+              const maxPickups = Math.max(...analyticsData.dailyPerformance.map(d => d.pickups), 1);
+              const maxEarnings = Math.max(...analyticsData.dailyPerformance.map(d => d.earnings), 1);
+              
+              return (
+                <View key={index} style={styles.chartRow}>
+                  <Text style={styles.chartDay}>{day.day}</Text>
+                  <View style={styles.chartBars}>
+                    {renderChartBar('Pickups', day.pickups, maxPickups, COLORS.blue)}
+                    {renderChartBar('Earnings', day.earnings, maxEarnings, COLORS.success)}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </View>
 
@@ -292,7 +440,7 @@ export default function AnalyticsScreen() {
                       style={[
                         styles.trendBarFill, 
                         { 
-                          width: `${(12 / 250) * 100}%`,
+                          width: `${Math.min(100, (analyticsData.environmentalImpact.wasteDiverted / 50) * 100)}%`,
                           backgroundColor: COLORS.error
                         }
                       ]} 
@@ -306,7 +454,7 @@ export default function AnalyticsScreen() {
                       style={[
                         styles.trendBarFill, 
                         { 
-                          width: `${(12 / 250) * 100}%`,
+                          width: `${Math.min(100, (analyticsData.environmentalImpact.wasteDiverted / 50) * 100)}%`,
                           backgroundColor: COLORS.success
                         }
                       ]} 
@@ -317,6 +465,8 @@ export default function AnalyticsScreen() {
             </View>
           </View>
         </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -610,5 +760,16 @@ const styles = StyleSheet.create({
   trendBarFill: {
     height: '100%',
     borderRadius: 2,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: COLORS.textLight,
   },
 }); 

@@ -43,6 +43,16 @@ export default function RecyclerHomeTab() {
     todayEarnings: 0,
     totalEarnings: 0
   });
+  const [recycler, setRecycler] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    status: 'unverified',
+    type: 'recycler' as const,
+    totalPickups: 0,
+    totalEarnings: '₵0.00',
+    memberSince: 'Unknown',
+  });
   const [mapMarkers, setMapMarkers] = useState<Array<{
     id: string;
     coordinate: { latitude: number; longitude: number };
@@ -84,16 +94,21 @@ export default function RecyclerHomeTab() {
   // useAutoOfflineManager();
 
   // Create recycler object from real data
-  const recycler = {
-    name: verificationData?.full_name || 'Recycler',
-    email: verificationData?.email || '',
-    phone: verificationData?.phone || '',
-    status: verificationStatus || 'unverified',
-    type: 'recycler' as const,
-    totalPickups: isVerified ? 156 : 0, // TODO: Fetch real pickup count
-    totalEarnings: isVerified ? '₵2,450.80' : '₵0.00', // TODO: Fetch real earnings
-    memberSince: verificationData?.created_at ? new Date(verificationData.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown',
-  };
+  // Initialize recycler data when verification data is available
+  useEffect(() => {
+    if (verificationData) {
+      setRecycler({
+        name: verificationData?.full_name || 'Recycler',
+        email: verificationData?.email || '',
+        phone: verificationData?.phone || '',
+        status: verificationStatus || 'unverified',
+        type: 'recycler' as const,
+        totalPickups: 0, // Will be updated by fetchRecyclerData
+        totalEarnings: '₵0.00', // Will be updated by fetchRecyclerData
+        memberSince: verificationData?.created_at ? new Date(verificationData.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown',
+      });
+    }
+  }, [verificationData, verificationStatus]);
 
   // Fetch real pickup requests and stats
   const fetchRecyclerData = async () => {
@@ -106,7 +121,20 @@ export default function RecyclerHomeTab() {
       
       console.log('Fetching recycler data for user:', user.id);
 
-      // Fetch pickup requests for this recycler
+      // Fetch ALL pickup requests for this recycler (including completed ones)
+      const { data: allPickupRequests, error: allRequestsError } = await supabase
+        .from('pickup_requests')
+        .select('*')
+        .eq('recycler_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (allRequestsError) {
+        console.error('Error fetching all pickup requests:', allRequestsError);
+      } else {
+        console.log('Fetched all pickup requests:', allPickupRequests?.length || 0, 'requests');
+      }
+
+      // Fetch active pickup requests (pending, confirmed, accepted, in_progress)
       const { data: pickupRequests, error: requestsError } = await supabase
         .from('pickup_requests')
         .select('*')
@@ -115,20 +143,53 @@ export default function RecyclerHomeTab() {
         .order('created_at', { ascending: false });
 
       if (requestsError) {
-        console.error('Error fetching pickup requests:', requestsError);
+        console.error('Error fetching active pickup requests:', requestsError);
       } else {
         const requestCount = pickupRequests?.length || 0;
-        console.log('Fetched pickup requests:', requestCount, 'requests');
-        console.log('Request details:', pickupRequests);
+        console.log('Fetched active pickup requests:', requestCount, 'requests');
         setRequests(requestCount);
       }
 
-      // Fetch recycler stats (mock for now - would need actual tables)
+      // Calculate real statistics
+      const completedPickups = allPickupRequests?.filter(r => r.status === 'completed').length || 0;
+      const totalPickups = allPickupRequests?.length || 0;
+      const activePickups = pickupRequests?.filter(r => r.status === 'in_progress').length || 0;
+      
+      // Calculate earnings from completed pickups (if final_price is available)
+      const totalEarnings = allPickupRequests
+        ?.filter(r => r.status === 'completed' && r.final_price)
+        .reduce((sum, r) => sum + (r.final_price || 0), 0) || 0;
+      
+      // Calculate today's earnings
+      const today = new Date().toISOString().split('T')[0];
+      const todayEarnings = allPickupRequests
+        ?.filter(r => r.status === 'completed' && 
+                     r.final_price && 
+                     r.updated_at?.startsWith(today))
+        .reduce((sum, r) => sum + (r.final_price || 0), 0) || 0;
+
+      console.log('Real stats calculated:', {
+        completedPickups,
+        totalPickups,
+        activePickups,
+        totalEarnings,
+        todayEarnings
+      });
+
+      // Update the recycler object with real data
+      setRecycler(prev => ({
+        ...prev,
+        totalPickups: completedPickups, // Use completed pickups as total
+        totalEarnings: `₵${totalEarnings.toFixed(2)}`,
+        completedPickups: completedPickups
+      }));
+
+      // Fetch recycler stats with real data
       const stats: RecyclerStats = {
-        totalRequests: pickupRequests?.length || 0,
-        activePickups: pickupRequests?.filter(r => r.status === 'in_progress').length || 0,
-        todayEarnings: 45.80, // TODO: Calculate from actual earnings
-        totalEarnings: 2450.80 // TODO: Calculate from actual earnings
+        totalRequests: totalPickups,
+        activePickups: activePickups,
+        todayEarnings: todayEarnings,
+        totalEarnings: totalEarnings
       };
       setRecyclerStats(stats);
 

@@ -22,98 +22,6 @@ const getStatusText = (status: string) => {
   }
 };
 
-// Mock data constants
-const HISTORY_DATA = [
-  {
-    id: '1',
-    date: '2024-01-15',
-    recyclerName: 'Green Team Recycling',
-    pickupLocation: 'Accra Central',
-    weight: '25.5 kg',
-    amount: 'GHS 12.75',
-    status: 'completed',
-    recyclerImage: require('../../assets/images/blend.jpg'),
-    wasteType: 'Mixed Waste',
-    totalAmount: 'GHS 15.25',
-    environmentalTax: 'GHS 2.50',
-    pickupTime: '14:30'
-  }
-];
-
-
-
-// ===== MOCK DATA FOR HISTORY SCREEN =====
-// This replaces the customerStats utility with local mock data
-// In a real app, this would come from a database or local storage
-
-// Mock customer pickup history data
-const mockCustomerHistory = [
-  {
-    id: 'pickup_001',
-    date: '2024-01-15',
-    recyclerName: 'Green Team Recycling',
-    pickupLocation: 'Gold Hostel, Komfo Anokye',
-    weight: 8,
-    amount: 12.50,
-    status: 'completed',
-    wasteType: 'Mixed Waste',
-    totalAmount: 15.75,
-    environmentalTax: 3.25,
-    time: '14:30'
-  },
-  {
-    id: 'pickup_002',
-    date: '2024-01-12',
-    recyclerName: 'Eco Collectors',
-    pickupLocation: 'KNUST Campus',
-    weight: 12,
-    amount: 18.00,
-    status: 'completed',
-    wasteType: 'Paper & Cardboard',
-    totalAmount: 22.50,
-    environmentalTax: 4.50,
-    time: '16:15'
-  },
-  {
-    id: 'pickup_003',
-    date: '2024-01-10',
-    recyclerName: 'Waste Management Pro',
-    pickupLocation: 'Adum Business District',
-    weight: 5,
-    amount: 7.50,
-    status: 'completed',
-    wasteType: 'Plastic',
-    totalAmount: 9.40,
-    environmentalTax: 1.90,
-    time: '11:45'
-  },
-  {
-    id: 'pickup_004',
-    date: '2024-01-08',
-    recyclerName: 'Green Team Recycling',
-    pickupLocation: 'Kejetia Market',
-    weight: 15,
-    amount: 22.50,
-    status: 'completed',
-    wasteType: 'Mixed Waste',
-    totalAmount: 28.15,
-    environmentalTax: 5.65,
-    time: '13:20'
-  },
-  {
-    id: 'pickup_005',
-    date: '2024-01-05',
-    recyclerName: 'Eco Collectors',
-    pickupLocation: 'Manhyia Palace Area',
-    weight: 6,
-    amount: 9.00,
-    status: 'completed',
-    wasteType: 'Glass & Metal',
-    totalAmount: 11.30,
-    environmentalTax: 2.30,
-    time: '15:00'
-  }
-];
 
 interface HistoryItem {
   id: string;
@@ -171,32 +79,14 @@ export default function HistoryScreen() {
     }
   }, [params.completedPickup, params.requestId, params.recyclerName, params.pickup, params.weight, params.wasteType, params.amount, params.environmentalTax, params.totalAmount]);
 
-  // ===== MOCK DATA INITIALIZATION =====
-  // This replaces the customerStats utility with local mock data
+  // ===== REAL DATA INITIALIZATION =====
+  // This loads real history data from the database
   useEffect(() => {
-    // Transform mock customer history to match HistoryItem interface
-    const enhancedHistory = mockCustomerHistory.map(pickup => ({
-      id: pickup.id,
-      date: pickup.date,
-      recyclerName: pickup.recyclerName,
-      pickupLocation: pickup.pickupLocation,
-      weight: `${pickup.weight} kg`,
-      amount: `GHS ${pickup.amount.toFixed(2)}`,
-      status: pickup.status,
-      recyclerImage: require('../../assets/images/blend.jpg'), // Use existing image
-      wasteType: pickup.wasteType,
-      totalAmount: `GHS ${pickup.totalAmount.toFixed(2)}`,
-      environmentalTax: `GHS ${pickup.environmentalTax.toFixed(2)}`,
-      pickupTime: pickup.time
-    }));
-
-    // Combine with existing mock data and remove duplicates
-    const allHistory = [...enhancedHistory, ...HISTORY_DATA];
-    const uniqueHistory = allHistory.filter((item, index, self) => 
-      index === self.findIndex(t => t.id === item.id)
-    );
-
-    setHistoryData(uniqueHistory);
+    // TODO: Implement real database calls to fetch customer history
+    // This should connect to the pickup_requests table and filter by customer_id
+    
+    // For now, start with empty array
+    setHistoryData([]);
   }, []);
 
   const filteredHistory = historyData.filter(item => {

@@ -21,6 +21,26 @@ interface AnalyticsData {
     description: string;
     timestamp: string;
   }>;
+  recyclerLeaderboard: Array<{
+    id: string;
+    name: string;
+    email: string;
+    totalPickups: number;
+    totalEarnings: number;
+    totalEcoPoints: number;
+    averageRating: number;
+    rank: number;
+  }>;
+  customerLeaderboard: Array<{
+    id: string;
+    name: string;
+    email: string;
+    totalPickups: number;
+    totalWasteRecycled: number;
+    totalCo2Saved: number;
+    totalPoints: number;
+    rank: number;
+  }>;
 }
 
 export default function AdminAnalyticsScreen() {
@@ -37,13 +57,170 @@ export default function AdminAnalyticsScreen() {
     rejectedVerifications: 0,
     newUsersThisMonth: 0,
     growthRate: 0,
-    recentActivity: []
+    recentActivity: [],
+    recyclerLeaderboard: [],
+    customerLeaderboard: []
   });
 
   useEffect(() => {
     checkAdminAccess();
     fetchAnalyticsData();
   }, []);
+
+  const fetchRecyclerLeaderboard = async () => {
+    try {
+      // Fetch recycler earnings data with user info
+      const { data: earningsData, error: earningsError } = await supabase
+        .from('recycler_earnings')
+        .select(`
+          recycler_id,
+          total_amount,
+          recycler_earnings,
+          eco_points_earned,
+          completed_at
+        `)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false });
+
+      if (earningsError) {
+        console.error('Error fetching recycler earnings:', earningsError);
+        return [];
+      }
+
+      // Fetch recycler details
+      const { data: recyclersData, error: recyclersError } = await supabase
+        .from('recyclers')
+        .select('id, full_name, email')
+        .in('id', earningsData?.map(e => e.recycler_id) || []);
+
+      if (recyclersError) {
+        console.error('Error fetching recyclers:', recyclersError);
+        return [];
+      }
+
+      // Calculate leaderboard data
+      const recyclerStats = new Map();
+      
+      earningsData?.forEach(earning => {
+        const recyclerId = earning.recycler_id;
+        if (!recyclerStats.has(recyclerId)) {
+          recyclerStats.set(recyclerId, {
+            id: recyclerId,
+            totalPickups: 0,
+            totalEarnings: 0,
+            totalEcoPoints: 0
+          });
+        }
+        
+        const stats = recyclerStats.get(recyclerId);
+        stats.totalPickups += 1;
+        stats.totalEarnings += earning.recycler_earnings || 0;
+        stats.totalEcoPoints += earning.eco_points_earned || 0;
+      });
+
+      // Create leaderboard array
+      const leaderboard = Array.from(recyclerStats.values())
+        .map(stats => {
+          const recycler = recyclersData?.find(r => r.id === stats.id);
+          return {
+            ...stats,
+            name: recycler?.full_name || 'Unknown',
+            email: recycler?.email || '',
+            averageRating: 4.5 // Mock rating for now
+          };
+        })
+        .sort((a, b) => b.totalEcoPoints - a.totalEcoPoints) // Sort by eco points
+        .slice(0, 10) // Top 10
+        .map((item, index) => ({
+          ...item,
+          rank: index + 1
+        }));
+
+      return leaderboard;
+    } catch (error) {
+      console.error('Error fetching recycler leaderboard:', error);
+      return [];
+    }
+  };
+
+  const fetchCustomerLeaderboard = async () => {
+    try {
+      // Fetch pickup requests data
+      const { data: pickupData, error: pickupError } = await supabase
+        .from('pickup_requests')
+        .select(`
+          customer_id,
+          weight,
+          status,
+          final_price,
+          created_at
+        `)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false });
+
+      if (pickupError) {
+        console.error('Error fetching pickup data:', pickupError);
+        return [];
+      }
+
+      // Fetch customer details
+      const { data: customersData, error: customersError } = await supabase
+        .from('customers')
+        .select('id, full_name, email')
+        .in('id', pickupData?.map(p => p.customer_id) || []);
+
+      if (customersError) {
+        console.error('Error fetching customers:', customersError);
+        return [];
+      }
+
+      // Calculate customer stats
+      const customerStats = new Map();
+      
+      pickupData?.forEach(pickup => {
+        const customerId = pickup.customer_id;
+        if (!customerStats.has(customerId)) {
+          customerStats.set(customerId, {
+            id: customerId,
+            totalPickups: 0,
+            totalWasteRecycled: 0,
+            totalCo2Saved: 0,
+            totalPoints: 0
+          });
+        }
+        
+        const stats = customerStats.get(customerId);
+        stats.totalPickups += 1;
+        
+        const weight = parseFloat(pickup.weight?.replace(' kg', '') || '0');
+        stats.totalWasteRecycled += weight;
+        stats.totalCo2Saved += weight * 0.5; // 0.5 kg CO2 saved per kg of waste
+        stats.totalPoints += Math.floor(weight * 10); // 10 points per kg
+      });
+
+      // Create leaderboard array
+      const leaderboard = Array.from(customerStats.values())
+        .map(stats => {
+          const customer = customersData?.find(c => c.id === stats.id);
+          return {
+            ...stats,
+            name: customer?.full_name || 'Unknown',
+            email: customer?.email || ''
+          };
+        })
+        .sort((a, b) => b.totalWasteRecycled - a.totalWasteRecycled) // Sort by waste recycled
+        .slice(0, 10) // Top 10
+        .map((item, index) => ({
+          ...item,
+          rank: index + 1
+        }));
+
+      return leaderboard;
+    } catch (error) {
+      console.error('Error fetching customer leaderboard:', error);
+      return [];
+    }
+  };
 
   const fetchRecentActivities = async () => {
     try {
@@ -205,8 +382,12 @@ export default function AdminAnalyticsScreen() {
       
       const growthRate = usersLastMonth > 0 ? ((newUsersThisMonth - usersLastMonth) / usersLastMonth) * 100 : 0;
 
-      // Fetch recent activities from various sources
-      const recentActivities = await fetchRecentActivities();
+      // Fetch recent activities and leaderboards
+      const [recentActivities, recyclerLeaderboard, customerLeaderboard] = await Promise.all([
+        fetchRecentActivities(),
+        fetchRecyclerLeaderboard(),
+        fetchCustomerLeaderboard()
+      ]);
 
       setAnalyticsData({
         totalUsers,
@@ -218,7 +399,9 @@ export default function AdminAnalyticsScreen() {
         rejectedVerifications,
         newUsersThisMonth,
         growthRate,
-        recentActivity: recentActivities
+        recentActivity: recentActivities,
+        recyclerLeaderboard,
+        customerLeaderboard
       });
 
     } catch (error) {
@@ -442,6 +625,116 @@ export default function AdminAnalyticsScreen() {
               <View style={styles.noActivityContainer}>
                 <MaterialIcons name="history" size={32} color="#CCCCCC" />
                 <Text style={styles.noActivityText}>No recent activity</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Recycler Leaderboard */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🏆 Top Performing Recyclers</Text>
+          <View style={styles.leaderboardCard}>
+            <View style={styles.leaderboardHeader}>
+              <MaterialIcons name="local-shipping" size={24} color="#207E06" />
+              <Text style={styles.leaderboardTitle}>Eco Points Leaderboard</Text>
+            </View>
+            {analyticsData.recyclerLeaderboard.length > 0 ? (
+              analyticsData.recyclerLeaderboard.map((recycler, index) => (
+                <View key={recycler.id} style={styles.leaderboardItem}>
+                  <View style={styles.rankContainer}>
+                    <Text style={[
+                      styles.rankNumber,
+                      index < 3 && styles.rankNumberTop
+                    ]}>
+                      {recycler.rank}
+                    </Text>
+                    {index < 3 && (
+                      <MaterialIcons 
+                        name={index === 0 ? "emoji-events" : index === 1 ? "workspace-premium" : "military-tech"} 
+                        size={16} 
+                        color={index === 0 ? "#FFD700" : index === 1 ? "#C0C0C0" : "#CD7F32"} 
+                      />
+                    )}
+                  </View>
+                  <View style={styles.leaderboardContent}>
+                    <Text style={styles.leaderboardName}>{recycler.name}</Text>
+                    <Text style={styles.leaderboardEmail}>{recycler.email}</Text>
+                    <View style={styles.leaderboardStats}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{recycler.totalEcoPoints}</Text>
+                        <Text style={styles.statLabel}>Eco Points</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{recycler.totalPickups}</Text>
+                        <Text style={styles.statLabel}>Pickups</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>₵{recycler.totalEarnings.toFixed(2)}</Text>
+                        <Text style={styles.statLabel}>Earnings</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.noDataContainer}>
+                <MaterialIcons name="local-shipping" size={32} color="#CCCCCC" />
+                <Text style={styles.noDataText}>No recycler data available</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Customer Leaderboard */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🌱 Top Environmental Contributors</Text>
+          <View style={styles.leaderboardCard}>
+            <View style={styles.leaderboardHeader}>
+              <MaterialIcons name="eco" size={24} color="#4CAF50" />
+              <Text style={styles.leaderboardTitle}>Waste Recycled Leaderboard</Text>
+            </View>
+            {analyticsData.customerLeaderboard.length > 0 ? (
+              analyticsData.customerLeaderboard.map((customer, index) => (
+                <View key={customer.id} style={styles.leaderboardItem}>
+                  <View style={styles.rankContainer}>
+                    <Text style={[
+                      styles.rankNumber,
+                      index < 3 && styles.rankNumberTop
+                    ]}>
+                      {customer.rank}
+                    </Text>
+                    {index < 3 && (
+                      <MaterialIcons 
+                        name={index === 0 ? "emoji-events" : index === 1 ? "workspace-premium" : "military-tech"} 
+                        size={16} 
+                        color={index === 0 ? "#FFD700" : index === 1 ? "#C0C0C0" : "#CD7F32"} 
+                      />
+                    )}
+                  </View>
+                  <View style={styles.leaderboardContent}>
+                    <Text style={styles.leaderboardName}>{customer.name}</Text>
+                    <Text style={styles.leaderboardEmail}>{customer.email}</Text>
+                    <View style={styles.leaderboardStats}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{customer.totalWasteRecycled.toFixed(1)}kg</Text>
+                        <Text style={styles.statLabel}>Waste Recycled</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{customer.totalCo2Saved.toFixed(1)}kg</Text>
+                        <Text style={styles.statLabel}>CO₂ Saved</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{customer.totalPoints}</Text>
+                        <Text style={styles.statLabel}>Points</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.noDataContainer}>
+                <MaterialIcons name="eco" size={32} color="#CCCCCC" />
+                <Text style={styles.noDataText}>No customer data available</Text>
               </View>
             )}
           </View>
@@ -774,6 +1067,96 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   noActivityText: {
+    fontSize: 14,
+    color: '#CCCCCC',
+    marginTop: 8,
+  },
+  // Leaderboard styles
+  leaderboardCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  leaderboardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  leaderboardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginLeft: 12,
+  },
+  leaderboardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8F8F8',
+  },
+  rankContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+    minWidth: 40,
+  },
+  rankNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#666666',
+    marginRight: 8,
+  },
+  rankNumberTop: {
+    color: '#207E06',
+    fontSize: 20,
+  },
+  leaderboardContent: {
+    flex: 1,
+  },
+  leaderboardName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 4,
+  },
+  leaderboardEmail: {
+    fontSize: 12,
+    color: '#666666',
+    marginBottom: 12,
+  },
+  leaderboardStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#207E06',
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 10,
+    color: '#666666',
+    textAlign: 'center',
+  },
+  noDataContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  noDataText: {
     fontSize: 14,
     color: '#CCCCCC',
     marginTop: 8,
