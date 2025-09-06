@@ -15,14 +15,11 @@ export function useClearNotifications() {
         return false;
       }
 
+      // Delete all notifications instead of just marking as read
       const { error } = await supabase
         .from('notifications')
-        .update({ 
-          is_read: true, 
-          read_at: new Date().toISOString() 
-        })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
+        .delete()
+        .eq('user_id', user.id);
 
       if (error) {
         console.error('Error clearing notifications:', error);
@@ -46,14 +43,14 @@ export function useClearNotifications() {
   const handleClearNotifications = useCallback(() => {
     Alert.alert(
       'Clear All Notifications',
-      'Are you sure you want to mark all notifications as read?',
+      'Are you sure you want to permanently delete all notifications? This action cannot be undone.',
       [
         {
           text: 'Cancel',
           style: 'cancel',
         },
         {
-          text: 'Clear',
+          text: 'Delete All',
           style: 'destructive',
           onPress: async () => {
             const success = await clearAllNotifications();

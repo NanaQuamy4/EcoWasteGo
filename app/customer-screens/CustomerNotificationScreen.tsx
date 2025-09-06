@@ -51,8 +51,8 @@ export default function CustomerNotificationScreen() {
   // Custom clear handler that also refreshes local notifications
   const handleClearNotifications = async () => {
     await originalHandleClearNotifications();
-    // Reload notifications to reflect the cleared state
-    await loadNotifications();
+    // Clear local notifications since they're deleted from database
+    setNotifications([]);
   };
 
   // Get current user
