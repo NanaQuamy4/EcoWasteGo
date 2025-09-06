@@ -2,16 +2,16 @@ import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    RefreshControl,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { COLORS } from '../../constants';
 import { supabase } from '../../lib/supabase';
@@ -429,7 +429,7 @@ export default function EarningsScreen() {
               <Text style={styles.summaryTitle}>Yesterday</Text>
             </View>
             <Text style={styles.summaryAmount}>₵{earningsStats.yesterdayEarnings}</Text>
-            <Text style={styles.summarySubtext}>Yesterday's earnings</Text>
+            <Text style={styles.summarySubtext}>Yesterday&apos;s earnings</Text>
           </View>
 
           {/* This Week's Earnings Card */}
@@ -453,7 +453,7 @@ export default function EarningsScreen() {
           <Text style={styles.summaryTitle}>Today</Text>
         </View>
         <Text style={styles.summaryAmount}>₵{earningsStats.todayEarnings}</Text>
-        <Text style={styles.summarySubtext}>Today's earnings</Text>
+        <Text style={styles.summarySubtext}>Today&apos;s earnings</Text>
       </View>
 
           {/* Yesterday's Earnings Card */}
@@ -463,7 +463,7 @@ export default function EarningsScreen() {
               <Text style={styles.summaryTitle}>Yesterday</Text>
             </View>
             <Text style={styles.summaryAmount}>₵{earningsStats.yesterdayEarnings}</Text>
-            <Text style={styles.summarySubtext}>Yesterday's earnings</Text>
+            <Text style={styles.summarySubtext}>Yesterday&apos;s earnings</Text>
           </View>
         </>
       )}
@@ -487,7 +487,7 @@ export default function EarningsScreen() {
               <Text style={styles.summaryTitle}>Today</Text>
             </View>
             <Text style={styles.summaryAmount}>₵{earningsStats.todayEarnings}</Text>
-            <Text style={styles.summarySubtext}>Today's earnings</Text>
+            <Text style={styles.summarySubtext}>Today&apos;s earnings</Text>
           </View>
         </>
       )}
@@ -659,7 +659,7 @@ export default function EarningsScreen() {
         {/* Real-time Quick Stats */}
         <View style={styles.quickStatsContainer}>
           <View style={styles.quickStatItem}>
-            <Text style={styles.quickStatLabel}>Today's Earnings</Text>
+            <Text style={styles.quickStatLabel}>Today&apos;s Earnings</Text>
             <Text style={[styles.quickStatValue, { color: showPaymentAnimation ? COLORS.green : COLORS.primary }]}>
               ₵{earningsStats.todayEarnings.toFixed(2)}
             </Text>
@@ -706,7 +706,7 @@ export default function EarningsScreen() {
           </View>
           <View style={styles.earningsBreakdownContent}>
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Today's Earnings:</Text>
+              <Text style={styles.breakdownLabel}>Today&apos;s Earnings:</Text>
               <Text style={[styles.breakdownValue, { color: COLORS.green }]}>
                 ₵{earningsStats.todayEarnings.toFixed(2)}
               </Text>

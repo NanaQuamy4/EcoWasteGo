@@ -270,7 +270,7 @@ export default function AdminNotificationsScreen() {
         <View style={styles.emptyContainer}>
           <MaterialIcons name="notifications-none" size={80} color="#CCCCCC" />
           <Text style={styles.emptyTitle}>No Notifications</Text>
-          <Text style={styles.emptySubtitle}>You're all caught up! New notifications will appear here.</Text>
+          <Text style={styles.emptySubtitle}>You&apos;re all caught up! New notifications will appear here.</Text>
         </View>
       ) : (
         <FlatList

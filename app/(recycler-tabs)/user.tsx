@@ -144,7 +144,7 @@ export default function RecyclerUserTab() {
   const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
   const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
-  const [showStatusSwitch, setShowStatusSwitch] = useState(false);
+  // const [showStatusSwitch, setShowStatusSwitch] = useState(false);
   // Use real notification count
   const { notificationCount } = useNotificationCount();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -304,14 +304,14 @@ export default function RecyclerUserTab() {
     }
   };
 
-  const handleStatusSwitch = (newStatus: string) => {
-    // Disable role switching for recyclers - they should stay in recycler mode
-    Alert.alert(
-      'Role Switching Disabled',
-      'Recyclers cannot switch to customer mode. Please contact support if you need to change your account type.',
-      [{ text: 'OK' }]
-    );
-  };
+  // const handleStatusSwitch = (newStatus: string) => {
+  //   // Disable role switching for recyclers - they should stay in recycler mode
+  //   Alert.alert(
+  //     'Role Switching Disabled',
+  //     'Recyclers cannot switch to customer mode. Please contact support if you need to change your account type.',
+  //     [{ text: 'OK' }]
+  //   );
+  // };
 
   const handleDeleteYes = () => {
     setDeleteStep(2);
@@ -579,7 +579,7 @@ export default function RecyclerUserTab() {
           <View style={styles.statCard}>
             <MaterialIcons name="trending-up" size={24} color={COLORS.orange} />
             <Text style={styles.statNumber}>{realPickupData.todayEcoPoints}</Text>
-            <Text style={styles.statLabel}>Today's Points</Text>
+            <Text style={styles.statLabel}>Today&apos;s Points</Text>
           </View>
           <View style={styles.statCard}>
             <MaterialIcons name="event" size={24} color={COLORS.darkGreen} />

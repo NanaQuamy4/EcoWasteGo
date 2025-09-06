@@ -462,7 +462,7 @@ export default function AdminVerifications() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Driver's License Document</Text>
+              <Text style={styles.modalTitle}>Driver&apos;s License Document</Text>
               <TouchableOpacity 
                 onPress={() => setImageModalVisible(false)}
                 style={styles.closeButton}

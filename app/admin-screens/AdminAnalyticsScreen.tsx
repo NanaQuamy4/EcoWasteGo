@@ -41,6 +41,18 @@ interface AnalyticsData {
     totalPoints: number;
     rank: number;
   }>;
+  regionalAnalytics: Array<{
+    region: string;
+    totalRequests: number;
+    completedRequests: number;
+    totalWasteRecycled: number;
+    averageRating: number;
+    topWasteTypes: Array<{
+      type: string;
+      count: number;
+    }>;
+    rank: number;
+  }>;
 }
 
 export default function AdminAnalyticsScreen() {
@@ -59,7 +71,8 @@ export default function AdminAnalyticsScreen() {
     growthRate: 0,
     recentActivity: [],
     recyclerLeaderboard: [],
-    customerLeaderboard: []
+    customerLeaderboard: [],
+    regionalAnalytics: []
   });
 
   useEffect(() => {
@@ -68,6 +81,37 @@ export default function AdminAnalyticsScreen() {
   }, []);
 
   const fetchRecyclerLeaderboard = async () => {
+    try {
+      // Use the rating leaderboard function for better data
+      const { data: ratingLeaderboard, error: ratingError } = await supabase
+        .rpc('get_recycler_rating_leaderboard');
+
+      if (ratingError) {
+        console.error('Error fetching rating leaderboard:', ratingError);
+        // Fallback to earnings-based leaderboard
+        return await fetchEarningsBasedLeaderboard();
+      }
+
+      // Transform rating leaderboard data
+      const leaderboard = ratingLeaderboard?.map((item: any, index: number) => ({
+        id: item.recycler_id,
+        name: item.recycler_name,
+        email: '', // Not available in rating function
+        totalPickups: item.total_ratings,
+        totalEarnings: 0, // Not available in rating function
+        totalEcoPoints: 0, // Not available in rating function
+        averageRating: parseFloat(item.average_rating.toString()),
+        rank: item.rank
+      })) || [];
+
+      return leaderboard;
+    } catch (error) {
+      console.error('Error fetching recycler leaderboard:', error);
+      return [];
+    }
+  };
+
+  const fetchEarningsBasedLeaderboard = async () => {
     try {
       // Fetch recycler earnings data with user info
       const { data: earningsData, error: earningsError } = await supabase
@@ -138,7 +182,7 @@ export default function AdminAnalyticsScreen() {
 
       return leaderboard;
     } catch (error) {
-      console.error('Error fetching recycler leaderboard:', error);
+      console.error('Error fetching earnings-based leaderboard:', error);
       return [];
     }
   };
@@ -150,7 +194,7 @@ export default function AdminAnalyticsScreen() {
         .from('pickup_requests')
         .select(`
           customer_id,
-          weight,
+          estimated_weight,
           status,
           final_price,
           created_at
@@ -192,7 +236,7 @@ export default function AdminAnalyticsScreen() {
         const stats = customerStats.get(customerId);
         stats.totalPickups += 1;
         
-        const weight = parseFloat(pickup.weight?.replace(' kg', '') || '0');
+        const weight = parseFloat(pickup.estimated_weight?.toString() || '0');
         stats.totalWasteRecycled += weight;
         stats.totalCo2Saved += weight * 0.5; // 0.5 kg CO2 saved per kg of waste
         stats.totalPoints += Math.floor(weight * 10); // 10 points per kg
@@ -222,9 +266,180 @@ export default function AdminAnalyticsScreen() {
     }
   };
 
+  const fetchRegionalAnalytics = async () => {
+    try {
+      // Fetch pickup requests data with location information
+      const { data: pickupData, error: pickupError } = await supabase
+        .from('pickup_requests')
+        .select(`
+          pickup_address,
+          estimated_weight,
+          waste_type,
+          status,
+          customer_rating,
+          created_at
+        `)
+        .order('created_at', { ascending: false });
+
+      if (pickupError) {
+        console.error('Error fetching pickup data for regional analytics:', pickupError);
+        return [];
+      }
+
+      // Extract regions from addresses
+      const extractRegion = (address: string): string => {
+        if (!address) return 'Unknown';
+        
+        // Common Ghana regions and areas
+        const regions = [
+          'Greater Accra', 'Ashanti', 'Western', 'Central', 'Volta', 'Eastern',
+          'Northern', 'Upper East', 'Upper West', 'Brong-Ahafo', 'Western North',
+          'Ahafo', 'Bono', 'Bono East', 'Oti', 'Savannah', 'North East'
+        ];
+        
+        const addressLower = address.toLowerCase();
+        
+        // Check for specific regions
+        for (const region of regions) {
+          if (addressLower.includes(region.toLowerCase())) {
+            return region;
+          }
+        }
+        
+        // Check for major cities that can indicate regions
+        if (addressLower.includes('accra') || addressLower.includes('tema')) {
+          return 'Greater Accra';
+        }
+        if (addressLower.includes('kumasi') || addressLower.includes('obuasi')) {
+          return 'Ashanti';
+        }
+        if (addressLower.includes('takoradi') || addressLower.includes('sekondi')) {
+          return 'Western';
+        }
+        if (addressLower.includes('cape coast') || addressLower.includes('kasoa')) {
+          return 'Central';
+        }
+        if (addressLower.includes('ho') || addressLower.includes('keta')) {
+          return 'Volta';
+        }
+        if (addressLower.includes('koforidua') || addressLower.includes('akim')) {
+          return 'Eastern';
+        }
+        if (addressLower.includes('tamale') || addressLower.includes('yendi')) {
+          return 'Northern';
+        }
+        if (addressLower.includes('bolgatanga') || addressLower.includes('navrongo')) {
+          return 'Upper East';
+        }
+        if (addressLower.includes('wa') || addressLower.includes('lawra')) {
+          return 'Upper West';
+        }
+        if (addressLower.includes('sunyani') || addressLower.includes('techiman')) {
+          return 'Bono';
+        }
+        
+        // If no specific region found, try to extract from common patterns
+        const parts = address.split(',').map(part => part.trim());
+        if (parts.length > 1) {
+          const lastPart = parts[parts.length - 1].toLowerCase();
+          if (lastPart.includes('region') || lastPart.includes('district')) {
+            return parts[parts.length - 1];
+          }
+        }
+        
+        return 'Other';
+      };
+
+      // Calculate regional stats
+      const regionalStats = new Map<string, {
+        region: string;
+        totalRequests: number;
+        completedRequests: number;
+        totalWasteRecycled: number;
+        totalRating: number;
+        ratingCount: number;
+        wasteTypeCounts: Map<string, number>;
+      }>();
+      
+      pickupData?.forEach(pickup => {
+        const region = extractRegion(pickup.pickup_address);
+        
+        if (!regionalStats.has(region)) {
+          regionalStats.set(region, {
+            region,
+            totalRequests: 0,
+            completedRequests: 0,
+            totalWasteRecycled: 0,
+            totalRating: 0,
+            ratingCount: 0,
+            wasteTypeCounts: new Map()
+          });
+        }
+        
+        const stats = regionalStats.get(region);
+        if (stats) {
+          stats.totalRequests += 1;
+          
+          if (pickup.status === 'completed') {
+            stats.completedRequests += 1;
+            
+            const weight = parseFloat(pickup.estimated_weight?.toString() || '0');
+            stats.totalWasteRecycled += weight;
+            
+            if (pickup.customer_rating) {
+              stats.totalRating += pickup.customer_rating;
+              stats.ratingCount += 1;
+            }
+            
+            // Count waste types
+            const wasteType = pickup.waste_type || 'general';
+            stats.wasteTypeCounts.set(wasteType, (stats.wasteTypeCounts.get(wasteType) || 0) + 1);
+          }
+        }
+      });
+
+      // Create regional analytics array
+      const regionalAnalytics = Array.from(regionalStats.values())
+        .map(stats => {
+          const averageRating = stats.ratingCount > 0 ? stats.totalRating / stats.ratingCount : 0;
+          
+          // Get top 3 waste types
+          const topWasteTypes = Array.from(stats.wasteTypeCounts.entries())
+            .sort((a, b) => (b[1] as number) - (a[1] as number))
+            .slice(0, 3)
+            .map(([type, count]) => ({ type: type as string, count: count as number }));
+          
+          return {
+            region: stats.region,
+            totalRequests: stats.totalRequests,
+            completedRequests: stats.completedRequests,
+            totalWasteRecycled: Math.round(stats.totalWasteRecycled * 10) / 10, // Round to 1 decimal
+            averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
+            topWasteTypes: topWasteTypes as Array<{ type: string; count: number }>
+          };
+        })
+        .sort((a, b) => b.totalRequests - a.totalRequests) // Sort by total requests
+        .slice(0, 10) // Top 10 regions
+        .map((item, index) => ({
+          ...item,
+          rank: index + 1
+        }));
+
+      return regionalAnalytics;
+    } catch (error) {
+      console.error('Error fetching regional analytics:', error);
+      return [];
+    }
+  };
+
   const fetchRecentActivities = async () => {
     try {
-      const activities = [];
+      const activities: Array<{
+        id: string;
+        type: string;
+        description: string;
+        timestamp: string;
+      }> = [];
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
@@ -337,8 +552,8 @@ export default function AdminAnalyticsScreen() {
       const nonAdminRecyclers = recyclersResult.data?.filter(r => !isAdminUser(r.email)) || [];
 
       // Remove duplicates (in case user exists in both tables)
-      const allEmails = new Set();
-      const uniqueUsers = [];
+      const allEmails = new Set<string>();
+      const uniqueUsers: Array<{ id: string; email: string; created_at: string; verification_status?: string }> = [];
       
       // Add all recyclers first
       nonAdminRecyclers.forEach(recycler => {
@@ -382,11 +597,12 @@ export default function AdminAnalyticsScreen() {
       
       const growthRate = usersLastMonth > 0 ? ((newUsersThisMonth - usersLastMonth) / usersLastMonth) * 100 : 0;
 
-      // Fetch recent activities and leaderboards
-      const [recentActivities, recyclerLeaderboard, customerLeaderboard] = await Promise.all([
+      // Fetch recent activities, leaderboards, and regional analytics
+      const [recentActivities, recyclerLeaderboard, customerLeaderboard, regionalAnalytics] = await Promise.all([
         fetchRecentActivities(),
         fetchRecyclerLeaderboard(),
-        fetchCustomerLeaderboard()
+        fetchCustomerLeaderboard(),
+        fetchRegionalAnalytics()
       ]);
 
       setAnalyticsData({
@@ -401,7 +617,8 @@ export default function AdminAnalyticsScreen() {
         growthRate,
         recentActivity: recentActivities,
         recyclerLeaderboard,
-        customerLeaderboard
+        customerLeaderboard,
+        regionalAnalytics
       });
 
     } catch (error) {
@@ -636,7 +853,7 @@ export default function AdminAnalyticsScreen() {
           <View style={styles.leaderboardCard}>
             <View style={styles.leaderboardHeader}>
               <MaterialIcons name="local-shipping" size={24} color="#207E06" />
-              <Text style={styles.leaderboardTitle}>Eco Points Leaderboard</Text>
+              <Text style={styles.leaderboardTitle}>Top Rated Recyclers</Text>
             </View>
             {analyticsData.recyclerLeaderboard.length > 0 ? (
               analyticsData.recyclerLeaderboard.map((recycler, index) => (
@@ -661,16 +878,16 @@ export default function AdminAnalyticsScreen() {
                     <Text style={styles.leaderboardEmail}>{recycler.email}</Text>
                     <View style={styles.leaderboardStats}>
                       <View style={styles.statItem}>
-                        <Text style={styles.statValue}>{recycler.totalEcoPoints}</Text>
-                        <Text style={styles.statLabel}>Eco Points</Text>
+                        <Text style={styles.statValue}>{recycler.averageRating.toFixed(1)}</Text>
+                        <Text style={styles.statLabel}>Avg Rating</Text>
                       </View>
                       <View style={styles.statItem}>
                         <Text style={styles.statValue}>{recycler.totalPickups}</Text>
-                        <Text style={styles.statLabel}>Pickups</Text>
+                        <Text style={styles.statLabel}>Ratings</Text>
                       </View>
                       <View style={styles.statItem}>
-                        <Text style={styles.statValue}>₵{recycler.totalEarnings.toFixed(2)}</Text>
-                        <Text style={styles.statLabel}>Earnings</Text>
+                        <Text style={styles.statValue}>{recycler.totalEcoPoints || 0}</Text>
+                        <Text style={styles.statLabel}>Eco Points</Text>
                       </View>
                     </View>
                   </View>
@@ -740,13 +957,81 @@ export default function AdminAnalyticsScreen() {
           </View>
         </View>
 
+        {/* Regional Analytics */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🗺️ Regional Performance</Text>
+          <View style={styles.leaderboardCard}>
+            <View style={styles.leaderboardHeader}>
+              <MaterialIcons name="location-on" size={24} color="#2196F3" />
+              <Text style={styles.leaderboardTitle}>Top Regions by Pickup Requests</Text>
+            </View>
+            {analyticsData.regionalAnalytics.length > 0 ? (
+              analyticsData.regionalAnalytics.map((region, index) => (
+                <View key={region.region} style={styles.leaderboardItem}>
+                  <View style={styles.rankContainer}>
+                    <Text style={[
+                      styles.rankNumber,
+                      index < 3 && styles.rankNumberTop
+                    ]}>
+                      {region.rank}
+                    </Text>
+                    {index < 3 && (
+                      <MaterialIcons 
+                        name={index === 0 ? "emoji-events" : index === 1 ? "workspace-premium" : "military-tech"} 
+                        size={16} 
+                        color={index === 0 ? "#FFD700" : index === 1 ? "#C0C0C0" : "#CD7F32"} 
+                      />
+                    )}
+                  </View>
+                  <View style={styles.leaderboardContent}>
+                    <Text style={styles.leaderboardName}>{region.region}</Text>
+                    <View style={styles.leaderboardStats}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{region.totalRequests}</Text>
+                        <Text style={styles.statLabel}>Total Requests</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{region.completedRequests}</Text>
+                        <Text style={styles.statLabel}>Completed</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{region.totalWasteRecycled}kg</Text>
+                        <Text style={styles.statLabel}>Waste Recycled</Text>
+                      </View>
+                    </View>
+                    <View style={styles.regionalDetails}>
+                      <View style={styles.regionalDetailItem}>
+                        <MaterialIcons name="star" size={14} color="#FF9800" />
+                        <Text style={styles.regionalDetailText}>
+                          Avg Rating: {region.averageRating > 0 ? region.averageRating.toFixed(1) : 'N/A'}
+                        </Text>
+                      </View>
+                      <View style={styles.regionalDetailItem}>
+                        <MaterialIcons name="recycling" size={14} color="#4CAF50" />
+                        <Text style={styles.regionalDetailText}>
+                          Top: {region.topWasteTypes[0]?.type || 'N/A'} ({region.topWasteTypes[0]?.count || 0})
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.noDataContainer}>
+                <MaterialIcons name="location-on" size={32} color="#CCCCCC" />
+                <Text style={styles.noDataText}>No regional data available</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
         {/* Coming Soon Section */}
         <View style={styles.section}>
           <View style={styles.comingSoonCard}>
             <MaterialIcons name="construction" size={48} color="#FF9800" />
             <Text style={styles.comingSoonTitle}>More Analytics Coming Soon</Text>
             <Text style={styles.comingSoonText}>
-              We're working on advanced analytics features including detailed reports, 
+              We&apos;re working on advanced analytics features including detailed reports, 
               user behavior insights, and performance metrics.
             </Text>
             <View style={styles.featureList}>
@@ -1160,5 +1445,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#CCCCCC',
     marginTop: 8,
+  },
+  // Regional analytics styles
+  regionalDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  regionalDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  regionalDetailText: {
+    fontSize: 12,
+    color: '#666666',
+    marginLeft: 4,
   },
 });

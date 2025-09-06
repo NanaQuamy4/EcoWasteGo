@@ -15,17 +15,17 @@ import { useRecyclerVerification } from '../../hooks/useRecyclerVerification';
 import { supabase } from '../../lib/supabase';
 
 // ===== REAL DATA INTERFACES =====
-interface PickupRequest {
-  id: string;
-  customer_id: string;
-  recycler_id: string | null;
-  pickup_address: string;
-  waste_type: string;
-  weight: number;
-  status: 'pending' | 'confirmed' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
-  created_at: string;
-  special_instructions?: string;
-}
+// interface PickupRequest {
+//   id: string;
+//   customer_id: string;
+//   recycler_id: string | null;
+//   pickup_address: string;
+//   waste_type: string;
+//   weight: number;
+//   status: 'pending' | 'confirmed' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
+//   created_at: string;
+//   special_instructions?: string;
+// }
 
 interface RecyclerStats {
   totalRequests: number;
@@ -43,23 +43,23 @@ export default function RecyclerHomeTab() {
     todayEarnings: 0,
     totalEarnings: 0
   });
-  const [recycler, setRecycler] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    status: 'unverified',
-    type: 'recycler' as const,
-    totalPickups: 0,
-    totalEarnings: '₵0.00',
-    memberSince: 'Unknown',
-  });
-  const [mapMarkers, setMapMarkers] = useState<Array<{
+  // const [recycler, setRecycler] = useState({
+  //   name: '',
+  //   email: '',
+  //   phone: '',
+  //   status: 'unverified',
+  //   type: 'recycler' as const,
+  //   totalPickups: 0,
+  //   totalEarnings: '₵0.00',
+  //   memberSince: 'Unknown',
+  // });
+  const [mapMarkers, setMapMarkers] = useState<{
     id: string;
     coordinate: { latitude: number; longitude: number };
     title: string;
     description: string;
     type: 'pickup' | 'recycler' | 'destination';
-  }>>([]);
+  }[]>([]);
 
   // Use real data hooks
   const {
@@ -71,10 +71,10 @@ export default function RecyclerHomeTab() {
     refreshVerification
   } = useRecyclerVerification();
 
-  const { notificationCount, loading: notificationLoading } = useNotificationCount();
+  const { notificationCount } = useNotificationCount();
   
   // New online status tracking
-  const { status: onlineStatus, loading: statusLoading, refetch: refetchStatus } = useCurrentRecyclerStatus();
+  const { status: onlineStatus, refetch: refetchStatus } = useCurrentRecyclerStatus();
   
   // Force refresh status when component mounts or when verification changes
   useEffect(() => {
@@ -88,7 +88,7 @@ export default function RecyclerHomeTab() {
       return () => clearTimeout(refreshTimer);
     }
   }, [isVerified, verificationData?.id, refetchStatus]);
-  const { startHeartbeat, stopHeartbeat, setOffline, getStatus } = useRecyclerHeartbeat();
+  const { startHeartbeat, stopHeartbeat, setOffline } = useRecyclerHeartbeat();
   
   // Auto-offline manager disabled - recycler has full manual control
   // useAutoOfflineManager();
@@ -97,16 +97,16 @@ export default function RecyclerHomeTab() {
   // Initialize recycler data when verification data is available
   useEffect(() => {
     if (verificationData) {
-      setRecycler({
-        name: verificationData?.full_name || 'Recycler',
-        email: verificationData?.email || '',
-        phone: verificationData?.phone || '',
-        status: verificationStatus || 'unverified',
-        type: 'recycler' as const,
-        totalPickups: 0, // Will be updated by fetchRecyclerData
-        totalEarnings: '₵0.00', // Will be updated by fetchRecyclerData
-        memberSince: verificationData?.created_at ? new Date(verificationData.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown',
-      });
+      // setRecycler({
+      //   name: verificationData?.full_name || 'Recycler',
+      //   email: verificationData?.email || '',
+      //   phone: verificationData?.phone || '',
+      //   status: verificationStatus || 'unverified',
+      //   type: 'recycler' as const,
+      //   totalPickups: 0, // Will be updated by fetchRecyclerData
+      //   totalEarnings: '₵0.00', // Will be updated by fetchRecyclerData
+      //   memberSince: verificationData?.created_at ? new Date(verificationData.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown',
+      // });
     }
   }, [verificationData, verificationStatus]);
 
@@ -177,12 +177,12 @@ export default function RecyclerHomeTab() {
       });
 
       // Update the recycler object with real data
-      setRecycler(prev => ({
-        ...prev,
-        totalPickups: completedPickups, // Use completed pickups as total
-        totalEarnings: `₵${totalEarnings.toFixed(2)}`,
-        completedPickups: completedPickups
-      }));
+      // setRecycler(prev => ({
+      //   ...prev,
+      //   totalPickups: completedPickups, // Use completed pickups as total
+      //   totalEarnings: `₵${totalEarnings.toFixed(2)}`,
+      //   completedPickups: completedPickups
+      // }));
 
       // Fetch recycler stats with real data
       const stats: RecyclerStats = {

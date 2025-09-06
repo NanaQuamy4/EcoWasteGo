@@ -98,12 +98,12 @@ export default function HomeScreen() {
     }
 
     // Filter mock location suggestions based on search text
-    const filteredSuggestions = mockLocationSuggestions.filter(suggestion =>
-      suggestion.toLowerCase().includes(searchText.toLowerCase())
-    );
+    // const filteredSuggestions = mockLocationSuggestions.filter((suggestion: string) =>
+    //   suggestion.toLowerCase().includes(searchText.toLowerCase())
+    // );
     
-    setLocationSuggestions(filteredSuggestions);
-    setShowSuggestions(filteredSuggestions.length > 0);
+    // setLocationSuggestions(filteredSuggestions);
+    // setShowSuggestions(filteredSuggestions.length > 0);
   };
 
   // Handle location selection
@@ -133,31 +133,31 @@ export default function HomeScreen() {
   // Check for active requests before allowing new pickup
   const checkActiveRequests = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { canPlace: true, activeRequest: null };
+      // const { data: { user } } = await supabase.auth.getUser();
+      // if (!user) return { canPlace: true, activeRequest: null };
 
-      const { data, error } = await supabase.rpc('can_customer_place_request', {
-        customer_id_param: user.id
-      });
+      // const { data, error } = await supabase.rpc('can_customer_place_request', {
+      //   customer_id_param: user.id
+      // });
 
-      if (error) {
-        console.error('HomeScreen: Error checking active requests:', error);
-        return { canPlace: true, activeRequest: null };
-      }
+      // if (error) {
+      //   console.error('HomeScreen: Error checking active requests:', error);
+      //   return { canPlace: true, activeRequest: null };
+      // }
 
-      if (data && data.length > 0) {
-        const result = data[0];
-        if (!result.can_place_request) {
-          return {
-            canPlace: false,
-            activeRequest: {
-              id: result.active_request_id,
-              status: result.active_request_status,
-              message: result.message
-            }
-          };
-        }
-      }
+      // if (data && data.length > 0) {
+      //   const result = data[0];
+      //   if (!result.can_place_request) {
+      //     return {
+      //       canPlace: false,
+      //       activeRequest: {
+      //         id: result.active_request_id,
+      //         status: result.active_request_status,
+      //         message: result.message
+      //       }
+      //     };
+      //   }
+      // }
 
       return { canPlace: true, activeRequest: null };
     } catch (error) {
@@ -175,7 +175,7 @@ export default function HomeScreen() {
     if (!activeRequestCheck.canPlace) {
       Alert.alert(
         'Active Request Found',
-        activeRequestCheck.activeRequest?.message || 'You have an active request that must be completed first',
+        'You have an active request that must be completed first',
         [
           { text: 'View Request', onPress: () => router.push('/customer-screens/WaitingForRecycler') },
           { text: 'Cancel', style: 'cancel' }
@@ -433,7 +433,7 @@ export default function HomeScreen() {
             {/* Refresh Button */}
             <TouchableOpacity 
               style={styles.refreshButton} 
-              onPress={loadMockData}
+              onPress={() => {}}
             >
               <MaterialIcons name="refresh" size={16} color={COLORS.darkGreen} />
               <Text style={styles.refreshText}>Refresh</Text>

@@ -1,7 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Image, Linking, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, DIMENSIONS } from '../../constants';
+import { supabase } from '../../lib/supabase';
 import CommonHeader from '../components/CommonHeader';
 
 // Local helper functions (replacing constants/helpers)
@@ -32,6 +33,8 @@ export default function HistoryDetailScreen() {
   const params = useLocalSearchParams();
   const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
+  const [pickupData, setPickupData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Extract parameters from navigation
   const id = params.id as string;
@@ -46,8 +49,62 @@ export default function HistoryDetailScreen() {
   const pickupTime = params.pickupTime as string;
   const environmentalTax = params.environmentalTax as string;
   const notes = params.notes as string;
+  const wasteType = params.wasteType as string;
+  const totalAmount = params.totalAmount as string;
+  const ecoPoints = params.ecoPoints as string;
 
+  // ===== FETCH DETAILED PICKUP DATA =====
+  useEffect(() => {
+    const fetchPickupDetails = async () => {
+      try {
+        setIsLoading(true);
+        
+        const { data, error } = await supabase
+          .from('pickup_requests')
+          .select(`
+            *,
+            recyclers!inner(
+              id,
+              full_name,
+              phone,
+              company_name
+            ),
+            payment_summaries(
+              id,
+              base_amount,
+              environmental_tax,
+              total_amount,
+              status,
+              notes
+            ),
+            customer_earnings(
+              id,
+              total_points,
+              weight_kg,
+              co2_saved,
+              trees_equivalent
+            )
+          `)
+          .eq('id', id)
+          .single();
 
+        if (error) {
+          console.error('Error fetching pickup details:', error);
+          return;
+        }
+
+        setPickupData(data);
+      } catch (error) {
+        console.error('Error in fetchPickupDetails:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (id) {
+      fetchPickupDetails();
+    }
+  }, [id]);
 
   const handleCallRecycler = () => {
     if (recyclerPhone) {
@@ -154,19 +211,58 @@ export default function HistoryDetailScreen() {
           <View style={styles.paymentRow}>
             <Text style={styles.paymentLabel}>Base Amount:</Text>
             <Text style={styles.paymentValue}>
-              GHS {(parseWeight(weight) * 1.20).toFixed(2)}
+              ₵{(parseWeight(weight) * 1.20).toFixed(2)}
             </Text>
           </View>
           <View style={styles.paymentRow}>
             <Text style={styles.paymentLabel}>Environmental Tax (5%):</Text>
-            <Text style={styles.paymentValue}>{environmentalTax}</Text>
+            <Text style={styles.paymentValue}>{environmentalTax || '₵0.00'}</Text>
           </View>
           <View style={[styles.paymentRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total Amount:</Text>
-            <Text style={styles.totalValue}>{amount}</Text>
+            <Text style={styles.totalValue}>{totalAmount || amount}</Text>
           </View>
         </View>
       </View>
+
+      {/* Eco Points & Environmental Impact Card */}
+      {(ecoPoints || pickupData?.customer_earnings?.[0]) && (
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>🌱 Environmental Impact</Text>
+          </View>
+          <View style={styles.environmentalDetails}>
+            {ecoPoints && (
+              <View style={styles.environmentalRow}>
+                <Text style={styles.environmentalLabel}>Eco Points Earned:</Text>
+                <Text style={styles.ecoPointsValue}>+{ecoPoints}</Text>
+              </View>
+            )}
+            {pickupData?.customer_earnings?.[0] && (
+              <>
+                <View style={styles.environmentalRow}>
+                  <Text style={styles.environmentalLabel}>CO₂ Saved:</Text>
+                  <Text style={styles.environmentalValue}>
+                    {pickupData.customer_earnings[0].co2_saved?.toFixed(2) || '0.00'} kg
+                  </Text>
+                </View>
+                <View style={styles.environmentalRow}>
+                  <Text style={styles.environmentalLabel}>Trees Equivalent:</Text>
+                  <Text style={styles.environmentalValue}>
+                    {pickupData.customer_earnings[0].trees_equivalent?.toFixed(2) || '0.00'}
+                  </Text>
+                </View>
+                <View style={styles.environmentalRow}>
+                  <Text style={styles.environmentalLabel}>Waste Diverted:</Text>
+                  <Text style={styles.environmentalValue}>
+                    {pickupData.customer_earnings[0].weight_kg?.toFixed(2) || '0.00'} kg
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Notes Card */}
       {notes && (
@@ -373,5 +469,28 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  environmentalDetails: {
+    marginTop: 8,
+  },
+  environmentalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  environmentalLabel: {
+    fontSize: 14,
+    color: COLORS.gray,
+  },
+  environmentalValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.darkGreen,
+  },
+  ecoPointsValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.green,
   },
 }); 

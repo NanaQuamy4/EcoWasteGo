@@ -4,6 +4,7 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 interface AppHeaderProps {
   onMenuPress?: () => void;
   onNotificationPress?: () => void;
+  onClearNotifications?: () => void;
   notificationCount?: number;
   leftIcon?: 'menu' | 'arrow-left';
   rightIcon?: 'bell' | 'list' | 'truck';
@@ -11,18 +12,21 @@ interface AppHeaderProps {
   onRightPress?: () => void;
   hideLeftIcon?: boolean;
   hideRightIcon?: boolean;
+  showClearButton?: boolean;
 }
 
 export default function AppHeader({ 
   onMenuPress, 
   onNotificationPress, 
+  onClearNotifications,
   notificationCount = 0,
   leftIcon = 'menu',
   rightIcon = 'bell',
   onLeftPress,
   onRightPress,
   hideLeftIcon = false,
-  hideRightIcon = false
+  hideRightIcon = false,
+  showClearButton = false
 }: AppHeaderProps) {
   return (
     <View style={styles.header}>
@@ -43,23 +47,33 @@ export default function AppHeader({
       </View>
       
       {!hideRightIcon && (
-        <TouchableOpacity 
-          style={styles.notificationButton} 
-          onPress={onRightPress || onNotificationPress}
-        >
-          {rightIcon === 'truck' ? (
-            <FontAwesome5 name="truck" size={24} color="#263A13" />
-          ) : (
-            <Feather name={rightIcon} size={26} color="#263A13" />
+        <View style={styles.rightContainer}>
+          {showClearButton && notificationCount > 0 && (
+            <TouchableOpacity 
+              style={styles.clearButton} 
+              onPress={onClearNotifications}
+            >
+              <Text style={styles.clearButtonText}>CLEAR</Text>
+            </TouchableOpacity>
           )}
-          {notificationCount > 0 && rightIcon === 'bell' && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {notificationCount > 99 ? '99+' : notificationCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.notificationButton} 
+            onPress={onRightPress || onNotificationPress}
+          >
+            {rightIcon === 'truck' ? (
+              <FontAwesome5 name="truck" size={24} color="#263A13" />
+            ) : (
+              <Feather name={rightIcon} size={26} color="#263A13" />
+            )}
+            {notificationCount > 0 && rightIcon === 'bell' && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {notificationCount > 99 ? '99+' : notificationCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -101,8 +115,24 @@ const styles = StyleSheet.create({
     height: 80,
     resizeMode: 'contain',
   },
+  rightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clearButton: {
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginRight: 4,
+  },
+  clearButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   notificationButton: {
-    marginLeft: 16,
     width: 40,
     height: 40,
     alignItems: 'center',

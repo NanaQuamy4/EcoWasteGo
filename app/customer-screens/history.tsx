@@ -1,7 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, RefreshControl, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, DIMENSIONS } from '../../constants';
+import { supabase } from '../../lib/supabase';
 
 // Local helper functions (replacing constants/helpers)
 const getStatusColor = (status: string) => {
@@ -39,6 +40,9 @@ interface HistoryItem {
   notes?: string;
   wasteType?: string;
   totalAmount?: string;
+  ecoPoints?: number;
+  recyclerId?: string;
+  completedAt?: string;
 }
 
 export default function HistoryScreen() {
@@ -46,6 +50,9 @@ export default function HistoryScreen() {
   const params = useLocalSearchParams();
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'completed' | 'cancelled' | 'pending'>('all');
   const [historyData, setHistoryData] = useState<HistoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   // Handle completed pickup from EcoImpactCelebration
   useEffect(() => {
@@ -79,20 +86,156 @@ export default function HistoryScreen() {
     }
   }, [params.completedPickup, params.requestId, params.recyclerName, params.pickup, params.weight, params.wasteType, params.amount, params.environmentalTax, params.totalAmount]);
 
-  // ===== REAL DATA INITIALIZATION =====
-  // This loads real history data from the database
+  // ===== DATA FETCHING FUNCTIONS =====
+  const loadHistoryData = useCallback(async (showLoading = true) => {
+    try {
+      if (showLoading) setIsLoading(true);
+      
+      if (!currentUser) {
+        console.log('No current user, skipping history data load');
+        return;
+      }
+
+      // Fetch pickup requests with recycler and payment data
+      const { data: pickupData, error: pickupError } = await supabase
+        .from('pickup_requests')
+        .select(`
+          id,
+          pickup_address,
+          waste_type,
+          estimated_weight,
+          status,
+          created_at,
+          pickup_completed_at,
+          final_price,
+          customer_rating,
+          recycler_notes,
+                  recyclers(
+          id,
+          full_name,
+          phone
+        ),
+          payment_summaries(
+            id,
+            base_amount,
+            environmental_tax,
+            total_amount,
+            status
+          )
+        `)
+        .eq('customer_id', currentUser.id)
+        .order('created_at', { ascending: false });
+
+      if (pickupError) {
+        console.error('Error fetching pickup history:', pickupError);
+        throw pickupError;
+      }
+
+      // Transform pickup data to history format
+      const transformedHistory = pickupData?.map((pickup) => ({
+        id: pickup.id,
+        date: new Date(pickup.created_at).toISOString().split('T')[0],
+        recyclerName: pickup.recyclers?.[0]?.full_name || 'Unknown Recycler',
+        pickupLocation: pickup.pickup_address || 'Unknown Location',
+        weight: `${pickup.estimated_weight || 0} kg`,
+        amount: `₵${(pickup.final_price || 0).toFixed(2)}`,
+        status: pickup.status,
+        recyclerImage: require('../../assets/images/blend.jpg'), // Default image
+        rating: pickup.customer_rating || 0,
+        recyclerPhone: pickup.recyclers?.[0]?.phone || '',
+        pickupTime: pickup.pickup_completed_at ? 
+          new Date(pickup.pickup_completed_at).toTimeString().split(' ')[0].substring(0, 5) : 
+          new Date(pickup.created_at).toTimeString().split(' ')[0].substring(0, 5),
+        environmentalTax: pickup.payment_summaries?.[0]?.environmental_tax ? 
+          `₵${pickup.payment_summaries[0].environmental_tax}` : '',
+        notes: pickup.recycler_notes || '',
+        wasteType: pickup.waste_type || 'General',
+        totalAmount: pickup.payment_summaries?.[0]?.total_amount ? 
+          `₵${pickup.payment_summaries[0].total_amount}` : `₵${(pickup.final_price || 0).toFixed(2)}`,
+        recyclerId: pickup.recyclers?.[0]?.id,
+        completedAt: pickup.pickup_completed_at,
+      })) || [];
+
+      setHistoryData(transformedHistory);
+
+      console.log('History data loaded successfully:', {
+        totalPickups: transformedHistory.length,
+        completedPickups: transformedHistory.filter(item => item.status === 'completed').length
+      });
+      
+    } catch (error) {
+      console.error('Error loading history data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser]);
+
+  // ===== USER AUTHENTICATION EFFECT =====
   useEffect(() => {
-    // TODO: Implement real database calls to fetch customer history
-    // This should connect to the pickup_requests table and filter by customer_id
-    
-    // For now, start with empty array
-    setHistoryData([]);
+    const getCurrentUser = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error('Error getting current user:', error);
+          return;
+        }
+        if (user) {
+          setCurrentUser(user);
+          console.log('Current user loaded:', user.id);
+        }
+      } catch (error) {
+        console.error('Error in getCurrentUser:', error);
+      }
+    };
+
+    getCurrentUser();
   }, []);
+
+  // ===== INITIALIZATION EFFECT =====
+  useEffect(() => {
+    if (currentUser) {
+      loadHistoryData();
+    }
+  }, [currentUser, loadHistoryData]);
 
   const filteredHistory = historyData.filter(item => {
     if (selectedFilter === 'all') return true;
     return item.status === selectedFilter;
   });
+
+  // ===== REFRESH HANDLER =====
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await loadHistoryData(false);
+    setIsRefreshing(false);
+  }, [loadHistoryData]);
+
+  // ===== REAL-TIME UPDATES =====
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Subscribe to pickup request changes
+    const channel = supabase
+      .channel('customer-pickup-history')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pickup_requests',
+          filter: `customer_id=eq.${currentUser.id}`,
+        },
+        (payload) => {
+          console.log('Pickup request change detected:', payload);
+          loadHistoryData(false);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, loadHistoryData]);
 
   const handleFilterPress = (filter: 'all' | 'completed' | 'cancelled' | 'pending') => {
     setSelectedFilter(filter);
@@ -161,7 +304,13 @@ export default function HistoryScreen() {
             <Text style={[styles.detailValue, styles.totalAmountText]}>{item.totalAmount}</Text>
           </View>
         )}
-        {item.rating && (
+        {item.ecoPoints && item.ecoPoints > 0 && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Eco Points:</Text>
+            <Text style={[styles.detailValue, styles.ecoPointsText]}>+{item.ecoPoints}</Text>
+          </View>
+        )}
+        {item.rating && item.rating > 0 && (
           <View style={styles.ratingContainer}>
             <Text style={styles.ratingLabel}>Rating:</Text>
             <View style={styles.starsContainer}>
@@ -234,7 +383,24 @@ export default function HistoryScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.historyList}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={renderEmptyState}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.loadingText}>Loading history...</Text>
+            </View>
+          ) : (
+            renderEmptyState()
+          )
+        }
       />
     </SafeAreaView>
   );
@@ -403,5 +569,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.lightGray,
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: COLORS.gray,
+  },
+  ecoPointsText: {
+    color: COLORS.green,
+    fontWeight: 'bold',
   },
 }); 

@@ -9,6 +9,7 @@ const RECYCLER_MENU_ITEMS = [
   { label: 'Education', icon: <MaterialIcons name="add-circle-outline" size={22} color="#22330B" />, key: 'education' },
   { label: 'History', icon: <Feather name="rotate-ccw" size={22} color="#22330B" />, key: 'history' },
   { label: 'Earnings', icon: <FontAwesome5 name="dollar-sign" size={22} color="#22330B" />, key: 'earnings' },
+  { label: 'My Ratings', icon: <MaterialIcons name="star" size={22} color="#22330B" />, key: 'ratings' },
   { label: 'Subscription', icon: <MaterialIcons name="check-circle-outline" size={22} color="#22330B" />, key: 'subscription' },
   { label: 'Analytics', icon: <MaterialIcons name="show-chart" size={22} color="#22330B" />, key: 'analytics' },
   { label: 'Rewards', icon: <Feather name="gift" size={22} color="#22330B" />, key: 'rewards' },
@@ -69,6 +70,19 @@ export default function DrawerMenu({ open, onClose, menuItems }: DrawerMenuProps
       console.log('DrawerMenu: Current user found:', currentUser.id);
       console.log('DrawerMenu: User metadata:', currentUser.user_metadata);
 
+      // Check if user is a recycler by querying the recyclers table
+      const { data: recyclerData, error: recyclerError } = await supabase
+        .from('recyclers')
+        .select('id, company_name, verification_status')
+        .eq('id', currentUser.id)
+        .single();
+
+      // Determine user role based on database check
+      const isRecycler = !recyclerError && recyclerData;
+      const userRole = isRecycler ? 'recycler' : 'customer';
+
+      console.log('DrawerMenu: Recycler check result:', { isRecycler, recyclerError, recyclerData });
+
       // Create enhanced user object with metadata
       const enhancedUser = {
         id: currentUser.id,
@@ -79,9 +93,9 @@ export default function DrawerMenu({ open, onClose, menuItems }: DrawerMenuProps
         name: currentUser.user_metadata?.full_name || 'User',
         full_name: currentUser.user_metadata?.full_name || '',
         phone: currentUser.user_metadata?.phone || '',
-        role: currentUser.user_metadata?.role || 'customer',
-        company_name: currentUser.user_metadata?.company_name || '',
-        verification_status: currentUser.user_metadata?.verification_status || 'incomplete',
+        role: userRole, // Use database-determined role
+        company_name: isRecycler ? recyclerData?.company_name || '' : currentUser.user_metadata?.company_name || '',
+        verification_status: isRecycler ? recyclerData?.verification_status || 'incomplete' : currentUser.user_metadata?.verification_status || 'incomplete',
         profile_image: null,
       };
 
@@ -197,6 +211,18 @@ export default function DrawerMenu({ open, onClose, menuItems }: DrawerMenuProps
                   } catch (error) {
                     console.error('DrawerMenu: Navigation error:', error);
                     Alert.alert('Navigation Error', 'Could not navigate to rewards screen');
+                  }
+                }
+              } else if (item.key === 'ratings') {
+                setShowContactCard(false);
+                onClose();
+                if (isRecycler) {
+                  console.log('DrawerMenu: Navigating to RecyclerRatingScreen');
+                  try {
+                    router.push('/recycler-screens/RecyclerRatingScreen' as any);
+                  } catch (error) {
+                    console.error('DrawerMenu: Navigation error:', error);
+                    Alert.alert('Navigation Error', 'Could not navigate to ratings screen');
                   }
                 }
               } else if (item.key === 'notification') {

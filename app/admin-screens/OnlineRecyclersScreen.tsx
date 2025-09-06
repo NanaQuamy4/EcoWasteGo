@@ -118,14 +118,14 @@ const RecyclerItem: React.FC<RecyclerItemProps> = ({ recycler, onForceOffline })
           <Text style={styles.detailLabel}>Last Seen:</Text>
           <Text style={styles.detailValue}>{formatLastSeen(recycler.lastSeenAt)}</Text>
         </View>
-        {recycler.pendingRequestsCount !== undefined && recycler.pendingRequestsCount > 0 && (
+        {/* {recycler.pendingRequestsCount !== undefined && recycler.pendingRequestsCount > 0 && (
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Pending Requests:</Text>
             <Text style={[styles.detailValue, { color: recycler.pendingRequestsCount >= 5 ? '#e74c3c' : COLORS.orange }]}>
               {recycler.pendingRequestsCount}
             </Text>
           </View>
-        )}
+        )} */}
       </View>
 
       {recycler.isOnline && (

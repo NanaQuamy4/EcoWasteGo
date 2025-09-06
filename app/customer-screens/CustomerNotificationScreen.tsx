@@ -10,6 +10,7 @@ import {
   View
 } from 'react-native';
 import { COLORS } from '../../constants';
+import { useClearNotifications } from '../../hooks/useClearNotifications';
 import { useNotificationCountSimple as useNotificationCount } from '../../hooks/useNotificationCountSimple';
 import { supabase } from '../../lib/supabase';
 
@@ -45,6 +46,14 @@ export default function CustomerNotificationScreen() {
   const [user, setUser] = useState<any>(null);
   const [filter, setFilter] = useState<FilterType>('all');
   const { refetch: refetchNotificationCount } = useNotificationCount();
+  const { handleClearNotifications: originalHandleClearNotifications } = useClearNotifications();
+  
+  // Custom clear handler that also refreshes local notifications
+  const handleClearNotifications = async () => {
+    await originalHandleClearNotifications();
+    // Reload notifications to reflect the cleared state
+    await loadNotifications();
+  };
 
   // Get current user
   useEffect(() => {
@@ -317,18 +326,17 @@ export default function CustomerNotificationScreen() {
             <View style={styles.unreadIndicator} />
           )}
         </View>
+        
+        {!item.is_read && (
+          <TouchableOpacity 
+            style={styles.markAsReadTextContainer}
+            onPress={() => markAsRead(item.id)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.markAsReadText}>Mark as read</Text>
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
-      
-      {!item.is_read && (
-        <TouchableOpacity 
-          style={styles.markAsReadButton}
-          onPress={() => markAsRead(item.id)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="checkmark" size={16} color={COLORS.white} />
-          <Text style={styles.markAsReadText}>Mark as Read</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 
@@ -338,7 +346,7 @@ export default function CustomerNotificationScreen() {
       <Ionicons name="notifications-off" size={64} color={COLORS.lightGray} />
       <Text style={styles.emptyStateTitle}>No Notifications</Text>
       <Text style={styles.emptyStateMessage}>
-        You're all caught up! Check back later for updates.
+        You&apos;re all caught up! Check back later for updates.
       </Text>
     </View>
   );
@@ -402,9 +410,15 @@ export default function CustomerNotificationScreen() {
         
         <Text style={styles.headerTitle}>Notifications</Text>
         
-        <TouchableOpacity onPress={markAllAsRead} style={styles.markAllButton}>
-          <Ionicons name="checkmark-done" size={20} color={COLORS.primary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={handleClearNotifications} style={styles.clearButton}>
+            <Ionicons name="trash-outline" size={16} color="#fff" />
+            <Text style={styles.clearButtonText}>CLEAR</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={markAllAsRead} style={styles.markAllButton}>
+            <Ionicons name="checkmark-done" size={20} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Filter Buttons */}
@@ -501,6 +515,25 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.primary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  clearButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   markAllButton: {
     padding: 8,
@@ -683,21 +716,17 @@ const styles = StyleSheet.create({
   filterButtonTextActive: {
     color: COLORS.white,
   },
-  markAsReadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    margin: 16,
-    marginTop: 0,
-    borderRadius: 8,
+  markAsReadTextContainer: {
+    position: 'absolute',
+    bottom: 8,
+    right: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
   markAsReadText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
 });

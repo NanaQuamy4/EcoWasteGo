@@ -99,8 +99,8 @@ BEGIN
     COALESCE(SUM(ce.landfill_space_saved), 0) as total_landfill_saved,
     COALESCE(SUM(ce.energy_saved), 0) as total_energy_saved,
     CASE 
-      WHEN COUNT(*) > 0 THEN COALESCE(SUM(ce.total_points), 0) / COUNT(*)
-      ELSE 0
+      WHEN COUNT(*) > 0 THEN (COALESCE(SUM(ce.total_points), 0)::DECIMAL / COUNT(*)::DECIMAL)::DECIMAL(8,2)
+      ELSE 0::DECIMAL(8,2)
     END as average_points_per_pickup
   FROM customer_earnings ce
   WHERE ce.customer_id = p_customer_id

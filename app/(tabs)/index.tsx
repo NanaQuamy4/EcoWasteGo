@@ -2,14 +2,14 @@ import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, ImageBackground, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
 import { useNotificationCountSimple as useNotificationCount } from '../../hooks/useNotificationCountSimple';
 import { useOnlineRecyclers } from '../../hooks/useRecyclerOnlineStatus';
-import { googlePlacesService, PlaceDetails, PlacePrediction } from '../../lib/googlePlaces';
+import { googlePlacesService, PlaceDetails } from '../../lib/googlePlaces';
 import { supabase } from '../../lib/supabase';
 // ===== REAL DATA INTERFACES =====
 interface Recycler {
@@ -68,26 +68,26 @@ export default function HomeScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [nearbyRecyclers, setNearbyRecyclers] = useState<Recycler[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<LocationSuggestion | null>(null);
-  const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
+  // const [selectedLocation, setSelectedLocation] = useState<LocationSuggestion | null>(null);
+  const [, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
-  const [searchMarkers, setSearchMarkers] = useState<Array<{
+  const [searchMarkers, setSearchMarkers] = useState<{
     id: string;
     coordinate: { latitude: number; longitude: number };
     title: string;
     description: string;
     type: 'search' | 'pickup' | 'user';
-  }>>([]);
+  }[]>([]);
   const [mapRegion, setMapRegion] = useState<{
     latitude: number;
     longitude: number;
     latitudeDelta: number;
     longitudeDelta: number;
   } | null>(null);
-  const [user, setUser] = useState<any>(null);
+  // const [user, setUser] = useState<any>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [userStats, setUserStats] = useState<UserStats>({
+  const [, setUserStats] = useState<UserStats>({
     totalPickups: 0,
     totalSavings: 0,
     environmentalImpact: 0
@@ -96,7 +96,7 @@ export default function HomeScreen() {
   const router = useRouter();
 
   // Use real notification count
-  const { notificationCount, loading: notificationLoading } = useNotificationCount();
+  const { notificationCount } = useNotificationCount();
 
   // Fetch user data
   const fetchUserData = useCallback(async () => {
@@ -106,7 +106,7 @@ export default function HomeScreen() {
         console.error('Error fetching user:', error);
         return;
       }
-      setUser(currentUser);
+      // setUser(currentUser);
     } catch (error) {
       console.error('Error fetching user data:', error);
     }
@@ -144,7 +144,7 @@ export default function HomeScreen() {
   }, []);
 
   // Use the new online recyclers hook
-  const { recyclers: onlineRecyclers, loading: recyclersLoading } = useOnlineRecyclers();
+  const { recyclers: onlineRecyclers } = useOnlineRecyclers();
 
   // Transform online recyclers data and add realistic Ghana coordinates
   const fetchAvailableRecyclers = useCallback(() => {
@@ -201,7 +201,7 @@ export default function HomeScreen() {
   }, [onlineRecyclers]);
 
   // Google Places predictions state
-  const [googlePredictions, setGooglePredictions] = useState<PlacePrediction[]>([]);
+  // const [googlePredictions, setGooglePredictions] = useState<PlacePrediction[]>([]);
 
   // Memoized search handler with debouncing
   const handleSearch = useCallback((text: string) => {
@@ -281,13 +281,13 @@ export default function HomeScreen() {
       // Get Google Places predictions
       const predictions = await googlePlacesService.getPlacePredictions(
         query,
-        userLocation ? {
-          lat: userLocation.coords.latitude,
-          lng: userLocation.coords.longitude
-        } : undefined
+        // userLocation ? {
+        //   lat: userLocation.coords.latitude,
+        //   lng: userLocation.coords.longitude
+        // } : undefined
       );
       
-      setGooglePredictions(predictions);
+      // setGooglePredictions(predictions);
 
       // Convert predictions to location suggestions
       const suggestions: LocationSuggestion[] = predictions.map(prediction => ({
@@ -326,7 +326,7 @@ export default function HomeScreen() {
     } finally {
       setIsSearching(false);
     }
-  }, [geocodeAddress, userLocation]);
+  }, [geocodeAddress]);
 
   // Memoized suggestion selection handler
   const handleSuggestionSelect = useCallback(async (suggestion: LocationSuggestion) => {
@@ -373,7 +373,7 @@ export default function HomeScreen() {
 
   // Memoized location selection handler
   const handleLocationSelect = useCallback(async (suggestion: LocationSuggestion) => {
-    setSelectedLocation(suggestion);
+    // setSelectedLocation(suggestion);
     setSearch(suggestion.name);
     setShowSuggestions(false);
     setLocationSuggestions([]);
@@ -420,7 +420,7 @@ export default function HomeScreen() {
         coordinate: coordinate,
         type: 'geocode',
       };
-      setSelectedLocation(locationSuggestion);
+      // setSelectedLocation(locationSuggestion);
       setSearch(address);
       
       // Fetch nearby recyclers for the selected location
@@ -508,13 +508,13 @@ export default function HomeScreen() {
         
         // Update search and selected location
         setSearch(address);
-        setSelectedLocation({
-          id: 'current-location',
-          name: address,
-          address: address,
-          coordinate: coordinates,
-          type: 'geocode',
-        });
+        // setSelectedLocation({
+        //   id: 'current-location',
+        //   name: address,
+        //   address: address,
+        //   coordinate: coordinates,
+        //   type: 'geocode',
+        // });
 
         // Add user location marker
         const userMarker = {
@@ -592,16 +592,16 @@ export default function HomeScreen() {
   }, [getCurrentLocation, fetchAvailableRecyclers]);
 
   // Memoized drawer toggle handler
-  const toggleDrawer = useCallback(() => {
-    setDrawerOpen(!drawerOpen);
-  }, [drawerOpen]);
+  // const toggleDrawer = useCallback(() => {
+  //   setDrawerOpen(!drawerOpen);
+  // }, [drawerOpen]);
 
   // Memoized keyboard dismiss handler
-  const dismissKeyboard = useCallback(() => {
-    Keyboard.dismiss();
-    setShowSuggestions(false);
-    setLocationSuggestions([]);
-  }, []);
+  // const dismissKeyboard = useCallback(() => {
+  //   Keyboard.dismiss();
+  //   setShowSuggestions(false);
+  //   setLocationSuggestions([]);
+  // }, []);
 
   // Memoized render item for FlatList
   const renderSuggestionItem = useCallback(({ item }: { item: LocationSuggestion }) => (
@@ -614,19 +614,19 @@ export default function HomeScreen() {
     </TouchableOpacity>
   ), [handleSuggestionSelect]);
 
-  const renderLocationItem = useCallback(({ item }: { item: LocationSuggestion }) => (
-    <TouchableOpacity style={styles.locationItem} onPress={() => handleLocationSelect(item)}>
-      <MaterialIcons name="location-on" size={20} color={COLORS.primary} />
-      <View style={styles.locationTextContainer}>
-        <Text style={styles.locationName}>{item.name}</Text>
-        <Text style={styles.locationAddress}>{item.address}</Text>
-      </View>
-    </TouchableOpacity>
-  ), [handleLocationSelect]);
+  // const renderLocationItem = useCallback(({ item }: { item: LocationSuggestion }) => (
+  //   <TouchableOpacity style={styles.locationItem} onPress={() => handleLocationSelect(item)}>
+  //     <MaterialIcons name="location-on" size={20} color={COLORS.primary} />
+  //     <View style={styles.locationTextContainer}>
+  //       <Text style={styles.locationName}>{item.name}</Text>
+  //       <Text style={styles.locationAddress}>{item.address}</Text>
+  //     </View>
+  //   </TouchableOpacity>
+  // ), [handleLocationSelect]);
 
-  const renderRecyclerItem = useCallback(({ item }: { item: Recycler }) => (
-    <RecyclerItem recycler={item} onPress={handleRecyclerPress} />
-  ), [handleRecyclerPress]);
+  // const renderRecyclerItem = useCallback(({ item }: { item: Recycler }) => (
+  //   <RecyclerItem recycler={item} onPress={handleRecyclerPress} />
+  // ), [handleRecyclerPress]);
 
   // Memoized key extractors
   const keyExtractor = useCallback((item: any) => item.id || item.toString(), []);

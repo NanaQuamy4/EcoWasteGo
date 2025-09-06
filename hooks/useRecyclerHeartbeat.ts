@@ -88,7 +88,7 @@ export function useRecyclerHeartbeat(config: HeartbeatConfig = {}) {
       if (isActiveRef.current) {
         sendHeartbeat();
       }
-    }, intervalMs);
+    }, intervalMs) as unknown as NodeJS.Timeout;
 
     console.log('Heartbeat started');
   }, [sendHeartbeat, intervalMs]);

@@ -87,7 +87,7 @@ export default function UserScreen() {
   // Fetch user data on component mount
   useEffect(() => {
     fetchUserData();
-  }, []); // Remove fetchUserData dependency to prevent infinite loop
+  }, []); // Remove router dependency
 
   // Refresh user data when screen comes into focus (e.g., returning from edit profile)
   useFocusEffect(

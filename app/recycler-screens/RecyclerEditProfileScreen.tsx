@@ -864,7 +864,7 @@ export default function RecyclerEditProfileScreen() {
               <View style={styles.licenseUploadContainer}>
                 <MaterialIcons name="card-membership" size={20} color="#263A13" style={styles.inputIcon} />
                 <View style={styles.licenseUploadContent}>
-                  <Text style={styles.licenseUploadLabel}>Driver's License</Text>
+                  <Text style={styles.licenseUploadLabel}>Driver&apos;s License</Text>
                   {driversLicense ? (
                     <View style={styles.licenseFileContainer}>
                       <MaterialIcons name="description" size={24} color="#4CAF50" />

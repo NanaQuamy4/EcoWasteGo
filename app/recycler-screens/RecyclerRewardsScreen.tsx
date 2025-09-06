@@ -2,14 +2,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    RefreshControl,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { COLORS } from '../../constants';
 import { supabase } from '../../lib/supabase';
@@ -529,7 +529,7 @@ export default function RecyclerRewardsScreen() {
             <View style={styles.statCard}>
               <MaterialIcons name="calendar-today" size={20} color={COLORS.secondary} />
               <Text style={styles.statNumber}>{ecoPointsStats.todayPoints}</Text>
-              <Text style={styles.statLabel}>Today's Points</Text>
+              <Text style={styles.statLabel}>Today&apos;s Points</Text>
             </View>
             <View style={styles.statCard}>
               <MaterialIcons name="eco" size={20} color={COLORS.primary} />

@@ -1,7 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
 import { Alert, Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { COLORS, DIMENSIONS, RECYCLER_DATA } from '../../constants';
+import { COLORS, DIMENSIONS } from '../../constants';
 import CommonHeader from '../components/CommonHeader';
 
 interface RecyclerData {
@@ -22,14 +21,14 @@ export default function CallRecyclerScreen() {
 
   // Use centralized recycler data
   const recyclerData: RecyclerData = {
-    name: recyclerName || RECYCLER_DATA.name,
-    phone: RECYCLER_DATA.phone,
-    rating: RECYCLER_DATA.rating,
-    truckType: RECYCLER_DATA.truckType,
-    recyclerId: RECYCLER_DATA.recyclerId,
-    color: RECYCLER_DATA.color,
-    rate: RECYCLER_DATA.rate,
-    pastPickups: RECYCLER_DATA.pastPickups,
+    name: recyclerName || 'John Doe',
+    phone: '+233 24 123 4567',
+    rating: 4.8,
+    truckType: 'Medium Truck',
+    recyclerId: 'recycler_001',
+    color: COLORS.darkGreen,
+    rate: '15',
+    pastPickups: 127,
   };
 
   const handleCall = () => {

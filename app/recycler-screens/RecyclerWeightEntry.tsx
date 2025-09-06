@@ -220,7 +220,7 @@ export default function RecyclerWeightEntry() {
               <Text style={styles.rejectionDetailsText}>{rejectionReason}</Text>
             </View>
             <Text style={styles.rejectionNote}>
-              Please review and adjust the waste details below based on the customer's feedback.
+              Please review and adjust the waste details below based on the customer&apos;s feedback.
             </Text>
           </View>
         )}

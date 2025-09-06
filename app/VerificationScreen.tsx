@@ -83,7 +83,7 @@ export default function VerificationScreen() {
             
             <Text style={styles.title}>Verify Your Email</Text>
             <Text style={styles.subtitle}>
-              We've sent a 6-digit verification code to{'\n'}
+              We&apos;ve sent a 6-digit verification code to{'\n'}
               <Text style={styles.emailText}>{email}</Text>
             </Text>
           </View>

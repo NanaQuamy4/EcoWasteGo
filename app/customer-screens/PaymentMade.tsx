@@ -1,8 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
+import { supabase } from '../../lib/supabase';
 
 // Payment data will be fetched from database
 // Review data will be managed in local state
@@ -82,10 +83,10 @@ export default function PaymentMade() {
   // ===== ACTION HANDLERS =====
   // These functions handle user actions
   
-  // Submit recycler review
+  // Submit recycler review and proceed to celebration
   const handleSubmitReview = async () => {
     if (reviewData.rating === 0) {
-      Alert.alert('Rating Required', 'Please select a rating before submitting.');
+      Alert.alert('Rating Required', 'Please select a rating before proceeding.');
       return;
     }
 
@@ -97,10 +98,25 @@ export default function PaymentMade() {
     setIsSubmittingReview(true);
 
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Save rating to database - this will trigger the notification
+      const { error: ratingError } = await supabase
+        .from('pickup_requests')
+        .update({
+          customer_rating: reviewData.rating,
+          recycler_notes: reviewData.comment,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', params.requestId);
+
+      if (ratingError) {
+        console.error('Error saving rating:', ratingError);
+        Alert.alert('Error', 'Failed to save rating. Please try again.');
+        return;
+      }
+
+      console.log('PaymentMade: Rating saved successfully, notification will be sent to recycler');
       
-      // Update mock review data
+      // Update local state
       const updatedReview = {
         ...reviewData,
         submitted: true
@@ -109,18 +125,27 @@ export default function PaymentMade() {
       setReviewData(updatedReview);
       setShowSuccessMessage(true);
       
-      // Hide success message after 3 seconds
+      // Hide success message after 2 seconds, then navigate
       setTimeout(() => {
         setShowSuccessMessage(false);
-      }, 3000);
+        // Navigate to Eco Impact Celebration
+        router.push({
+          pathname: '/customer-screens/EcoImpactCelebration',
+          params: {
+            requestId: params.requestId,
+            recyclerName: params.recyclerName,
+            pickup: 'Selected Location',
+            weight: params.weight,
+            wasteType: params.wasteType,
+            amount: params.amount,
+            environmentalTax: '0.00',
+            totalAmount: params.amount
+          }
+        });
+      }, 2000);
       
-      console.log('PaymentMade: Review submitted successfully');
+      console.log('PaymentMade: Review submitted successfully, navigating to celebration');
       
-      Alert.alert(
-        'Review Submitted!',
-        'Thank you for your feedback. Your review helps other customers choose the best recyclers.',
-        [{ text: 'OK' }]
-      );
     } catch (error) {
       console.error('Error submitting review:', error);
       Alert.alert('Error', 'Failed to submit review. Please try again.');
@@ -202,10 +227,58 @@ export default function PaymentMade() {
         </Text>
       </View>
 
-      {/* Payment Made Button */}
-      <TouchableOpacity style={styles.paymentButton} onPress={() => router.push('/customer-screens/EcoImpactCelebration')}>
-        <Text style={styles.paymentButtonText}>PAYMENT MADE</Text>
-      </TouchableOpacity>
+      {/* Rating Section */}
+      {!reviewData.submitted ? (
+        <View style={styles.ratingSection}>
+          <Text style={styles.ratingTitle}>Rate Your Recycler</Text>
+          <Text style={styles.ratingSubtitle}>How was your experience with {params.recyclerName}?</Text>
+          
+          {/* Star Rating */}
+          <View style={styles.starContainer}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <TouchableOpacity
+                key={star}
+                onPress={() => handleRatingSelect(star)}
+                style={styles.starButton}
+              >
+                <MaterialIcons
+                  name={star <= reviewData.rating ? 'star' : 'star-border'}
+                  size={32}
+                  color={star <= reviewData.rating ? '#FFD700' : '#CCCCCC'}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+          
+          {/* Comment Input */}
+          <TextInput
+            style={styles.commentInput}
+            placeholder="Tell us about your experience..."
+            value={reviewData.comment}
+            onChangeText={handleCommentChange}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
+          
+          {/* Submit Button */}
+          <TouchableOpacity 
+            style={[styles.submitButton, (!reviewData.rating || !reviewData.comment.trim()) && styles.submitButtonDisabled]} 
+            onPress={handleSubmitReview}
+            disabled={!reviewData.rating || !reviewData.comment.trim() || isSubmittingReview}
+          >
+            <Text style={styles.submitButtonText}>
+              {isSubmittingReview ? 'Submitting...' : 'Submit Rating & Continue'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.successSection}>
+          <MaterialIcons name="check-circle" size={48} color="#4CAF50" />
+          <Text style={styles.successText}>Thank you for your feedback!</Text>
+          <Text style={styles.successSubtext}>Proceeding to celebration...</Text>
+        </View>
+      )}
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
@@ -399,5 +472,88 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 18,
     color: COLORS.darkGreen,
+  },
+  // Rating styles
+  ratingSection: {
+    backgroundColor: '#FFFFFF',
+    margin: 16,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  ratingTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  ratingSubtitle: {
+    fontSize: 16,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  starContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  starButton: {
+    padding: 4,
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: COLORS.darkGreen,
+    backgroundColor: '#F8F8F8',
+    marginBottom: 20,
+    minHeight: 80,
+  },
+  submitButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  submitButtonDisabled: {
+    backgroundColor: COLORS.lightGray,
+  },
+  submitButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  successSection: {
+    backgroundColor: '#FFFFFF',
+    margin: 16,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: COLORS.black,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  successText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  successSubtext: {
+    fontSize: 14,
+    color: COLORS.gray,
   },
 });

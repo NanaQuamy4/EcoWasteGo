@@ -40,7 +40,7 @@ BEGIN
   RETURN QUERY SELECT 
     false as can_place_request,
     active_request.id as active_request_id,
-    active_request.status as active_request_status,
+    active_request.status::text as active_request_status,
     CASE 
       WHEN active_request.status = 'pending' THEN 'You have a pending request waiting for recycler confirmation'
       WHEN active_request.status = 'assigned' THEN 'You have an assigned request waiting for recycler confirmation'
@@ -70,7 +70,7 @@ BEGIN
   RETURN QUERY
   SELECT 
     pr.id,
-    pr.status,
+    pr.status::text,
     pr.recycler_id,
     r.full_name as recycler_name,
     pr.pickup_address,

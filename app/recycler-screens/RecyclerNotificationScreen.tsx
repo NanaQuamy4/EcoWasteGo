@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants';
+import { useClearNotifications } from '../../hooks/useClearNotifications';
 import { supabase } from '../../lib/supabase';
 import CommonHeader from '../components/CommonHeader';
 
@@ -21,6 +22,14 @@ export default function RecyclerNotificationScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { handleClearNotifications: originalHandleClearNotifications } = useClearNotifications();
+  
+  // Custom clear handler that also refreshes local notifications
+  const handleClearNotifications = async () => {
+    await originalHandleClearNotifications();
+    // Reload notifications to reflect the cleared state
+    await loadNotifications();
+  };
 
   // Load notifications
   const loadNotifications = async () => {
@@ -264,10 +273,16 @@ export default function RecyclerNotificationScreen() {
       <CommonHeader />
       
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        <Text style={styles.headerSubtitle}>
-          {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
-        </Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Notifications</Text>
+          <Text style={styles.headerSubtitle}>
+            {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={handleClearNotifications} style={styles.clearButton}>
+          <MaterialIcons name="clear" size={16} color="#fff" />
+          <Text style={styles.clearButtonText}>CLEAR</Text>
+        </TouchableOpacity>
       </View>
 
       {notifications.length === 0 ? (
@@ -275,7 +290,7 @@ export default function RecyclerNotificationScreen() {
           <MaterialIcons name="notifications-none" size={64} color="#ccc" />
           <Text style={styles.emptyTitle}>No Notifications</Text>
           <Text style={styles.emptyMessage}>
-            You'll receive notifications about payment updates, new requests, and other important updates here.
+            You&apos;ll receive notifications about payment updates, new requests, and other important updates here.
           </Text>
         </View>
       ) : (
@@ -315,9 +330,29 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
+  },
+  headerContent: {
+    flex: 1,
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  clearButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   headerTitle: {
     fontSize: 24,

@@ -266,8 +266,11 @@ export default function RewardsScreen() {
         ...badge,
         earned: newAchievements.includes(badge.key) ? true : badge.earned
       })));
+      
+      // Refresh data to get updated stats
+      fetchCustomerData();
     }
-  }, [params.newAchievements, params.achievementsEarned]);
+  }, [params.newAchievements, params.achievementsEarned, fetchCustomerData]);
 
   // Refresh control
   const onRefresh = useCallback(async () => {
@@ -381,6 +384,20 @@ export default function RewardsScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Rewards & Achievements</Text>
         <Text style={styles.headerSubtitle}>Track your eco-friendly progress</Text>
+        {customerStats.totalPoints > 0 && (
+          <View style={styles.motivationalMessage}>
+            <Text style={styles.motivationalText}>
+              {customerStats.totalPoints >= 1000 ? 
+                "🌟 You're a true environmental champion!" :
+                customerStats.totalPoints >= 500 ?
+                "🌱 Keep up the amazing eco-friendly work!" :
+                customerStats.totalPoints >= 100 ?
+                "♻️ Great start on your recycling journey!" :
+                "🌍 Every small action makes a big difference!"
+              }
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Stats Summary */}
@@ -424,6 +441,35 @@ export default function RewardsScreen() {
           </View>
         </View>
       </View>
+
+      {/* Recent Activity */}
+      {earningsHistory.length > 0 && (
+        <View style={styles.recentActivitySection}>
+          <Text style={styles.recentActivityTitle}>📈 Recent Activity</Text>
+          <View style={styles.recentActivityList}>
+            {earningsHistory.slice(0, 3).map((earning, index) => (
+              <View key={earning.id} style={styles.recentActivityItem}>
+                <View style={styles.activityIcon}>
+                  <MaterialIcons name="recycling" size={20} color="#4CAF50" />
+                </View>
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityTitle}>
+                    {earning.waste_type} Pickup
+                  </Text>
+                  <Text style={styles.activityDetails}>
+                    {earning.weight_kg}kg • {earning.total_points} points • {new Date(earning.completed_at).toLocaleDateString()}
+                  </Text>
+                  {earning.achievements_earned && earning.achievements_earned.length > 0 && (
+                    <Text style={styles.activityAchievements}>
+                      🏆 {earning.achievements_earned.length} achievement(s) earned
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
 
       {/* Badges Grid */}
       <View style={styles.badgesSection}>
@@ -597,6 +643,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+  },
+  motivationalMessage: {
+    backgroundColor: '#F1F8E9',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  motivationalText: {
+    fontSize: 14,
+    color: '#4A6B2A',
+    textAlign: 'center',
+    fontWeight: '500',
+    fontStyle: 'italic',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -916,5 +977,59 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  // Recent activity styles
+  recentActivitySection: {
+    backgroundColor: '#FFFFFF',
+    margin: 20,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  recentActivityTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1C3301',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  recentActivityList: {
+    gap: 12,
+  },
+  recentActivityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  activityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F8E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C3301',
+    marginBottom: 4,
+  },
+  activityDetails: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  activityAchievements: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '500',
   },
 }); 

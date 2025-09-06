@@ -173,6 +173,9 @@ export default function AdminPortal() {
       case 'analytics':
         router.push('/admin-screens/AdminAnalyticsScreen');
         break;
+      case 'subscriptions':
+        router.push('/admin-screens/AdminSubscriptionScreen');
+        break;
       case 'help':
         router.push('/admin-screens/AdminHelpScreen');
         break;
@@ -301,6 +304,22 @@ export default function AdminPortal() {
           <View style={styles.menuItemText}>
             <Text style={styles.menuItemTitle}>Analytics</Text>
             <Text style={styles.menuItemSubtitle}>View platform statistics and reports</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="#207E06" />
+        </TouchableOpacity>
+
+        {/* Subscription Management */}
+        <TouchableOpacity 
+          style={styles.menuItem} 
+          onPress={() => navigateToSection('subscriptions')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.menuItemIcon}>
+            <MaterialIcons name="account-balance-wallet" size={28} color="#207E06" />
+          </View>
+          <View style={styles.menuItemText}>
+            <Text style={styles.menuItemTitle}>Subscription Management</Text>
+            <Text style={styles.menuItemSubtitle}>Track recycler subscription fees and payments</Text>
           </View>
           <MaterialIcons name="chevron-right" size={24} color="#207E06" />
         </TouchableOpacity>

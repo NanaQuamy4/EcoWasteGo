@@ -486,6 +486,55 @@ export default function RecyclerNavigation() {
     }
   };
 
+  // ===== MANUAL ARRIVAL CONFIRMATION =====
+  const handleManualArrival = useCallback(async () => {
+    if (!requestId || hasArrived) return;
+
+    try {
+      console.log('Processing manual arrival confirmation for request:', requestId);
+      
+      // Use the same database function as automatic detection but with current location
+      const { data, error } = await supabase.rpc('update_pickup_status_on_arrival', {
+        p_request_id: requestId,
+        p_recycler_latitude: currentLocation.latitude,
+        p_recycler_longitude: currentLocation.longitude,
+        p_arrival_threshold: 0.05 // 50 meters
+      });
+
+      if (error) {
+        console.error('Error updating pickup request status:', error);
+        throw error;
+      }
+
+      // If successful, trigger the same arrival logic as automatic detection
+      if (data && !hasArrived) {
+        setHasArrived(true);
+        setIsNavigating(false);
+        stopLocationTracking();
+        
+        console.log('🎯 Manual arrival confirmation successful!');
+        
+        Alert.alert(
+          '🎯 Arrival Confirmed!',
+          'You have successfully confirmed your arrival at the pickup location. All stakeholders have been notified.',
+          [
+            {
+              text: 'Start Collection',
+              onPress: () => {
+                console.log('Starting waste collection process');
+                // Navigate to collection screen or update UI
+              }
+            }
+          ]
+        );
+      }
+      
+      console.log('Manual arrival confirmation completed successfully');
+    } catch (error) {
+      console.error('Error in manual arrival confirmation:', error);
+      throw error;
+    }
+  }, [requestId, hasArrived, currentLocation]);
 
   const handleStartNavigation = async () => {
     if (!locationPermission) {
@@ -932,36 +981,52 @@ export default function RecyclerNavigation() {
           )}
         </View>
 
-        {/* Cancel Ride Button */}
-        <View style={styles.cancelRideContainer}>
-          <TouchableOpacity 
-            style={styles.cancelRideButton}
-            onPress={handleCancelRide}
-          >
-            <MaterialIcons name="cancel" size={20} color={COLORS.white} />
-            <Text style={styles.cancelRideButtonText}>Cancel Pickup</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Navigation Controls */}
         <View style={styles.navigationControls}>
-          {!isNavigating ? (
-            <TouchableOpacity 
-              style={[styles.navButton, styles.startNavButton]}
-              onPress={handleStartNavigation}
-            >
-              <MaterialIcons name="play-arrow" size={24} color={COLORS.white} />
-              <Text style={styles.startNavButtonText}>Start Navigation</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity 
-              style={[styles.navButton, styles.stopNavButton]}
-              onPress={handleStopNavigation}
-            >
-              <MaterialIcons name="stop" size={24} color={COLORS.white} />
-              <Text style={styles.stopNavButtonText}>Stop Navigation</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.navigationButtonsRow}>
+            {!isNavigating ? (
+              <TouchableOpacity 
+                style={[styles.navButton, styles.startNavButton]}
+                onPress={handleStartNavigation}
+              >
+                <MaterialIcons name="play-arrow" size={20} color={COLORS.white} />
+                <Text style={styles.startNavButtonText}>Start Navigation</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                style={[styles.navButton, styles.stopNavButton]}
+                onPress={handleStopNavigation}
+              >
+                <MaterialIcons name="stop" size={20} color={COLORS.white} />
+                <Text style={styles.stopNavButtonText}>Stop Navigation</Text>
+              </TouchableOpacity>
+            )}
+            
+            {/* Manual Arrival Confirmation Button */}
+            {!hasArrived && (
+              <TouchableOpacity 
+                style={[styles.navButton, styles.manualArrivalButton]}
+                onPress={async () => {
+                  console.log('Manual arrival confirmation triggered');
+                  
+                  try {
+                    // Trigger the same arrival detection logic as automatic system
+                    await handleManualArrival();
+                  } catch (error) {
+                    console.error('Error in manual arrival confirmation:', error);
+                    Alert.alert(
+                      'Error',
+                      'Failed to confirm arrival. Please try again or contact support.',
+                      [{ text: 'OK' }]
+                    );
+                  }
+                }}
+              >
+                <MaterialIcons name="location-on" size={20} color={COLORS.white} />
+                <Text style={styles.manualArrivalButtonText}>I've Arrived</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Location Status */}
@@ -979,28 +1044,6 @@ export default function RecyclerNavigation() {
           </Text>
         </View>
 
-        {/* Test Arrival Button - Remove this in production */}
-        {!hasArrived && (
-          <View style={styles.testButtonContainer}>
-            <TouchableOpacity 
-              style={styles.testArrivalButton}
-              onPress={() => {
-                console.log('Manual arrival test triggered');
-                setHasArrived(true);
-                setIsNavigating(false);
-                stopLocationTracking();
-                
-                Alert.alert(
-                  '🎯 Destination Reached!',
-                  'You have arrived at the pickup location. Ready to collect waste.',
-                  [{ text: 'OK' }]
-                );
-              }}
-            >
-              <Text style={styles.testArrivalButtonText}>🧪 Test Arrival (Remove in Production)</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </ScrollView>
     </View>
   );
@@ -1159,24 +1202,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
     paddingHorizontal: 16,
-    gap: 12,
+    gap: 6,
   },
   actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 8,
     marginHorizontal: 0,
     backgroundColor: COLORS.darkGreen,
     shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-    minHeight: 56,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    minHeight: 36,
   },
   callButton: {
     backgroundColor: COLORS.darkGreen,
@@ -1186,20 +1229,27 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: COLORS.white,
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: 'bold',
-    marginLeft: 8,
-    letterSpacing: 0.5,
+    marginLeft: 4,
+    letterSpacing: 0.2,
   },
   navigationControls: {
     marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  navigationButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
   navButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     borderRadius: 12,
+    gap: 6,
   },
   startNavButton: {
     backgroundColor: COLORS.darkGreen,
@@ -1209,15 +1259,13 @@ const styles = StyleSheet.create({
   },
   startNavButtonText: {
     color: COLORS.white,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    marginLeft: 8,
   },
   stopNavButtonText: {
     color: COLORS.white,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    marginLeft: 8,
   },
   cancelRideContainer: {
     marginBottom: 16,
@@ -1333,25 +1381,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
-  testButtonContainer: {
-    marginBottom: 16,
-    paddingHorizontal: 16,
-  },
-  testArrivalButton: {
+  manualArrivalButton: {
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.primary,
   },
-  testArrivalButtonText: {
+  manualArrivalButtonText: {
     color: COLORS.white,
     fontSize: 14,
     fontWeight: 'bold',
-    textAlign: 'center',
   },
   debugInfo: {
     backgroundColor: COLORS.lightGray,

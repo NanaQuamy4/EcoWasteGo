@@ -238,6 +238,11 @@ export default function PaymentSummary() {
       
       const totalEcoPoints = Math.floor(weightInKg * basePointsPerKg) + bonusPoints;
 
+      // Calculate platform fee (10% commission)
+      const totalAmount = parseFloat(paymentSummary?.totalAmount?.replace('GHS ', '') || '0');
+      const platformFee = totalAmount * 0.10; // 10% platform fee
+      const recyclerEarnings = totalAmount - platformFee; // 90% goes to recycler
+
       // Create recycler earnings record
       const { error: earningsError } = await supabase
         .from('recycler_earnings')
@@ -249,9 +254,9 @@ export default function PaymentSummary() {
           weight: paymentSummary?.weight,
           base_amount: parseFloat(paymentSummary?.subtotal?.replace('GHS ', '') || '0'),
           environmental_tax: parseFloat(paymentSummary?.environmentalTax?.replace('GHS ', '') || '0'),
-          total_amount: parseFloat(paymentSummary?.totalAmount?.replace('GHS ', '') || '0'),
-          recycler_earnings: parseFloat(paymentSummary?.totalAmount?.replace('GHS ', '') || '0'), // Full amount goes to recycler
-          platform_fee: 0, // No platform fee for now
+          total_amount: totalAmount,
+          recycler_earnings: recyclerEarnings, // 90% goes to recycler
+          platform_fee: platformFee, // 10% platform fee
           eco_points_earned: totalEcoPoints,
           points_per_kg: basePointsPerKg,
           bonus_points: bonusPoints,
@@ -305,12 +310,13 @@ export default function PaymentSummary() {
           user_id: paymentSummary?.recyclerId,
           type: 'payment_accepted',
           title: 'Payment Accepted!',
-          message: `Customer has accepted your payment summary of ${paymentSummary?.totalAmount}. You earned ${paymentSummary?.totalAmount} and ${totalEcoPoints} eco points from this pickup! 🌱`,
+          message: `Customer has accepted your payment summary of ${paymentSummary?.totalAmount}. You earned ₵${recyclerEarnings.toFixed(2)} (after 10% platform fee) and ${totalEcoPoints} eco points from this pickup! 🌱`,
           data: {
             request_id: paymentSummary?.requestId,
             payment_summary_id: paymentSummary?.id,
             total_amount: paymentSummary?.totalAmount,
-            recycler_earnings: paymentSummary?.totalAmount,
+            recycler_earnings: recyclerEarnings,
+            platform_fee: platformFee,
             eco_points_earned: totalEcoPoints,
             status: 'completed'
           },
@@ -597,9 +603,9 @@ export default function PaymentSummary() {
         {/* Note Section */}
         <View style={styles.noteSection}>
           <Text style={styles.noteText}>This receipt includes a 5% Environmental Excise Tax.</Text>
-          <Text style={styles.noteText}>Your payment supports Ghana's environmental protection and recycling efforts.</Text>
-          <Text style={styles.noteText}>Together, we're reducing pollution and creating a cleaner future</Text>
-          <Text style={styles.noteText}>"One Tap to a Greener Planet."</Text>
+          <Text style={styles.noteText}>Your payment supports Ghana&apos;s environmental protection and recycling efforts.</Text>
+          <Text style={styles.noteText}>Together, we&apos;re reducing pollution and creating a cleaner future</Text>
+          <Text style={styles.noteText}>&quot;One Tap to a Greener Planet.&quot;</Text>
         </View>
       </View>
 

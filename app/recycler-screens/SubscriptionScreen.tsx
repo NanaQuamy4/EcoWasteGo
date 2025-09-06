@@ -1,78 +1,177 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppHeader from '../../components/AppHeader';
 import { COLORS } from '../../constants';
-// Mock recycler stats (replacing utils/recyclerStats)
-const recyclerStats = {
-  getTotalAvailableRequestsCount: () => 5,
-  isPaymentRequired: () => false,
-  getSubscriptionFeeString: () => '₵0.00',
-  getActivePickupsCount: () => 3,
-  getTodayEarnings: () => 45.80,
-  getWeeklySummary: () => ({ 
-    totalPickups: 25, 
-    totalEarnings: 375.50, 
-    weeklyGoal: 30,
-    fees: 15.00,
-    pickups: 25,
-    avgFee: 0.60
-  }),
-  paySubscriptionFees: () => {},
-  addCompletedPickup: (id: string, amount: number, details: any) => {}
-};
+import { supabase } from '../../lib/supabase';
+
+interface SubscriptionSummary {
+  current_week_fees: number;
+  current_week_earnings: number;
+  current_week_pickups: number;
+  is_payment_required: boolean;
+  overdue_fees: number;
+  total_pending_fees: number;
+}
 
 export default function SubscriptionScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [subscriptionSummary, setSubscriptionSummary] = useState<SubscriptionSummary | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
-  const weeklySummary = recyclerStats.getWeeklySummary();
-  const isPaymentRequired = recyclerStats.isPaymentRequired();
+  // ===== DATA LOADING =====
+  const loadSubscriptionData = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      if (!currentUser) {
+        console.log('No current user, skipping subscription data load');
+        return;
+      }
 
-  const handlePayFees = () => {
+      // Get subscription summary from database
+      const { data, error } = await supabase
+        .rpc('get_recycler_subscription_summary', { p_recycler_id: currentUser.id });
+
+      if (error) {
+        console.error('Error fetching subscription summary:', error);
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        setSubscriptionSummary(data[0]);
+        console.log('Subscription data loaded successfully:', data[0]);
+      }
+      
+    } catch (error) {
+      console.error('Error loading subscription data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser]);
+
+  // ===== USER AUTHENTICATION =====
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error('Error getting current user:', error);
+          return;
+        }
+        if (user) {
+          setCurrentUser(user);
+          console.log('Current user loaded:', user.id);
+        }
+      } catch (error) {
+        console.error('Error in getCurrentUser:', error);
+      }
+    };
+
+    getCurrentUser();
+  }, []);
+
+  // ===== INITIALIZATION =====
+  useEffect(() => {
+    if (currentUser) {
+      loadSubscriptionData();
+    }
+  }, [currentUser, loadSubscriptionData]);
+
+  // ===== COMPUTED VALUES =====
+  const isPaymentRequired = subscriptionSummary?.is_payment_required || false;
+  const weeklySummary = {
+    totalPickups: subscriptionSummary?.current_week_pickups || 0,
+    totalEarnings: subscriptionSummary?.current_week_earnings || 0,
+    fees: subscriptionSummary?.current_week_fees || 0,
+    pickups: subscriptionSummary?.current_week_pickups || 0,
+    avgFee: (subscriptionSummary?.current_week_pickups || 0) > 0 
+      ? (subscriptionSummary?.current_week_fees || 0) / (subscriptionSummary?.current_week_pickups || 1) 
+      : 0
+  };
+
+  const handlePayFees = async () => {
     if (!isPaymentRequired) {
       Alert.alert('No Payment Required', 'You have no outstanding subscription fees.');
       return;
     }
 
+    const totalFees = subscriptionSummary?.total_pending_fees || 0;
+    
     Alert.alert(
       'Pay Subscription Fees',
-      `Pay GHS ${weeklySummary.fees.toFixed(2)} to EcoWasteGo?\n\nThis will clear your weekly subscription fees.`,
+      `Pay ₵${totalFees.toFixed(2)} to EcoWasteGo?\n\nThis will clear your ${(subscriptionSummary?.overdue_fees || 0) > 0 ? 'overdue and ' : ''}pending subscription fees.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Pay Now',
-          onPress: () => {
+          onPress: async () => {
             setIsProcessing(true);
-            // Simulate payment processing
-            setTimeout(() => {
-              recyclerStats.paySubscriptionFees();
-              setIsProcessing(false);
+            
+            try {
+              // Get current week's subscription fee ID
+              const currentWeekStart = new Date();
+              currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+              
+              const { data: feeData, error: feeError } = await supabase
+                .rpc('get_or_create_weekly_subscription_fee', {
+                  p_recycler_id: currentUser.id,
+                  p_week_start: currentWeekStart.toISOString().split('T')[0]
+                });
+
+              if (feeError || !feeData || feeData.length === 0) {
+                throw new Error('Failed to get subscription fee record');
+              }
+
+              const feeId = feeData[0].id;
+              
+              // Mark fee as paid
+              const { error: paymentError } = await supabase
+                .rpc('mark_subscription_fee_paid', {
+                  p_fee_id: feeId,
+                  p_payment_method: 'mobile_money',
+                  p_payment_reference: `PAY_${Date.now()}`
+                });
+
+              if (paymentError) {
+                throw paymentError;
+              }
+
+              // Refresh data
+              await loadSubscriptionData();
+              
               Alert.alert(
                 'Payment Successful!',
-                'Your subscription fees have been paid. You can continue using the app.',
+                `Your subscription fees of ₵${totalFees.toFixed(2)} have been paid. You can continue using the app.`,
                 [{ text: 'OK', onPress: () => router.back() }]
               );
-            }, 2000);
+              
+            } catch (error) {
+              console.error('Error processing payment:', error);
+              Alert.alert(
+                'Payment Failed',
+                'Failed to process payment. Please try again or contact support.',
+                [{ text: 'OK' }]
+              );
+            } finally {
+              setIsProcessing(false);
+            }
           }
         }
       ]
     );
   };
 
-  const handleTestAddFees = () => {
-    recyclerStats.addCompletedPickup('test-1', 25.00, {
-      customer: 'Test User 1',
-      wasteType: 'Plastic',
-      weight: '12kg'
-    });
-    recyclerStats.addCompletedPickup('test-2', 30.00, {
-      customer: 'Test User 2',
-      wasteType: 'Paper',
-      weight: '15kg'
-    });
-    Alert.alert('Test Fees Added', 'Added test fees for testing. Refresh the screen to see changes.');
-  };
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading subscription data...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -121,7 +220,7 @@ export default function SubscriptionScreen() {
             <View style={styles.summaryItem}>
               <MaterialIcons name="attach-money" size={20} color={COLORS.darkGreen} style={styles.summaryIcon} />
               <Text style={styles.summaryLabel}>Total Earnings</Text>
-              <Text style={styles.summaryValue}>GHS {(weeklySummary.fees * 10).toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>₵{weeklySummary.totalEarnings.toFixed(2)}</Text>
             </View>
           </View>
 
@@ -130,13 +229,13 @@ export default function SubscriptionScreen() {
               <MaterialIcons name="account-balance" size={20} color="#E65100" style={styles.summaryIcon} />
               <Text style={styles.summaryLabel}>Subscription Fee (10%)</Text>
               <Text style={[styles.summaryValue, styles.feeAmount]}>
-                {recyclerStats.getSubscriptionFeeString()}
+                ₵{weeklySummary.fees.toFixed(2)}
               </Text>
             </View>
             <View style={styles.summaryItem}>
               <MaterialIcons name="trending-up" size={20} color={COLORS.darkGreen} style={styles.summaryIcon} />
               <Text style={styles.summaryLabel}>Avg Fee per Pickup</Text>
-              <Text style={styles.summaryValue}>GHS {weeklySummary.avgFee.toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>₵{weeklySummary.avgFee.toFixed(2)}</Text>
             </View>
           </View>
         </View>
@@ -375,5 +474,17 @@ const styles = StyleSheet.create({
   },
   summaryIcon: {
     marginBottom: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FFF0',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: COLORS.gray,
+    textAlign: 'center',
   },
 }); 
