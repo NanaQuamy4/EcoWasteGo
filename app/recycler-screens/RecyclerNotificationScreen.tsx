@@ -14,7 +14,7 @@ interface Notification {
   message: string;
   data: any;
   created_at: string;
-  read: boolean;
+  is_read: boolean;
 }
 
 export default function RecyclerNotificationScreen() {
@@ -63,7 +63,7 @@ export default function RecyclerNotificationScreen() {
     try {
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .update({ is_read: true })
         .eq('id', notificationId);
 
       if (error) {
@@ -72,10 +72,10 @@ export default function RecyclerNotificationScreen() {
       }
 
       // Update local state
-      setNotifications(prev => 
+      setNotifications(prev =>
         prev.map(notif => 
           notif.id === notificationId 
-            ? { ...notif, read: true }
+            ? { ...notif, is_read: true }
             : notif
         )
       );
@@ -219,7 +219,7 @@ export default function RecyclerNotificationScreen() {
     <TouchableOpacity
       style={[
         styles.notificationItem,
-        !item.read && styles.unreadNotification
+        !item.is_read && styles.unreadNotification
       ]}
       onPress={() => handleNotificationPress(item)}
     >
@@ -244,7 +244,7 @@ export default function RecyclerNotificationScreen() {
       <View style={styles.notificationContent}>
         <Text style={[
           styles.notificationTitle,
-          !item.read && styles.unreadText
+          !item.is_read && styles.unreadText
         ]}>
           {item.title}
         </Text>
@@ -256,7 +256,7 @@ export default function RecyclerNotificationScreen() {
         </Text>
       </View>
 
-      {!item.read && <View style={styles.unreadDot} />}
+      {!item.is_read && <View style={styles.unreadDot} />}
     </TouchableOpacity>
   );
 
