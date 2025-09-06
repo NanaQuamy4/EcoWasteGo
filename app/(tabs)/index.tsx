@@ -8,6 +8,7 @@ import DrawerMenu from '../../components/DrawerMenu';
 import MapComponent from '../../components/MapComponent';
 import { COLORS } from '../../constants';
 import { useNotificationCountSimple as useNotificationCount } from '../../hooks/useNotificationCountSimple';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useOnlineRecyclers } from '../../hooks/useRecyclerOnlineStatus';
 import { googlePlacesService, PlaceDetails } from '../../lib/googlePlaces';
 import { supabase } from '../../lib/supabase';
@@ -97,6 +98,9 @@ export default function HomeScreen() {
 
   // Use real notification count
   const { notificationCount } = useNotificationCount();
+  
+  // Initialize push notifications
+  const { permissions, requestPermissions, isLoading: pushNotificationLoading } = usePushNotifications();
 
   // Fetch user data
   const fetchUserData = useCallback(async () => {

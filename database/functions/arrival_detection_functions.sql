@@ -120,6 +120,9 @@ BEGIN
         -- Send arrival notification to customer
         PERFORM send_arrival_notification(p_request_id);
         
+        -- Send push notification to customer
+        PERFORM send_push_notification_on_arrival(p_request_id);
+        
         RAISE NOTICE 'Recycler arrived at pickup location for request %', p_request_id;
         RAISE NOTICE 'Arrival coordinates: %, %', p_recycler_latitude, p_recycler_longitude;
         RAISE NOTICE 'Arrival time: %', request_record.arrived_at;

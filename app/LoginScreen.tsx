@@ -50,15 +50,11 @@ export default function LoginScreen() {
       console.log('LoginScreen: User logged in with role:', userRole);
       console.log('LoginScreen: Full user object:', user);
       
-      // Check if user is admin first (this should override everything else)
-      if (isAdminUser(user.email)) {
-        console.log('LoginScreen: ADMIN USER DETECTED - Navigating to admin portal');
+      // Navigate based on user role
+      if (userRole === 'admin') {
+        console.log('LoginScreen: ADMIN USER - Navigating to admin portal');
         router.replace('/admin-screens/AdminPortal');
-        return;
-      }
-      
-      // Navigate based on user role (only for non-admin users)
-      if (userRole === 'recycler') {
+      } else if (userRole === 'recycler') {
         console.log('LoginScreen: Navigating to recycler screens');
         router.replace('/(recycler-tabs)');
       } else {
@@ -106,6 +102,7 @@ export default function LoginScreen() {
     try {
       setIsLoading(true);
       console.log('LoginScreen: Attempting login with email:', email);
+      console.log('LoginScreen: Expected role from role selection:', selectedRole);
       
       const result = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -133,6 +130,56 @@ export default function LoginScreen() {
         
         // Get user role from metadata (no database query needed!)
         const userRole = result.data.user.user_metadata?.role || 'customer';
+        console.log('LoginScreen: User role from metadata:', userRole);
+        console.log('LoginScreen: Expected role:', selectedRole);
+        
+        // ===== ADMIN CHECK FIRST =====
+        // Check if user is admin first (this should override everything else)
+        if (isAdminUser(result.data.user.email)) {
+          console.log('LoginScreen: ADMIN USER DETECTED - Bypassing role validation');
+          const userProfile = {
+            id: result.data.user.id,
+            email: result.data.user.email,
+            full_name: result.data.user.user_metadata?.full_name || 'Admin',
+            phone: result.data.user.user_metadata?.phone || '',
+            company_name: result.data.user.user_metadata?.company_name || '',
+            email_verified: result.data.user.email_confirmed_at ? true : false,
+            profile_completed: true,
+          };
+          
+          const enhancedUser = {
+            ...result.data.user,
+            role: 'admin',
+            profile: userProfile
+          };
+          
+          setUser(enhancedUser);
+          Alert.alert('Success', 'Admin login successful!');
+          setIsLoading(false);
+          return;
+        }
+        
+        // ===== ROLE VALIDATION (Only for non-admin users) =====
+        // Check if the user's role matches the expected role from role selection
+        if (selectedRole && selectedRole !== userRole) {
+          console.log('LoginScreen: Role mismatch detected');
+          Alert.alert(
+            'Role Mismatch',
+            `This account is registered as a ${userRole}. Please use the correct login screen for ${userRole}s.`,
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  // Sign out the user since they used wrong login screen
+                  supabase.auth.signOut();
+                  setIsLoading(false);
+                }
+              }
+            ]
+          );
+          return;
+        }
+        
         const userProfile = {
           id: result.data.user.id,
           email: result.data.user.email,
@@ -143,7 +190,6 @@ export default function LoginScreen() {
           profile_completed: true, // Assume completed since they registered
         };
         
-        console.log('LoginScreen: User role from metadata:', userRole);
         console.log('LoginScreen: User profile from metadata:', userProfile);
         
         // Create enhanced user object
@@ -212,8 +258,20 @@ export default function LoginScreen() {
             
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
-              Sign in to your account to continue
+              Sign in to your {selectedRole || 'account'} to continue
             </Text>
+            {selectedRole && (
+              <View style={styles.roleIndicator}>
+                <MaterialIcons 
+                  name={selectedRole === 'recycler' ? 'recycling' : 'person'} 
+                  size={20} 
+                  color={COLORS.darkGreen} 
+                />
+                <Text style={styles.roleText}>
+                  {selectedRole === 'recycler' ? 'Recycler Login' : 'Customer Login'}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Form */}
@@ -351,6 +409,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.gray,
     textAlign: 'center',
+  },
+  roleIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.lightGreen,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 10,
+    alignSelf: 'center',
+  },
+  roleText: {
+    color: COLORS.darkGreen,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   form: {
     gap: 20,

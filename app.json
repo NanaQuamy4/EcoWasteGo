@@ -30,7 +30,9 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.WAKE_LOCK",
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
@@ -53,6 +55,14 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow EcoWasteGo to use your location to find nearby recyclers and provide accurate pickup services."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo.png",
+          "color": "#263A13",
+          "sounds": ["./assets/sounds/notification.wav"]
         }
       ],
       "expo-audio"
