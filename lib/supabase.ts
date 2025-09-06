@@ -1,7 +1,7 @@
+import { createClient, processLock } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 import 'react-native-url-polyfill/auto';
-// import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient, processLock } from '@supabase/supabase-js';
+import storageAdapter from './storageAdapter';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -12,10 +12,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    // Temporarily disable AsyncStorage to fix native module error
-    // ...(Platform.OS !== "web" ? { storage: AsyncStorage } : {}),
+    ...(Platform.OS !== "web" ? { storage: storageAdapter } : {}),
     autoRefreshToken: true,
-    persistSession: false, // Disable session persistence temporarily
+    persistSession: true,
     detectSessionInUrl: false,
     lock: processLock,
   },

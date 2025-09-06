@@ -223,14 +223,53 @@ export default function RecyclerTextUserScreen() {
     try {
       console.log('RecyclerTextUserScreen: Loading messages for request:', params.requestId, 'user:', user.id);
       
-      const { data, error } = await supabase.rpc('get_messages_for_request', {
-        p_request_id: params.requestId,
-        p_user_id: user.id,
-        p_user_type: 'recycler'
-      });
+      // Try RPC function first
+      let data, error;
+      
+      try {
+        const result = await supabase.rpc('get_messages_for_request', {
+          p_request_id: params.requestId,
+          p_user_id: user.id,
+          p_user_type: 'recycler'
+        });
+        data = result.data;
+        error = result.error;
+      } catch (rpcError) {
+        console.log('RecyclerTextUserScreen: RPC function failed, trying direct query...');
+        
+        // Fallback to direct query
+        const result = await supabase
+          .from('messages')
+          .select(`
+            id,
+            sender_id,
+            sender_type,
+            message,
+            is_read,
+            created_at,
+            customers!messages_sender_id_fkey(full_name),
+            recyclers!messages_sender_id_fkey(full_name)
+          `)
+          .eq('request_id', params.requestId)
+          .order('created_at', { ascending: true });
+        
+        data = result.data?.map(msg => ({
+          id: msg.id,
+          sender_id: msg.sender_id,
+          sender_type: msg.sender_type,
+          message: msg.message,
+          is_read: msg.is_read,
+          created_at: msg.created_at,
+          sender_name: msg.sender_type === 'customer' 
+            ? (msg.customers as any)?.full_name || 'Customer'
+            : (msg.recyclers as any)?.full_name || 'Recycler'
+        }));
+        error = result.error;
+      }
 
       if (error) {
         console.error('RecyclerTextUserScreen: Error loading messages:', error);
+        console.error('RecyclerTextUserScreen: Error details:', JSON.stringify(error, null, 2));
         return;
       }
 

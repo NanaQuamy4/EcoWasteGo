@@ -33,6 +33,18 @@ The digital transformation of waste management has produced several notable plat
 - Limited environmental impact tracking for end users
 - Complex interface requiring training
 
+**Limitations:**
+- Only serves B2B market, not individual consumers
+- Requires significant technical infrastructure
+- Limited to developed economies
+- No integration with informal waste management sector
+
+**Gaps:**
+- No mobile app for individual users
+- No real-time communication between users and service providers
+- No financial incentives for citizen participation
+- No environmental impact tracking for individual users
+
 #### 2.1.1.2 RecycleSmart (Australia)
 
 **System Features:**
@@ -56,6 +68,19 @@ The digital transformation of waste management has produced several notable plat
 - Limited to recycling information rather than collection services
 - Geographic limitations to Australian market
 
+**Limitations:**
+- Only provides information, not actual collection services
+- No integration with waste collection companies
+- Limited to Australian market
+- No real-time communication features
+
+**Gaps:**
+- No actual waste collection coordination
+- No integration with formal waste management companies
+- No financial incentives for users
+- No real-time tracking of collection services
+- No support for developing economies
+
 #### 2.1.1.3 Too Good To Go (Europe)
 
 **System Features:**
@@ -78,6 +103,19 @@ The digital transformation of waste management has produced several notable plat
 - Dependent on restaurant participation
 - Limited scalability to other waste types
 - Revenue model may not be sustainable in all markets
+
+**Limitations:**
+- Only handles food waste, not other waste types
+- Requires restaurant participation
+- Limited to developed economies
+- No integration with waste collection infrastructure
+
+**Gaps:**
+- No support for general waste management
+- No integration with formal waste management companies
+- No real-time communication between users and collectors
+- No support for developing economies
+- Limited to food waste reduction only
 
 ### 2.1.2 Location-Based Services in Waste Management
 
@@ -129,17 +167,32 @@ Recent academic research has provided valuable insights into the effectiveness o
 
 Pichit et al. (2021) developed an application for waste management via QR-Code system to address inefficiencies in traditional waste management, high costs, poor waste sorting, and minimal community engagement [1]. Their QR-Code based waste tracking and sorting system demonstrated several advantages:
 
-**Achievements:**
+**Pros (Strengths):**
 - Optimized waste collection processes
 - Reduced transportation costs through better route planning
 - Encouraged community participation in waste sorting
 - Improved waste sorting efficiency significantly
+- High user satisfaction (Mean = 4.42, S.D. = 0.45)
+- High quality assessment scores (Mean = 4.41, S.D. = 0.10)
 
-**Limitations:**
+**Cons (Weaknesses):**
 - Requires adoption by all households for maximum effectiveness
 - Dependency on QR technology and user compliance
 - Limited scalability beyond localized regions
 - No integration with existing waste collection systems or governmental policies
+
+**Limitations:**
+- Only works with QR-code enabled waste bins
+- Requires smartphone access and technical literacy
+- Limited to communities with established waste collection infrastructure
+- No real-time tracking or communication features
+
+**Gaps (What's Missing):**
+- No integration with formal waste management companies
+- No financial incentives for users
+- No real-time communication between users and collectors
+- No environmental impact tracking
+- No mobile app for service providers
 
 **Performance Metrics:**
 - Quality Assessment: High level (Mean = 4.41, S.D. = 0.10)
@@ -150,91 +203,143 @@ Pichit et al. (2021) developed an application for waste management via QR-Code s
 
 Kellow et al. (2020) proposed a smart waste management solution geared towards citizens, addressing traditional waste collection inefficiencies through IoT-based systems with real-time waste monitoring via smart bins equipped with sensors, cloud data storage, and mobile app for citizen engagement [2].
 
-**Achievements:**
+**Pros (Strengths):**
 - Real-time waste level monitoring capabilities
 - Route optimization for waste collection trucks
-- Reduced fuel consumption and emissions
+- Reduced fuel consumption and emissions (up to 40% savings)
 - User-friendly mobile and web applications
 - Smart bins with automatic alerts for collection
+- Significant cost reduction (30-40% through optimized routes)
+- High accuracy in waste segregation (90% with smart bins)
+- Reduced collection time (50% through sensor-based status)
 
-**Performance Metrics:**
-- Up to 30-40% cost reduction due to optimized collection routes
-- Up to 40% savings on fuel consumption through dynamic route optimization
-- Up to 80% reduction in overflowing bins due to real-time monitoring
-- Up to 90% accurate waste segregation with smart bins detecting material types
-- Up to 50% reduction in collection time due to sensor-based bin status
-
-**Limitations:**
+**Cons (Weaknesses):**
 - Higher initial deployment costs
 - Requires stable IoT infrastructure and internet connectivity
 - Security and privacy concerns for data collection
 - Limited insights on long-term cost savings vs. setup costs
 - No mention of recycling incentives or citizen rewards
 
+**Limitations:**
+- Dependent on IoT sensor functionality and maintenance
+- Requires continuous internet connectivity
+- Limited to areas with proper IoT infrastructure
+- High technical complexity for implementation
+- No integration with informal waste collectors
+
+**Gaps (What's Missing):**
+- No direct citizen engagement or rewards system
+- No integration with existing waste management companies
+- No real-time communication between citizens and collectors
+- No environmental impact measurement for users
+- No financial incentives for citizen participation
+- No support for informal waste management sector
+
 #### 2.1.3.3 AI Applications in Waste Management
 
 Lynda et al. (2021) conducted a systematic review of artificial intelligence applications for sustainable solid waste management practices in Australia, covering data from 2005-2021 [3]. Their research revealed:
 
-**Achievements:**
+**Pros (Strengths):**
 - AI improves waste prediction accuracy significantly
 - Optimized recycling rates through intelligent sorting
 - Reduces need for manual labor in waste processing
 - Enhanced efficiency in waste-to-energy conversion
+- Ambitious recycling targets (70% by 2025)
+- High waste recovery goals (80% by 2030)
 
-**Performance Metrics:**
-- AI recycling target: 70% by 2025
-- Waste recovery goal: 80% by 2030
-
-**Limitations:**
+**Cons (Weaknesses):**
 - Data inconsistencies in AI model training
 - Lack of public awareness about AI benefits
 - No empirical data on AI's efficiency in real-world applications
 - Absence of national AI waste management policy in Australia
 
+**Limitations:**
+- Limited to developed countries with advanced AI infrastructure
+- Requires high-quality training data
+- No integration with mobile applications for citizens
+- Focused only on processing, not collection coordination
+- No real-time user engagement features
+
+**Gaps (What's Missing):**
+- No citizen-facing mobile application
+- No real-time communication between users and service providers
+- No integration with informal waste management sector
+- No financial incentives for citizen participation
+- No environmental impact tracking for individual users
+- No support for developing economies
+
 #### 2.1.3.4 Machine Learning in Waste Collection Optimization
 
 Tran et al. (2020) developed a waste management system using IoT-based machine learning in university settings, addressing high labor costs, inefficient waste collection, and lack of real-time waste level monitoring [4]. Their system utilized IoT-based smart trash bins with machine learning (Logistic Regression & Dijkstra's algorithm).
 
-**Achievements:**
+**Pros (Strengths):**
 - Predicts waste fill levels accurately
 - Uses LoRa for real-time data transfer
 - Optimizes collection routes using graph theory
-- Significant reduction in unnecessary waste collection trips
+- Significant reduction in unnecessary waste collection trips (30-50%)
+- High accuracy in waste level prediction
+- Time savings through optimized routing
+- Validated through real-world testing
 
-**Performance Metrics:**
-- Reduction in waste collection trips: 30-50%
-- Accuracy of waste level prediction: High (validated through real-world testing)
-- Time savings in collection process through optimized routing
-
-**Limitations:**
+**Cons (Weaknesses):**
 - Limited to university campus settings
 - Logistic Regression may not capture all waste variation patterns
 - Needs larger-scale implementation outside university settings
 - Does not include citizen engagement incentives
 
+**Limitations:**
+- Only tested in controlled university environment
+- Limited scalability to diverse urban settings
+- No integration with existing waste management infrastructure
+- Requires specialized technical knowledge for maintenance
+- No citizen-facing features
+
+**Gaps (What's Missing):**
+- No mobile application for citizens
+- No real-time communication between users and collectors
+- No integration with formal waste management companies
+- No financial incentives for citizen participation
+- No environmental impact tracking
+- No support for informal waste management sector
+- No scalability to developing economies
+
 #### 2.1.3.5 Smart Waste Management in Urban Areas
 
 S. Vishnu et al. (2020) developed an IoT-enabled solid waste management system for smart cities, addressing inefficiency in traditional waste collection, overflowing bins, and high operational costs [5]. Their system used IoT-based monitoring with LoRaWAN and Wi-Fi for bin monitoring.
 
-**Achievements:**
+**Pros (Strengths):**
 - Uses PBLMUs (Public Bin Level Monitoring Units) & HBLMUs (Home Bin Level Monitoring Units)
 - Real-time bin status monitoring via intelligent GUI
 - Long-range LoRaWAN for public bins, Wi-Fi for home bins
 - Solar-powered sensors for sustainability
+- High monitoring accuracy (tested with 16 bins)
+- Low power consumption (1.5mA)
+- Long battery life (~70 days with solar charging)
+- Good LoRaWAN range (up to 10 km)
+- Low network latency (<1s update time)
 
-**Performance Metrics:**
-- Bin level monitoring accuracy: High (tested with 16 bins)
-- Power consumption: 1.5mA (low)
-- Battery life: ~70 days (solar charging supported)
-- LoRaWAN range: Up to 10 km
-- Wi-Fi network latency: Low (<1s update time)
-
-**Limitations:**
+**Cons (Weaknesses):**
 - No AI/ML integration for predictive collection
 - Requires LoRaWAN infrastructure, which may not be widely available
 - Lacks route optimization for waste trucks
 - No waste classification technology
 - Limited to bin-level monitoring, no integration with recycling
+
+**Limitations:**
+- Only tested with 16 bins (limited scale)
+- Requires specialized LoRaWAN infrastructure
+- No integration with existing waste management companies
+- No citizen engagement features
+- Limited to developed smart cities
+
+**Gaps (What's Missing):**
+- No mobile application for citizens
+- No real-time communication between users and collectors
+- No integration with informal waste management sector
+- No financial incentives for citizen participation
+- No environmental impact tracking
+- No support for developing economies
+- No waste classification or sorting features
 
 ### 2.1.4 Local Context: Zoomlion Ghana Limited
 
@@ -267,7 +372,54 @@ Zoomlion Ghana Limited represents the largest private waste management company i
 - No integrated payment and pricing systems
 - Limited use of AI and machine learning for optimization
 
-### 2.1.5 Analysis of Existing Systems
+### 2.1.5 Grassroots Environmental Initiatives: Buz Stop Boys
+
+The emergence of community-driven environmental initiatives in Ghana represents a significant shift toward localized waste management solutions. Buz Stop Boys, founded in July 2023 by civil engineer Heneba Kwadwo Sarfo, exemplifies this grassroots movement and provides important insights into community engagement in waste management.
+
+**Initiative Overview:**
+- Founded: July 2023 by Heneba Kwadwo Sarfo
+- Growth: Expanded from 5 to over 40 members
+- Focus Area: Greater Accra region
+- Mission: Clearing clogged drains, cleaning streets, and maintaining public spaces
+
+**Core Activities:**
+- Street and drain cleaning operations
+- Community education on waste management
+- Public space maintenance and beautification
+- Collaboration with formal waste management entities
+- Volunteer-driven environmental action
+
+**Partnerships and Support:**
+- Collaboration with Zoomlion Ghana Limited (March 2024)
+- Financial support from musician Shatta Wale (GH₵30,000 donation)
+- Community engagement and awareness campaigns
+- Integration with formal waste management systems
+
+**Impact and Achievements:**
+- Demonstrated community commitment to environmental cleanliness
+- Successfully bridged gap between formal and informal waste management
+- Created model for community-corporate partnerships
+- Raised awareness about environmental responsibility
+- Provided template for grassroots environmental action
+
+**Challenges and Limitations:**
+- Limited resources and funding dependency
+- Reliance on volunteer participation
+- Geographic scope limited to Greater Accra
+- Lack of formal organizational structure
+- Limited technological integration
+
+**Opportunities for Digital Integration:**
+- Potential for mobile app coordination of volunteer activities
+- Integration with formal waste management platforms
+- Digital tracking of community impact
+- Social media and digital marketing for awareness
+- Technology-enabled volunteer management systems
+
+**Relevance to EcoWasteGo:**
+The Buz Stop Boys initiative demonstrates the potential for community-driven waste management solutions and highlights the importance of bridging formal and informal approaches. Their success in collaborating with established companies like Zoomlion provides a model for how EcoWasteGo can serve both individual recyclers and community groups while maintaining connections with formal waste management entities.
+
+### 2.1.6 Analysis of Existing Systems
 
 The review of existing waste management platforms and academic research reveals several common patterns and limitations:
 
@@ -716,6 +868,10 @@ The next chapter will delve deeper into the system analysis and design, providin
 [9] Deval Singh, Anil Kumar Dikshit, Sunil Kumar, "Smart Technological Options in Collection and Transportation of Municipal Solid Waste in Urban Areas: A Mini Review," *Waste Management*, vol. 103, pp. 377-385, 2020.
 
 [10] Sonali Dubey, Pushpa Singh, Piyush Yadav, Krishna Kant Singh, "Household Waste Management System Using IoT and Machine Learning," *International Journal of Computer Applications*, vol. 182, no. 1, pp. 1-6, 2019.
+
+[11] BBC, "Buz Stop Boys: The grassroots heroes cleaning Ghana one street at a time," *BBC News*, 2024. Available: https://www.bbc.com/news/articles/c2l9kdznkzko
+
+[12] Citinewsroom, "Buz Stop Boys and Zoomlion collaborate to keep Accra beautiful," *Citinewsroom*, March 2024. Available: https://citinewsroom.com/2024/03/buz-stop-boys-and-zoomlion-collaborate-to-keep-accra-beautiful/
 
 ---
 
