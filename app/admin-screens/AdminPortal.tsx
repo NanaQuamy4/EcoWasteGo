@@ -162,15 +162,54 @@ export default function AdminPortal() {
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('AdminPortal: Starting logout process...');
+              
+              // Show loading indicator
+              Alert.alert(
+                'Logging out...',
+                'Please wait while we log you out.',
+                [],
+                { cancelable: false }
+              );
+              
               const { error } = await supabase.auth.signOut();
+              
               if (error) {
+                console.error('AdminPortal: Supabase logout error:', error);
                 Alert.alert('Error', 'Failed to logout. Please try again.');
               } else {
-                router.replace('/LoginScreen');
+                console.log('AdminPortal: Logout successful, navigating to login...');
+                
+                // Clear any loading alerts
+                Alert.alert(
+                  'Logged Out',
+                  'You have been successfully logged out.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        router.replace('/LoginScreen');
+                      }
+                    }
+                  ]
+                );
               }
             } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
+              console.error('AdminPortal: Logout error:', error);
+              
+              // Even if logout fails, try to navigate to login
+              Alert.alert(
+                'Logout Issue',
+                'There was an issue with the logout process, but you will be redirected to the login screen.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      router.replace('/LoginScreen');
+                    }
+                  }
+                ]
+              );
             }
           },
         },
